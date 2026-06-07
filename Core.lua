@@ -77,7 +77,7 @@ ns.defaults = {
         valueMode = "amount", includeMana = false, windowSecs = 5, holdSecs = 5,
         attach = "free", point = nil,
     },
-    takenText = {   -- Damage Taken: cumulative damage you take, one row per source enemy
+    takenText = {   -- Damage Taken: cumulative damage you take, one row per attack type
         enabled = true, style = "float", showBar = true, rowHeight = 18,
         barColor = { 0.80, 0.30, 0.20 },
         anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "UP", align = "LEFT",

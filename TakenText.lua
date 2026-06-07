@@ -1,8 +1,8 @@
 local ADDON, ns = ...
 
--- Damage Taken (per enemy): the cumulative damage YOU take this fight, one row per
--- source (each enemy, or an environmental type), on the shared ns.Meter engine.
--- Built like the Damage Dealt feed, but routed from hits where you are the target.
+-- Damage Taken (by type): the cumulative damage YOU take this fight from ALL enemies,
+-- combined per attack type -- all melee together, each incoming spell together, each
+-- environmental type. On the shared ns.Meter engine; routed from hits where you're hit.
 
 local MELEE_ICON = "Interface\\ICONS\\INV_Sword_04"
 
@@ -19,7 +19,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     playerGUID = playerGUID or UnitGUID("player")
 
     local info = { CombatLogGetCurrentEventInfo() }
-    local sub, srcGUID, srcName, destGUID = info[2], info[4], info[5], info[8]
+    local sub, destGUID = info[2], info[8]
     if destGUID ~= playerGUID then return end   -- only damage dealt TO me
 
     local frame = host()
@@ -39,12 +39,13 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local key, label, amount, school, crit, iconTex
     if sub == "SWING_DAMAGE" then
         amount, school, crit = info[12], info[14], info[18]
-        key, label, iconTex = "src:" .. tostring(srcGUID or "?"), srcName or "Melee", MELEE_ICON
+        key, label, iconTex = "swing", "Melee", MELEE_ICON
     elseif sub == "SPELL_DAMAGE" or sub == "RANGE_DAMAGE"
         or sub == "SPELL_PERIODIC_DAMAGE" or sub == "SPELL_BUILDING_DAMAGE" then
-        local spellId = info[12]
+        local spellId, spellName = info[12], info[13]
         amount, school, crit = info[15], info[17], info[21]
-        key, label = "src:" .. tostring(srcGUID or "?"), srcName or "Spell"
+        key   = "spell:" .. tostring(spellId or spellName or "?")
+        label = spellName or "Spell"
         iconTex = GetSpellTexture and GetSpellTexture(spellId) or nil
     elseif sub == "ENVIRONMENTAL_DAMAGE" then
         local etype = info[12]
@@ -65,10 +66,10 @@ end)
 -- Test preview (reuses the "combat" test flag)
 --------------------------------------------------------------------------
 local TEST_SOURCES = {
-    { label = "Snarling Wolf",   school = 1,  icon = MELEE_ICON },
-    { label = "Fire Elemental",  school = 4 },
-    { label = "Frost Mage",      school = 16 },
-    { label = "Shadow Acolyte",  school = 32 },
+    { label = "Melee",       school = 1,  icon = MELEE_ICON },
+    { label = "Fireball",    school = 4 },
+    { label = "Frostbolt",   school = 16 },
+    { label = "Shadow Bolt", school = 32 },
 }
 function ns.TakenTextTest(dt)
     testAcc = testAcc + dt

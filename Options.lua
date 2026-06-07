@@ -214,7 +214,7 @@ local function fillTaken(c)
     local tk = ns.db.takenText
     local syncs = {}; SYNC = syncs
     local y = -10
-    y = Header(c, y, "Damage Taken (per enemy)")
+    y = Header(c, y, "Damage Taken (by type)")
     y = Button(c, y, "Copy & mirror from Damage Dealt", function()
         copyMirror(tk, ns.db.enemyText); RA(); RK(); RT()
         for _, f in ipairs(syncs) do f() end
@@ -233,7 +233,7 @@ local function fillTaken(c)
     y = Slider(c, y, "Font size",   8, 40, 1, function() return tk.fontSize end, function(v) tk.fontSize = v end)
     y = Slider(c, y, "Line spacing", 8, 60, 1, function() return tk.lineSpacing end, function(v) tk.lineSpacing = v; RK(); RT() end)
     y = Dropdown(c, y, "Sort order",   SORT,  function() return tk.sortMode end, function(v) tk.sortMode = v end)
-    y = Checkbox(c, y, "Show source name",            function() return tk.showLabel end, function(v) tk.showLabel = v end)
+    y = Checkbox(c, y, "Show attack name",            function() return tk.showLabel end, function(v) tk.showLabel = v end)
     y = Checkbox(c, y, "Show spell icon",             function() return tk.showIcon end, function(v) tk.showIcon = v end)
     y = Checkbox(c, y, "Color by damage school",      function() return tk.schoolColors end, function(v) tk.schoolColors = v end)
     y = Checkbox(c, y, "Show misses & avoids (dodge/parry/block/...)", function() return tk.showAvoid end, function(v) tk.showAvoid = v; RK() end)
