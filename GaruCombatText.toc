@@ -2,7 +2,7 @@
 ## Title: |cff66ccffGaru Combat Text|r
 ## Notes: Standalone damage-dealt (per target) & healing-received combat text. Freeform movable anchors, own settings (/gcf).
 ## Author: Sokratis
-## Version: 1.0
+## Version: 1.1
 ## SavedVariables: GaruCombatTextDB
 ## IconTexture: Interface\Icons\Ability_Warrior_BloodFrenzy
 

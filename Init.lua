@@ -8,10 +8,10 @@ ns.On("PLAYER_LOGIN", function()
     end)
 end)
 
--- Slash: open the config panel; /gcf test toggles the preview, /gcf reset restores.
-SLASH_GARUICOMBATFEED1 = "/combatfeed"
-SLASH_GARUICOMBATFEED2 = "/gcf"
-SlashCmdList.GARUICOMBATFEED = function(msg)
+-- Slash: open the config panel; /gct test toggles the preview, /gct reset restores.
+SLASH_GARUCOMBATTEXT1 = "/gct"
+SLASH_GARUCOMBATTEXT2 = "/garucombattext"
+SlashCmdList.GARUCOMBATTEXT = function(msg)
     msg = (msg or ""):lower():gsub("%s+", "")
     if msg == "test" then
         ns.test.combat = not ns.test.combat

@@ -38,6 +38,7 @@ end)
 function ns.RefreshTimer()
     local c = cfg()
     if not c then return end
+    if not c.point then c.point = { "CENTER", 0, 140 } end   -- so manual Free position has a value
     tf.text:SetFont(ns.Font(ns.db.general.font), math.max(8, c.fontSize or 12), "OUTLINE")
     tf:ClearAllPoints()
     local host, fcfg
@@ -51,9 +52,7 @@ function ns.RefreshTimer()
         tf:SetPoint("CENTER", host, "CENTER", c.xOffset or 0, (c.yOffset or 0) + autoY)
         tf:EnableMouse(false)
     else  -- free
-        local p = c.point
-        if p then tf:SetPoint("CENTER", UIParent, p[1] or "CENTER", p[2] or 0, p[3] or 0)
-        else tf:SetPoint("CENTER", UIParent, "CENTER", 0, 140) end
+        tf:SetPoint("CENTER", UIParent, c.point[1] or "CENTER", c.point[2] or 0, c.point[3] or 0)
         tf:EnableMouse((not ns.db.locked) and c.enabled)
     end
     local editing = (not ns.db.locked) and c.attach == "free" and c.enabled

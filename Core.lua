@@ -44,13 +44,13 @@ function ns.FormatNumber(v)
     if v >= 1e4 then return string.format("%.1fk", v / 1e3) end
     return tostring(math.floor(v + 0.5))
 end
-ns.test = { combat = false }   -- set true via /gcf test to preview
+ns.test = { combat = false }   -- set true via /gct test to preview
 
 --------------------------------------------------------------------------
 -- Settings (SavedVariables: GaruCombatTextDB)
 --------------------------------------------------------------------------
 ns.defaults = {
-    locked = true,   -- /gcf unlock to drag the feed anchors
+    locked = true,   -- /gct unlock to drag the feed anchors
     general = {
         fontSize = 12, fontOutline = "OUTLINE",
     },

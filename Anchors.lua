@@ -28,18 +28,18 @@ end
 
 local function apply(key)
     local f, cfg = anchors[key], ns.db[key]
+    -- normalize / initialize the free point (accept legacy {point,relPoint,x,y}) so the
+    -- manual "Free position" inputs always have a real value to read.
+    local p = cfg.point or DEFAULT_POINT[key]
+    if type(p[2]) ~= "number" then p = { p[2], p[3], p[4] } end
+    cfg.point = { p[1] or "CENTER", math.floor(p[2] or 0), math.floor(p[3] or 0) }
     f:ClearAllPoints()
     local af = attachFrame(cfg)
     if af then
         f:SetPoint("CENTER", af, "CENTER", 0, 0)
         f:EnableMouse(false)
     else
-        local p = cfg.point or DEFAULT_POINT[key]
-        -- accept new {relPoint, x, y} and legacy {point, relPoint, x, y}
-        local rp, x, y
-        if type(p[2]) == "number" then rp, x, y = p[1], p[2], p[3]
-        else rp, x, y = p[2], p[3], p[4] end
-        f:SetPoint("CENTER", UIParent, rp or "CENTER", x or 0, y or 0)
+        f:SetPoint("CENTER", UIParent, cfg.point[1], cfg.point[2], cfg.point[3])
         f:EnableMouse(not ns.db.locked)
     end
     local editing = (not ns.db.locked) and not af

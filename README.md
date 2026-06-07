@@ -25,10 +25,10 @@ Extract the `GaruCombatText` folder into:
 Then enable **Garu Combat Text** at the character-select AddOns screen.
 
 ## Usage
-- `/gcf` (or `/combatfeed`) — open the settings panel
-- `/gcf unlock` / `/gcf lock` — show/hide the draggable anchor boxes
-- `/gcf test` — toggle a live preview
-- `/gcf reset` — restore default settings
+- `/gct` (or `/garucombattext`) — open the settings panel
+- `/gct unlock` / `/gct lock` — show/hide the draggable anchor boxes
+- `/gct test` — toggle a live preview
+- `/gct reset` — restore default settings
 
 ## License
 All rights reserved unless stated otherwise by the author.
