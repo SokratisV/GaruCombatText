@@ -21,6 +21,7 @@ local SCHOOL_COLOR = {
     [64] = { 0.95, 0.55, 1.00 },  -- Arcane
 }
 local NEUTRAL = { 1.00, 0.95, 0.85 }
+local AVOID_COLOR = { 0.72, 0.74, 0.80 }   -- miss / dodge / parry / block count rows
 local ALIGN_POINT = { LEFT = "LEFT", CENTER = "CENTER", RIGHT = "RIGHT" }
 ns.Meter.SCHOOL_COLOR = SCHOOL_COLOR
 
@@ -162,6 +163,7 @@ local function ensureTracker(s, key)
         t.popT  = 1     -- BumpMana (no bump) doesn't leave popT nil for layoutFloat
         t.casts = 0     -- how many times this spell was cast (for the mana figure)
         t.isMana = false -- a mana-gain line (Mana Tide, Innervate, ...): drawn blue
+        t.isCount = false -- a count row (misses/avoids): value shown as "xN"
         -- windowed-meter bookkeeping (see windowUpdate); inert for plain meters
         t.samples    = t.samples or {}
         wipe(t.samples)
@@ -179,6 +181,7 @@ local function bump(M, s, key, label, amount, school, crit, iconTex)
     t.school  = school
     t.iconTex = iconTex
     t.isMana  = (type(key) == "string" and key:sub(1, 5) == "mana:") or false
+    t.isCount = (type(key) == "string" and key:sub(1, 5) == "miss:") or false
     t.last    = GetTime()
     t.pop     = (crit and cfg.crit) and 1.9 or 1.45
     t.popT    = 0
@@ -230,6 +233,7 @@ end
 -- Displayed main value: the running total, or (when a meter opts in via
 -- cfg.valueMode) the value-per-mana ratio, or both. Mana is drawn separately.
 local function valueString(t, cfg)
+    if t.isCount then return "|cffb9bcc6\195\151" .. (t.total or 0) .. "|r" end   -- "xN"
     local mode = cfg and cfg.valueMode
     if mode == "mana" then            -- show the mana spent (blue), not the healing
         return "|cff599eff" .. ns.FormatNumber(t.mana or 0) .. "|r"
@@ -352,7 +356,7 @@ local function layoutFloat(s, list, dt, cfg, maxhp)
                 t.icon:ClearAllPoints();   t.icon:SetPoint("RIGHT", t.text, "LEFT", -4, 0)
             end
 
-            local c = t.isMana and MANA_COLOR
+            local c = (t.isCount and AVOID_COLOR) or (t.isMana and MANA_COLOR)
                 or (cfg.schoolColors and SCHOOL_COLOR[t.school]) or NEUTRAL
             t.text:SetTextColor(c[1], c[2], c[3])
 

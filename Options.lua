@@ -236,6 +236,7 @@ local function fillTaken(c)
     y = Checkbox(c, y, "Show source name",            function() return tk.showLabel end, function(v) tk.showLabel = v end)
     y = Checkbox(c, y, "Show spell icon",             function() return tk.showIcon end, function(v) tk.showIcon = v end)
     y = Checkbox(c, y, "Color by damage school",      function() return tk.schoolColors end, function(v) tk.schoolColors = v end)
+    y = Checkbox(c, y, "Show misses & avoids (dodge/parry/block/...)", function() return tk.showAvoid end, function(v) tk.showAvoid = v; RK() end)
     y = Slider(c, y, "Ignore hits below", 0, 3000, 25, function() return tk.threshold end, function(v) tk.threshold = v end)
     SYNC = nil
     return y

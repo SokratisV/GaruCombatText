@@ -23,7 +23,8 @@ Screenshots: drop images into docs/ and reference them here, e.g.
   school-colored, with an optional combat-time header. Tracks each target separately and can
   remember their totals when you re-select them.
 - 🛡️ **Damage taken (per enemy)** — the cumulative damage you take this fight, one row per
-  source enemy (or environment), school-colored.
+  source enemy (or environment), school-colored. Optionally also counts your **misses &
+  avoids** — dodge / parry / block / miss / absorb / resist — as their own "Dodge ×4" rows.
 - 💚 **Healing received** — a per-spell meter of effective healing from any source, with a
   rolling out-of-combat window. The value shown can be **healing**, **both**, or **mana only**.
 - ⏱️ **Combat timer** — an optional "Combat M:SS" readout for your current target, toggled on

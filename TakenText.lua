@@ -25,6 +25,17 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local frame = host()
     if not frame then return end
 
+    -- Misses / avoids (no damage number): DODGE, PARRY, BLOCK, MISS, ABSORB, RESIST,
+    -- IMMUNE, DEFLECT, EVADE. Shown as count rows ("Dodge x4") when enabled.
+    if sub == "SWING_MISSED" or sub == "SPELL_MISSED" or sub == "RANGE_MISSED" or sub == "SPELL_PERIODIC_MISSED" then
+        if not cfg.showAvoid then return end
+        local missType = (sub == "SWING_MISSED") and info[12] or info[15]
+        if not missType then return end
+        local pretty = missType:sub(1, 1) .. missType:sub(2):lower()
+        meter:Bump(frame, "miss:" .. missType, pretty, 1, 1, false, nil)
+        return
+    end
+
     local key, label, amount, school, crit, iconTex
     if sub == "SWING_DAMAGE" then
         amount, school, crit = info[12], info[14], info[18]
@@ -65,6 +76,12 @@ function ns.TakenTextTest(dt)
     testAcc = 0
     local f = host()
     if not f or not f:IsShown() then return end
+    if ns.db.takenText.showAvoid and math.random() < 0.3 then
+        local MT = { "DODGE", "PARRY", "BLOCK", "MISS" }
+        local m = MT[math.random(1, #MT)]
+        meter:Bump(f, "miss:" .. m, m:sub(1, 1) .. m:sub(2):lower(), 1, 1, false, nil)
+        return
+    end
     local src = TEST_SOURCES[math.random(1, #TEST_SOURCES)]
     local amt = math.random(50, 900)
     if math.random() < 0.15 then amt = amt * 3 end

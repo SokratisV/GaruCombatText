@@ -85,7 +85,7 @@ ns.defaults = {
         fontSize = 12, maxSize = 34, scaleBySeverity = false, bigPct = 40,
         schoolColors = true, crit = false, showLabel = true, maxLabel = 0, showIcon = true,
         showMana = false, showCombatTime = false, sortMode = "amount",
-        holdTime = 4, fadeTime = 0.8, threshold = 0,
+        holdTime = 4, fadeTime = 0.8, threshold = 0, showAvoid = true,
         attach = "free", point = nil,
     },
     combatTimer = {   -- "Combat M:SS" for your current target; positioned on its own
