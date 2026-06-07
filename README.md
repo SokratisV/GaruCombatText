@@ -33,6 +33,8 @@ Screenshots: drop images into docs/ and reference them here, e.g.
 - 🪧 **Freeform anchors** — each feed has its own movable anchor. Unlock and drag the marker
   anywhere, set its text alignment and grow direction, or optionally **pin** it to the
   Player or Target frame.
+- 🌀 **Stacked or radial** — show each feed as a vertical line **or** a configurable **arc**
+  (radius, span in degrees, and which way it faces).
 - 🪶 **Lightweight & standalone** — its own saved settings; no dependencies.
 
 ## Usage

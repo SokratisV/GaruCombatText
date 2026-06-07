@@ -155,6 +155,7 @@ local function ensureTracker(s, key)
         t = table.remove(s.pool) or newTracker(s)
         t.total = 0
         t.mana  = 0
+        t.curX  = nil
         t.curY  = nil
         t.alpha = 0
         t.size  = nil
@@ -321,6 +322,7 @@ end
 local function layoutFloat(s, list, dt, cfg, maxhp)
     local ap = ALIGN_POINT[cfg.align] or "CENTER"
     local up = (cfg.growth ~= "DOWN")
+    local n  = math.min(#list, cfg.maxLines)   -- visible count (for the radial arc spread)
     for i = 1, #list do
         local t = list[i]
         local slot = i - 1
@@ -385,9 +387,26 @@ local function layoutFloat(s, list, dt, cfg, maxhp)
             t.scaler:SetScale(sc)
             t:SetAlpha(t.alpha)
 
-            glide(t, up and (slot * cfg.lineSpacing) or (-slot * cfg.lineSpacing), dt)
-            t:ClearAllPoints()
-            t:SetPoint(ap, s.container, ap, 0, t.curY)
+            if cfg.layout == "radial" then
+                -- spread the rows along an arc: facing = center angle (90 up / 270 down
+                -- / 0 right / 180 left), span = total arc width, radius = distance out.
+                local R      = cfg.radius or 90
+                local span   = math.rad(cfg.arc or 180)
+                local center = math.rad(cfg.arcAngle or 90)
+                local ang    = (n <= 1) and center or (center - span / 2 + (slot / (n - 1)) * span)
+                local tx, ty = R * math.cos(ang), R * math.sin(ang)
+                if not t.curX then t.curX = tx end
+                if not t.curY then t.curY = ty end
+                local lerp = math.min(1, dt * 10)
+                t.curX = t.curX + (tx - t.curX) * lerp
+                t.curY = t.curY + (ty - t.curY) * lerp
+                t:ClearAllPoints()
+                t:SetPoint("CENTER", s.container, "CENTER", t.curX, t.curY)
+            else
+                glide(t, up and (slot * cfg.lineSpacing) or (-slot * cfg.lineSpacing), dt)
+                t:ClearAllPoints()
+                t:SetPoint(ap, s.container, ap, 0, t.curY)
+            end
         end
     end
 end
@@ -595,8 +614,8 @@ local function anchorStream(M, s)
     s.container:SetWidth(s.areaW)
     s.container:ClearAllPoints()
     -- Pin the text's alignment edge to the anchor point, so Left/Center/Right place
-    -- the numbers relative to that point (not within a sized box).
-    local ap = ALIGN_POINT[cfg.align] or "CENTER"
+    -- the numbers relative to that point. Radial centers on the point (arc around it).
+    local ap = (cfg.layout == "radial") and "CENTER" or (ALIGN_POINT[cfg.align] or "CENTER")
     s.container:SetPoint(ap, s.frame, "CENTER", cfg.xOffset, cfg.yOffset)
 end
 

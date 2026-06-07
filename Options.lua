@@ -14,6 +14,8 @@ local ATTACH = { {value="free",text="Free (movable)"}, {value="player",text="Pla
 local TIMER_ATTACH = { {value="free",text="Free (movable)"}, {value="enemy",text="Damage Dealt feed"}, {value="taken",text="Damage Taken feed"}, {value="heal",text="Healing feed"} }
 local UPDOWN = { {value="UP",text="Up"}, {value="DOWN",text="Down"} }
 local ALIGN  = { {value="LEFT",text="Left"}, {value="CENTER",text="Center"}, {value="RIGHT",text="Right"} }
+local LAYOUT = { {value="stack",text="Stacked (line)"}, {value="radial",text="Radial (arc)"} }
+local FACING = { {value=90,text="Up"}, {value=270,text="Down"}, {value=0,text="Right"}, {value=180,text="Left"} }
 local SORT   = { {value="amount",text="Biggest first"}, {value="lowest",text="Smallest first"}, {value="recent",text="Most recent"} }
 local VALUE  = { {value="amount",text="Healing"}, {value="both",text="Both"}, {value="mana",text="Mana only"} }
 
@@ -125,15 +127,26 @@ end
 -- Copy the shared layout/style from `src` into `dst`, mirrored to the opposite side:
 -- alignment flips L<->R, fine X offset and the free-position X are negated.
 local FLIP = { LEFT = "RIGHT", RIGHT = "LEFT" }
+local ARCFLIP = { [0] = 180, [180] = 0 }   -- mirror "facing" left<->right
 local function copyMirror(dst, src)
-    for _, k in ipairs({ "growth", "fontSize", "lineSpacing", "maxLines", "sortMode", "showLabel", "showIcon", "schoolColors" }) do
+    for _, k in ipairs({ "growth", "fontSize", "lineSpacing", "maxLines", "sortMode", "showLabel", "showIcon", "schoolColors", "layout", "radius", "arc" }) do
         dst[k] = src[k]
     end
-    dst.align   = FLIP[src.align] or src.align
-    dst.xOffset = -(src.xOffset or 0)
-    dst.yOffset = src.yOffset or 0
+    dst.align    = FLIP[src.align] or src.align
+    dst.arcAngle = ARCFLIP[src.arcAngle] or src.arcAngle
+    dst.xOffset  = -(src.xOffset or 0)
+    dst.yOffset  = src.yOffset or 0
     local p = src.point
     if p and type(p[2]) == "number" then dst.point = { p[1] or "CENTER", -p[2], p[3] or 0 } end
+end
+
+-- Layout + arc-shape controls shared by every feed tab.
+local function RadialControls(c, y, t, refresh)
+    y = Dropdown(c, y, "Layout",        LAYOUT, function() return t.layout end,   function(v) t.layout = v; refresh() end)
+    y = Slider(c, y, "Arc radius",   20, 400, 2, function() return t.radius end,   function(v) t.radius = v end)
+    y = Slider(c, y, "Arc span (deg)", 20, 360, 5, function() return t.arc end,    function(v) t.arc = v end)
+    y = Dropdown(c, y, "Arc facing",    FACING, function() return t.arcAngle end, function(v) t.arcAngle = v end)
+    return y
 end
 
 --------------------------------------------------------------------------
@@ -152,6 +165,7 @@ local function fillDamage(c)
     y = Dropdown(c, y, "Attach to",        ATTACH,  function() return et.attach end,  function(v) et.attach = v; RA(); RE() end)
     y = Dropdown(c, y, "Text alignment",  ALIGN,   function() return et.align end,   function(v) et.align = v; RE() end)
     y = Dropdown(c, y, "Grow",            UPDOWN,  function() return et.growth end,  function(v) et.growth = v; RT() end)
+    y = RadialControls(c, y, et, RE)
     y = Slider(c, y, "Fine X offset",   -150, 150, 1, function() return et.xOffset end, function(v) et.xOffset = v; RE() end)
     y = Slider(c, y, "Fine Y offset",   -150, 150, 1, function() return et.yOffset end, function(v) et.yOffset = v; RE() end)
     y = Slider(c, y, "Free position X", -1500, 1500, 1, function() return (et.point and et.point[2]) or 0 end,
@@ -187,6 +201,7 @@ local function fillHealing(c)
     y = Dropdown(c, y, "Attach to",        ATTACH,  function() return h.attach end,   function(v) h.attach = v; RA(); RH() end)
     y = Dropdown(c, y, "Text alignment",  ALIGN,   function() return h.align end,    function(v) h.align = v; RH() end)
     y = Dropdown(c, y, "Grow",            UPDOWN,  function() return h.growth end,   function(v) h.growth = v; RT() end)
+    y = RadialControls(c, y, h, RH)
     y = Slider(c, y, "Fine X offset",   -150, 150, 1, function() return h.xOffset end, function(v) h.xOffset = v; RH() end)
     y = Slider(c, y, "Fine Y offset",   -150, 150, 1, function() return h.yOffset end, function(v) h.yOffset = v; RH() end)
     y = Slider(c, y, "Free position X", -1500, 1500, 1, function() return (h.point and h.point[2]) or 0 end,
@@ -223,6 +238,7 @@ local function fillTaken(c)
     y = Dropdown(c, y, "Attach to",        ATTACH,  function() return tk.attach end,  function(v) tk.attach = v; RA(); RK() end)
     y = Dropdown(c, y, "Text alignment",  ALIGN,   function() return tk.align end,   function(v) tk.align = v; RK() end)
     y = Dropdown(c, y, "Grow",            UPDOWN,  function() return tk.growth end,  function(v) tk.growth = v; RT() end)
+    y = RadialControls(c, y, tk, RK)
     y = Slider(c, y, "Fine X offset",   -150, 150, 1, function() return tk.xOffset end, function(v) tk.xOffset = v; RK() end)
     y = Slider(c, y, "Fine Y offset",   -150, 150, 1, function() return tk.yOffset end, function(v) tk.yOffset = v; RK() end)
     y = Slider(c, y, "Free position X", -1500, 1500, 1, function() return (tk.point and tk.point[2]) or 0 end,
