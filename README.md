@@ -9,7 +9,7 @@
 
 A focused, dependency-free combat-text addon: a running tally of the **damage you deal to
 your current target** (broken out per source) and a meter of **healing you receive** (per
-spell). Extracted from GarUI, but fully self-contained — no other addons required.
+spell). It's completely standalone — no other addons required.
 
 <!--
 Screenshots: drop images into docs/ and reference them here, e.g.

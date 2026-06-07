@@ -47,7 +47,7 @@ local function apply(key)
 end
 
 local function makeAnchor(key, label, unit)
-    local f = CreateFrame("Frame", "GarUICombatFeed_" .. key .. "Anchor", UIParent)
+    local f = CreateFrame("Frame", "GaruCombatText_" .. key .. "Anchor", UIParent)
     f.unit = unit
     f:SetSize(26, 26)
     f:SetFrameStrata("MEDIUM")

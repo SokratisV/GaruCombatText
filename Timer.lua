@@ -11,7 +11,7 @@ local function fmtDur(sec)
     return string.format("%d:%02d", math.floor(sec / 60), sec % 60)
 end
 
-local tf = CreateFrame("Frame", "GarUICombatFeed_TimerAnchor", UIParent)
+local tf = CreateFrame("Frame", "GaruCombatText_TimerAnchor", UIParent)
 tf:SetSize(64, 16)
 tf:SetFrameStrata("MEDIUM")
 tf:SetClampedToScreen(true)

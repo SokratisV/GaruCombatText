@@ -274,14 +274,14 @@ end
 
 local function build()
     if win then return end
-    win = CreateFrame("Frame", "GarUICombatFeedOptions", UIParent, "BackdropTemplate")
+    win = CreateFrame("Frame", "GaruCombatTextOptions", UIParent, "BackdropTemplate")
     win:SetSize(440, 580); win:SetPoint("CENTER"); win:SetFrameStrata("HIGH")
     win:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
     win:SetBackdropColor(0.05, 0.05, 0.06, 0.97); win:SetBackdropBorderColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.55)
     win:SetMovable(true); win:EnableMouse(true); win:RegisterForDrag("LeftButton")
     win:SetScript("OnDragStart", win.StartMoving); win:SetScript("OnDragStop", win.StopMovingOrSizing)
     win:SetClampedToScreen(true)
-    tinsert(UISpecialFrames, "GarUICombatFeedOptions")
+    tinsert(UISpecialFrames, "GaruCombatTextOptions")
 
     local title = win:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", 14, -12); title:SetText("|cff66ccffGaru Combat Text|r")

@@ -1,4 +1,4 @@
-local ADDON, ns = ...   -- own namespace; Shim.lua fills it (delegating to GarUI when present)
+local ADDON, ns = ...   -- own namespace, shared across the addon's files
 
 -- "Healing Received" meter on the player frame: effective healing you've received,
 -- one line/row per healing spell, from ANY source (your own heals, other players,
