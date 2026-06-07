@@ -3,3 +3,4 @@
 /.gitignore     export-ignore
 /.gitattributes export-ignore
 /.pkgmeta        export-ignore
+/logo.png        export-ignore
