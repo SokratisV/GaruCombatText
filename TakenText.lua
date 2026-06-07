@@ -6,6 +6,19 @@ local ADDON, ns = ...
 
 local MELEE_ICON = "Interface\\ICONS\\INV_Sword_04"
 
+-- Icons for the miss / avoid count rows (shown when "Show spell icon" is on).
+local AVOID_ICON = {
+    DODGE   = "Interface\\ICONS\\Ability_Rogue_Evasion",
+    PARRY   = "Interface\\ICONS\\Ability_Parry",
+    BLOCK   = "Interface\\ICONS\\Ability_Defend",
+    MISS    = "Interface\\ICONS\\Ability_Warrior_Disarm",
+    ABSORB  = "Interface\\ICONS\\Spell_Holy_PowerWordShield",
+    RESIST  = "Interface\\ICONS\\Spell_Shadow_AntiShadow",
+    IMMUNE  = "Interface\\ICONS\\Spell_Holy_DivineShield",
+    DEFLECT = "Interface\\ICONS\\Ability_Warrior_ShieldWall",
+    EVADE   = "Interface\\ICONS\\Ability_Rogue_Evasion",
+}
+
 local playerGUID
 local testAcc = 0
 
@@ -32,7 +45,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
         local missType = (sub == "SWING_MISSED") and info[12] or info[15]
         if not missType then return end
         local pretty = missType:sub(1, 1) .. missType:sub(2):lower()
-        meter:Bump(frame, "miss:" .. missType, pretty, 1, 1, false, nil)
+        meter:Bump(frame, "miss:" .. missType, pretty, 1, 1, false, AVOID_ICON[missType])
         return
     end
 
@@ -80,7 +93,7 @@ function ns.TakenTextTest(dt)
     if ns.db.takenText.showAvoid and math.random() < 0.3 then
         local MT = { "DODGE", "PARRY", "BLOCK", "MISS" }
         local m = MT[math.random(1, #MT)]
-        meter:Bump(f, "miss:" .. m, m:sub(1, 1) .. m:sub(2):lower(), 1, 1, false, nil)
+        meter:Bump(f, "miss:" .. m, m:sub(1, 1) .. m:sub(2):lower(), 1, 1, false, AVOID_ICON[m])
         return
     end
     local src = TEST_SOURCES[math.random(1, #TEST_SOURCES)]
