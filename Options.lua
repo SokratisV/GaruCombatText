@@ -339,7 +339,7 @@ end
 local function build()
     if win then return end
     win = CreateFrame("Frame", "GarUICombatFeedOptions", UIParent, "BackdropTemplate")
-    win:SetSize(440, 580); win:SetPoint("CENTER"); win:SetFrameStrata("HIGH")
+    win:SetSize(440, 580); win:SetPoint("CENTER"); win:SetFrameStrata("DIALOG")   -- above the feeds (HIGH) so it covers them
     win:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
     win:SetBackdropColor(0.05, 0.05, 0.06, 0.97); win:SetBackdropBorderColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.55)
     win:SetMovable(true); win:EnableMouse(true); win:RegisterForDrag("LeftButton")
