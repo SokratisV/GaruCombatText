@@ -6,8 +6,7 @@
 ## SavedVariables: GaruCombatTextDB
 ## IconTexture: Interface\Icons\Ability_Warrior_BloodFrenzy
 ## X-License: MIT
-# Uncomment and fill in once the CurseForge project exists (enables CF upload):
-# ## X-Curse-Project-ID: 000000
+## X-Curse-Project-ID: 1567453
 
 Core.lua
 Anchors.lua
