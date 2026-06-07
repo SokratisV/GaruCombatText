@@ -31,4 +31,4 @@ Then enable **Garu Combat Text** at the character-select AddOns screen.
 - `/gct reset` — restore default settings
 
 ## License
-All rights reserved unless stated otherwise by the author.
+Released under the [MIT License](LICENSE).
