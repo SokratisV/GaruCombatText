@@ -1,34 +1,46 @@
 # Garu Combat Text
 
-A standalone World of Warcraft **TBC Classic (2.5.5)** addon for combat text:
-**damage dealt (per target)** and **healing received**. Extracted from GarUI, but
-fully self-contained — no dependencies.
+**Standalone combat text for World of Warcraft (TBC Classic / Anniversary): damage you deal, per target, and healing you receive.**
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![Version](https://img.shields.io/badge/version-1.1-brightgreen)
+![WoW](https://img.shields.io/badge/WoW-TBC%20Classic%20%2F%20Anniversary-f8b700)
+![Interface](https://img.shields.io/badge/interface-20505-555)
+
+A focused, dependency-free combat-text addon: a running tally of the **damage you deal to
+your current target** (broken out per source) and a meter of **healing you receive** (per
+spell). Extracted from GarUI, but fully self-contained — no other addons required.
+
+<!--
+Screenshots: drop images into docs/ and reference them here, e.g.
+![Damage & healing feeds](docs/feeds.png)
+-->
 
 ## Features
-- **Damage dealt (per target)** — the cumulative damage you deal to your current
-  target, one ever-growing number/row per source (melee, each spell, wand, pet,
-  totem), school-colored, with an optional combat-time header. Tracks each target
-  separately and can remember their totals when you re-select them.
-- **Healing received** — a per-spell meter of effective healing from any source,
-  with a rolling out-of-combat window. The value shown can be **healing**,
-  **healing/mana**, **both**, or **mana only**.
-- **Combat timer** — an optional "Combat M:SS" readout for your current target,
-  enabled/disabled on its own and positioned freely or anchored to either feed.
-- **Freeform** — each feed has its own movable anchor point. Position it anywhere
-  (unlock and drag the marker), set its text alignment and grow direction, or
-  optionally **pin** it to the Player / Target / Focus frame. Not tied to any frame.
-- Its own saved settings; no other addons required.
 
-## Install
-Extract the `GaruCombatText` folder into:
-`World of Warcraft/<version>/Interface/AddOns/`
-Then enable **Garu Combat Text** at the character-select AddOns screen.
+- ⚔️ **Damage dealt (per target)** — the cumulative damage you deal to your current target,
+  one ever-growing number/row per source (melee, each spell, wand, pet, totem),
+  school-colored, with an optional combat-time header. Tracks each target separately and can
+  remember their totals when you re-select them.
+- 💚 **Healing received** — a per-spell meter of effective healing from any source, with a
+  rolling out-of-combat window. The value shown can be **healing**, **healing/mana**,
+  **both**, or **mana only**.
+- ⏱️ **Combat timer** — an optional "Combat M:SS" readout for your current target, toggled on
+  its own and positioned freely or anchored to either feed.
+- 🪧 **Freeform anchors** — each feed has its own movable anchor. Unlock and drag the marker
+  anywhere, set its text alignment and grow direction, or optionally **pin** it to the
+  Player / Target / Focus frame.
+- 🪶 **Lightweight & standalone** — its own saved settings; no dependencies.
 
 ## Usage
-- `/gct` (or `/garucombattext`) — open the settings panel
-- `/gct unlock` / `/gct lock` — show/hide the draggable anchor boxes
-- `/gct test` — toggle a live preview
-- `/gct reset` — restore default settings
+
+| Command | What it does |
+|---|---|
+| `/gct` (or `/garucombattext`) | Open the settings panel. |
+| `/gct unlock` / `/gct lock` | Show / hide the draggable anchor boxes. |
+| `/gct test` | Toggle a live preview. |
+| `/gct reset` | Restore default settings. |
 
 ## License
-Released under the [MIT License](LICENSE).
+
+[MIT](LICENSE).

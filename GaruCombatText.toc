@@ -1,10 +1,13 @@
 ## Interface: 20505
 ## Title: |cff66ccffGaru Combat Text|r
-## Notes: Standalone damage-dealt (per target) & healing-received combat text. Freeform movable anchors, own settings (/gcf).
+## Notes: Standalone damage-dealt (per target) & healing-received combat text. Freeform movable anchors, own settings (/gct).
 ## Author: Sokratis
 ## Version: 1.1
 ## SavedVariables: GaruCombatTextDB
 ## IconTexture: Interface\Icons\Ability_Warrior_BloodFrenzy
+## X-License: MIT
+# Uncomment and fill in once the CurseForge project exists (enables CF upload):
+# ## X-Curse-Project-ID: 000000
 
 Core.lua
 Anchors.lua

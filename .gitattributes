@@ -1,0 +1,5 @@
+# Keep repo-meta files out of the packaged addon zip (git archive export-ignore).
+/.github        export-ignore
+/.gitignore     export-ignore
+/.gitattributes export-ignore
+/.pkgmeta        export-ignore
