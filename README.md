@@ -7,9 +7,9 @@
 ![WoW](https://img.shields.io/badge/WoW-TBC%20Classic%20%2F%20Anniversary-f8b700)
 ![Interface](https://img.shields.io/badge/interface-20505-555)
 
-A focused, dependency-free combat-text addon: a running tally of the **damage you deal to
-your current target** (broken out per source) and a meter of **healing you receive** (per
-spell). It's completely standalone — no other addons required.
+A focused, dependency-free combat-text addon: running tallies of the **damage you deal to
+your current target**, the **damage you take** (per enemy), and the **healing you receive**
+(per spell). It's completely standalone — no other addons required.
 
 <!--
 Screenshots: drop images into docs/ and reference them here, e.g.
@@ -22,14 +22,15 @@ Screenshots: drop images into docs/ and reference them here, e.g.
   one ever-growing number/row per source (melee, each spell, wand, pet, totem),
   school-colored, with an optional combat-time header. Tracks each target separately and can
   remember their totals when you re-select them.
+- 🛡️ **Damage taken (per enemy)** — the cumulative damage you take this fight, one row per
+  source enemy (or environment), school-colored.
 - 💚 **Healing received** — a per-spell meter of effective healing from any source, with a
-  rolling out-of-combat window. The value shown can be **healing**, **healing/mana**,
-  **both**, or **mana only**.
+  rolling out-of-combat window. The value shown can be **healing**, **both**, or **mana only**.
 - ⏱️ **Combat timer** — an optional "Combat M:SS" readout for your current target, toggled on
   its own and positioned freely or anchored to either feed.
 - 🪧 **Freeform anchors** — each feed has its own movable anchor. Unlock and drag the marker
   anywhere, set its text alignment and grow direction, or optionally **pin** it to the
-  Player / Target / Focus frame.
+  Player or Target frame.
 - 🪶 **Lightweight & standalone** — its own saved settings; no dependencies.
 
 ## Usage

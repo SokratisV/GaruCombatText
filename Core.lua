@@ -77,6 +77,17 @@ ns.defaults = {
         valueMode = "amount", includeMana = false, windowSecs = 5, holdSecs = 5,
         attach = "free", point = nil,
     },
+    takenText = {   -- Damage Taken: cumulative damage you take, one row per source enemy
+        enabled = true, style = "float", showBar = true, rowHeight = 18,
+        barColor = { 0.80, 0.30, 0.20 },
+        anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "UP", align = "LEFT",
+        matchFrameWidth = false, textWidth = 300, lineSpacing = 18, maxLines = 6,
+        fontSize = 12, maxSize = 34, scaleBySeverity = false, bigPct = 40,
+        schoolColors = true, crit = false, showLabel = true, maxLabel = 0, showIcon = true,
+        showMana = false, showCombatTime = false, sortMode = "amount",
+        holdTime = 4, fadeTime = 0.8, threshold = 0,
+        attach = "free", point = nil,
+    },
     combatTimer = {   -- "Combat M:SS" for your current target; positioned on its own
         enabled = true, attach = "enemy",   -- "free" | "enemy" (damage feed) | "heal" (healing feed)
         point = nil, xOffset = 0, yOffset = 0, fontSize = 12,
@@ -101,7 +112,7 @@ local function initDB()
 
     -- Plain-text (float) only; severity scaling, crit emphasis and the sized box were
     -- all removed -- the feed is placed at a movable anchor point.
-    for _, k in ipairs({ "enemyText", "healText" }) do
+    for _, k in ipairs({ "enemyText", "healText", "takenText" }) do
         local c = ns.db[k]
         c.style, c.scaleBySeverity, c.crit, c.matchFrameWidth = "float", false, false, false
         c.showCombatTime = false   -- the standalone Combat Timer element handles this now

@@ -10,8 +10,9 @@ local ADDON, ns = ...
 local anchors = {}
 
 local DEFAULT_POINT = {
-    enemyText = { "CENTER",  250, 40 },
-    healText  = { "CENTER", -250, 40 },
+    enemyText = { "CENTER",  250,  40 },
+    healText  = { "CENTER", -250,  40 },
+    takenText = { "CENTER",  250, -120 },
 }
 
 local function attachFrame(cfg)
@@ -76,11 +77,13 @@ end
 
 makeAnchor("enemyText", "Damage Dealt", "target")
 makeAnchor("healText", "Healing Received", "player")
-ns.frames.target = anchors.enemyText   -- EnemyText anchors + routes target damage here
-ns.healHostFrame = anchors.healText    -- HealText anchors here
+makeAnchor("takenText", "Damage Taken", "player")
+ns.frames.target  = anchors.enemyText   -- EnemyText anchors + routes target damage here
+ns.healHostFrame  = anchors.healText    -- HealText anchors here
+ns.takenHostFrame = anchors.takenText   -- TakenText anchors here
 
 function ns.RefreshAnchors()
-    apply("enemyText"); apply("healText")
+    apply("enemyText"); apply("healText"); apply("takenText")
 end
 
 function ns.SetLocked(v)

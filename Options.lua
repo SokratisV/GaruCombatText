@@ -6,11 +6,12 @@ local ADDON, ns = ...
 
 local function RE() if ns.RefreshEnemyText then ns.RefreshEnemyText() end end
 local function RH() if ns.RefreshHealText then ns.RefreshHealText() end end
+local function RK() if ns.RefreshTakenText then ns.RefreshTakenText() end end
 local function RA() if ns.RefreshAnchors then ns.RefreshAnchors() end end
 local function RT() if ns.RefreshTimer then ns.RefreshTimer() end end
 
 local ATTACH = { {value="free",text="Free (movable)"}, {value="player",text="Player frame"}, {value="target",text="Target frame"} }
-local TIMER_ATTACH = { {value="free",text="Free (movable)"}, {value="enemy",text="Damage feed"}, {value="heal",text="Healing feed"} }
+local TIMER_ATTACH = { {value="free",text="Free (movable)"}, {value="enemy",text="Damage Dealt feed"}, {value="taken",text="Damage Taken feed"}, {value="heal",text="Healing feed"} }
 local UPDOWN = { {value="UP",text="Up"}, {value="DOWN",text="Down"} }
 local ALIGN  = { {value="LEFT",text="Left"}, {value="CENTER",text="Center"}, {value="RIGHT",text="Right"} }
 local SORT   = { {value="amount",text="Biggest first"}, {value="lowest",text="Smallest first"}, {value="recent",text="Most recent"} }
@@ -209,6 +210,37 @@ local function fillHealing(c)
     return y
 end
 
+local function fillTaken(c)
+    local tk = ns.db.takenText
+    local syncs = {}; SYNC = syncs
+    local y = -10
+    y = Header(c, y, "Damage Taken (per enemy)")
+    y = Button(c, y, "Copy & mirror from Damage Dealt", function()
+        copyMirror(tk, ns.db.enemyText); RA(); RK(); RT()
+        for _, f in ipairs(syncs) do f() end
+    end)
+    y = Checkbox(c, y, "Enabled",                   function() return tk.enabled end, function(v) tk.enabled = v; RK() end)
+    y = Dropdown(c, y, "Attach to",        ATTACH,  function() return tk.attach end,  function(v) tk.attach = v; RA(); RK() end)
+    y = Dropdown(c, y, "Text alignment",  ALIGN,   function() return tk.align end,   function(v) tk.align = v; RK() end)
+    y = Dropdown(c, y, "Grow",            UPDOWN,  function() return tk.growth end,  function(v) tk.growth = v; RT() end)
+    y = Slider(c, y, "Fine X offset",   -150, 150, 1, function() return tk.xOffset end, function(v) tk.xOffset = v; RK() end)
+    y = Slider(c, y, "Fine Y offset",   -150, 150, 1, function() return tk.yOffset end, function(v) tk.yOffset = v; RK() end)
+    y = Slider(c, y, "Free position X", -1500, 1500, 1, function() return (tk.point and tk.point[2]) or 0 end,
+        function(v) local p = tk.point or {"CENTER",0,0}; tk.point = { p[1] or "CENTER", v, p[3] or 0 }; RA() end)
+    y = Slider(c, y, "Free position Y", -1000, 1000, 1, function() return (tk.point and tk.point[3]) or 0 end,
+        function(v) local p = tk.point or {"CENTER",0,0}; tk.point = { p[1] or "CENTER", p[2] or 0, v }; RA() end)
+    y = Slider(c, y, "Max sources shown", 1, 12, 1, function() return tk.maxLines end, function(v) tk.maxLines = v; RT() end)
+    y = Slider(c, y, "Font size",   8, 40, 1, function() return tk.fontSize end, function(v) tk.fontSize = v end)
+    y = Slider(c, y, "Line spacing", 8, 60, 1, function() return tk.lineSpacing end, function(v) tk.lineSpacing = v; RK(); RT() end)
+    y = Dropdown(c, y, "Sort order",   SORT,  function() return tk.sortMode end, function(v) tk.sortMode = v end)
+    y = Checkbox(c, y, "Show source name",            function() return tk.showLabel end, function(v) tk.showLabel = v end)
+    y = Checkbox(c, y, "Show spell icon",             function() return tk.showIcon end, function(v) tk.showIcon = v end)
+    y = Checkbox(c, y, "Color by damage school",      function() return tk.schoolColors end, function(v) tk.schoolColors = v end)
+    y = Slider(c, y, "Ignore hits below", 0, 3000, 25, function() return tk.threshold end, function(v) tk.threshold = v end)
+    SYNC = nil
+    return y
+end
+
 local function fillTimer(c)
     local t = ns.db.combatTimer
     local syncs = {}; SYNC = syncs
@@ -296,12 +328,14 @@ local function build()
     unlock:SetScript("OnClick", function(self) if ns.SetLocked then ns.SetLocked(not self:GetChecked()) end end)
 
     local dmg   = makePage("GCFScrollDamage", fillDamage)
+    local taken = makePage("GCFScrollTaken", fillTaken)
     local heal  = makePage("GCFScrollHealing", fillHealing)
     local timer = makePage("GCFScrollTimer", fillTimer)
     tabX = 14
     makeTab(1, "Damage Dealt", dmg)
-    makeTab(2, "Healing", heal)
-    makeTab(3, "Timer", timer)
+    makeTab(2, "Damage Taken", taken)
+    makeTab(3, "Healing", heal)
+    makeTab(4, "Timer", timer)
 
     local testBtn = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
     testBtn:SetSize(100, 22); testBtn:SetPoint("BOTTOMRIGHT", -12, 10)
@@ -311,6 +345,7 @@ local function build()
         if not ns.test.combat then
             if ns.ClearEnemyText then ns.ClearEnemyText() end
             if ns.ClearHealText then ns.ClearHealText() end
+            if ns.ClearTakenText then ns.ClearTakenText() end
         end
         updTest()
     end)
