@@ -87,7 +87,7 @@ ns.defaults = {
         fontSize = 12, maxSize = 34, scaleBySeverity = false, bigPct = 40,
         schoolColors = true, crit = false, showLabel = true, maxLabel = 0, showIcon = true,
         showMana = false, showCombatTime = false, sortMode = "amount",
-        holdTime = 4, fadeTime = 0.8, threshold = 0, showAvoid = true,
+        holdTime = 4, fadeTime = 0.8, threshold = 0, showAvoid = true, holdSecs = 5,
         layout = "stack", radius = 90, arc = 180, arcAngle = 90, arcFixed = false,
         attach = "free", point = nil,
     },

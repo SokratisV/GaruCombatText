@@ -76,6 +76,29 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
 end)
 
 --------------------------------------------------------------------------
+-- Keep the whole feed up through the fight + a grace period: freeze fading
+-- while in combat, and for `holdSecs` after it ends, then let it fade out.
+--------------------------------------------------------------------------
+local inCombat, fadeGen = false, 0
+ns.On("PLAYER_REGEN_DISABLED", function()
+    inCombat = true
+    fadeGen = fadeGen + 1   -- cancel any pending post-combat fade
+    meter.noFade = true
+end)
+ns.On("PLAYER_REGEN_ENABLED", function()
+    inCombat = false
+    fadeGen = fadeGen + 1
+    local gen, hold = fadeGen, ns.db.takenText.holdSecs or 5
+    if C_Timer and C_Timer.After then
+        C_Timer.After(hold, function()
+            if gen == fadeGen and not inCombat then meter.noFade = false end
+        end)
+    else
+        meter.noFade = false
+    end
+end)
+
+--------------------------------------------------------------------------
 -- Test preview (reuses the "combat" test flag)
 --------------------------------------------------------------------------
 local TEST_SOURCES = {
@@ -117,6 +140,7 @@ end
 
 function ns.BuildTakenText()
     playerGUID = UnitGUID("player")
+    meter.noFade = InCombatLockdown() and true or false   -- frozen if we logged in mid-fight
     ns.RefreshTakenText()
     if not ns.ttTicker then
         ns.ttTicker = CreateFrame("Frame", nil, UIParent)

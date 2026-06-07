@@ -225,6 +225,7 @@ local function fillTaken(c, reflow)
     Checkbox(c, "Color by damage school", function() return tk.schoolColors end, function(v) tk.schoolColors = v end)
     Checkbox(c, "Show misses & avoids (dodge/parry/block/...)", function() return tk.showAvoid end, function(v) tk.showAvoid = v; RK() end)
     Slider(c, "Ignore hits below", 0, 3000, 25, function() return tk.threshold end, function(v) tk.threshold = v end)
+    Slider(c, "Keep after combat (s)", 0, 60, 1, function() return tk.holdSecs end, function(v) tk.holdSecs = v end)
     SYNC = nil
 end
 
