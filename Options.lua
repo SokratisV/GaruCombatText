@@ -138,7 +138,7 @@ end
 local FLIP = { LEFT = "RIGHT", RIGHT = "LEFT" }
 local ARCFLIP = { [0] = 180, [180] = 0 }
 local function copyMirror(dst, src)
-    for _, k in ipairs({ "growth", "fontSize", "lineSpacing", "maxLines", "sortMode", "showLabel", "showIcon", "schoolColors", "layout", "radius", "arc" }) do
+    for _, k in ipairs({ "growth", "fontSize", "lineSpacing", "maxLines", "sortMode", "showLabel", "showIcon", "schoolColors", "layout", "radius", "arc", "arcFixed" }) do
         dst[k] = src[k]
     end
     dst.align    = FLIP[src.align] or src.align
@@ -160,6 +160,7 @@ local function LayoutControls(c, t, refresh, reflow)
     Slider(c, "Arc radius", 20, 400, 2, function() return t.radius end, function(v) t.radius = v end, radialVis)
     Slider(c, "Arc span (deg)", 20, 360, 5, function() return t.arc end, function(v) t.arc = v end, radialVis)
     Dropdown(c, "Arc facing", FACING, function() return t.arcAngle end, function(v) t.arcAngle = v end, radialVis)
+    Checkbox(c, "Fixed slot positions (don't spread to fill)", function() return t.arcFixed end, function(v) t.arcFixed = v end, radialVis)
 end
 
 -- Free-position X/Y, shown only while the feed is in Free (movable) mode.

@@ -393,7 +393,14 @@ local function layoutFloat(s, list, dt, cfg, maxhp)
                 local R      = cfg.radius or 90
                 local span   = math.rad(cfg.arc or 180)
                 local center = math.rad(cfg.arcAngle or 90)
-                local ang    = (n <= 1) and center or (center - span / 2 + (slot / (n - 1)) * span)
+                local ang
+                if cfg.arcFixed then
+                    -- fixed slots: items fill from one end based on the max, not spread
+                    local denom = math.max(1, (cfg.maxLines or 6) - 1)
+                    ang = center - span / 2 + (slot / denom) * span
+                else
+                    ang = (n <= 1) and center or (center - span / 2 + (slot / (n - 1)) * span)
+                end
                 local tx, ty = R * math.cos(ang), R * math.sin(ang)
                 if not t.curX then t.curX = tx end
                 if not t.curY then t.curY = ty end

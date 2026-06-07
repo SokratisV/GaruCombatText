@@ -64,7 +64,7 @@ ns.defaults = {
         showMana = true, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, persist = true,
         hideBlizzardFCT = true, onFocus = false,
-        layout = "stack", radius = 90, arc = 180, arcAngle = 90,   -- text layout: stack | radial
+        layout = "stack", radius = 90, arc = 180, arcAngle = 90, arcFixed = false,   -- text layout: stack | radial
         -- freeform anchor point: "free" = movable (dragged to `point`); else pinned to a frame
         attach = "free", point = nil,
     },
@@ -76,7 +76,7 @@ ns.defaults = {
         bigPct = 30, schoolColors = true, crit = false, showLabel = true, maxLabel = 0,
         showIcon = true, sortMode = "amount", threshold = 0, showMana = false,
         valueMode = "amount", includeMana = false, windowSecs = 5, holdSecs = 5,
-        layout = "stack", radius = 90, arc = 180, arcAngle = 90,
+        layout = "stack", radius = 90, arc = 180, arcAngle = 90, arcFixed = false,
         attach = "free", point = nil,
     },
     takenText = {   -- Damage Taken: cumulative damage you take, one row per attack type
@@ -88,7 +88,7 @@ ns.defaults = {
         schoolColors = true, crit = false, showLabel = true, maxLabel = 0, showIcon = true,
         showMana = false, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, showAvoid = true,
-        layout = "stack", radius = 90, arc = 180, arcAngle = 90,
+        layout = "stack", radius = 90, arc = 180, arcAngle = 90, arcFixed = false,
         attach = "free", point = nil,
     },
     combatTimer = {   -- "Combat M:SS" for your current target; positioned on its own
