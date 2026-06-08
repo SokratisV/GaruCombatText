@@ -6,6 +6,7 @@ ns.On("PLAYER_LOGIN", function()
         if ns.BuildEnemyText then ns.BuildEnemyText() end
         if ns.BuildHealText then ns.BuildHealText() end
         if ns.BuildTakenText then ns.BuildTakenText() end
+        if ns.BuildActionsText then ns.BuildActionsText() end
     end)
 end)
 
@@ -20,6 +21,7 @@ SlashCmdList.GARUCOMBATTEXT = function(msg)
             if ns.ClearEnemyText then ns.ClearEnemyText() end
             if ns.ClearHealText then ns.ClearHealText() end
             if ns.ClearTakenText then ns.ClearTakenText() end
+            if ns.ClearActionsText then ns.ClearActionsText() end
         end
         print("|cff66ccffGaru Combat Text|r: preview " .. (ns.test.combat and "ON" or "OFF"))
     elseif msg == "unlock" then

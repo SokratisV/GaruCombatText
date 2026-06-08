@@ -46,6 +46,19 @@ function ns.FormatNumber(v)
 end
 ns.test = { combat = false }   -- set true via /gct test to preview
 
+-- Shared icons for the miss/avoid count rows (Damage Taken + Actions feeds).
+ns.AVOID_ICON = {
+    DODGE   = "Interface\\ICONS\\Ability_Rogue_Sprint",
+    PARRY   = "Interface\\ICONS\\Ability_Parry",
+    BLOCK   = "Interface\\ICONS\\Ability_Warrior_DefensiveStance",
+    MISS    = "Interface\\ICONS\\Ability_Warrior_Disarm",
+    ABSORB  = "Interface\\ICONS\\Spell_Holy_PowerWordShield",
+    RESIST  = "Interface\\ICONS\\Spell_Shadow_AntiShadow",
+    IMMUNE  = "Interface\\ICONS\\Spell_Holy_DivineShield",
+    DEFLECT = "Interface\\ICONS\\Ability_Warrior_ShieldWall",
+    EVADE   = "Interface\\ICONS\\Ability_Rogue_Sprint",
+}
+
 --------------------------------------------------------------------------
 -- Settings (SavedVariables: GaruCombatTextDB)
 --------------------------------------------------------------------------
@@ -91,6 +104,17 @@ ns.defaults = {
         layout = "stack", radius = 90, arc = 180, arcAngle = 90, arcFixed = false,
         attach = "free", point = nil,
     },
+    actionsText = {   -- Actions: how many of your attacks the current target avoided (per target)
+        enabled = true, style = "float", includePet = false,
+        anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "UP", align = "LEFT",
+        matchFrameWidth = false, textWidth = 300, lineSpacing = 18, maxLines = 8,
+        fontSize = 12, maxSize = 30, scaleBySeverity = false, bigPct = 40,
+        schoolColors = false, crit = false, showLabel = true, maxLabel = 0, showIcon = true,
+        showMana = false, showCombatTime = false, sortMode = "amount",
+        holdTime = 4, fadeTime = 0.8, threshold = 0, persist = true,
+        layout = "stack", radius = 90, arc = 180, arcAngle = 90, arcFixed = false,
+        attach = "free", point = nil,
+    },
     combatTimer = {   -- "Combat M:SS" for your current target; positioned on its own
         enabled = true, attach = "enemy",   -- "free" | "enemy" (damage feed) | "heal" (healing feed)
         point = nil, xOffset = 0, yOffset = 0, fontSize = 12,
@@ -115,7 +139,7 @@ local function initDB()
 
     -- Plain-text (float) only; severity scaling, crit emphasis and the sized box were
     -- all removed -- the feed is placed at a movable anchor point.
-    for _, k in ipairs({ "enemyText", "healText", "takenText" }) do
+    for _, k in ipairs({ "enemyText", "healText", "takenText", "actionsText" }) do
         local c = ns.db[k]
         c.style, c.scaleBySeverity, c.crit, c.matchFrameWidth = "float", false, false, false
         c.showCombatTime = false   -- the standalone Combat Timer element handles this now

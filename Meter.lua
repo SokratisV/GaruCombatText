@@ -127,7 +127,9 @@ local function restoreInto(s, guid)
         local t = table.remove(s.pool) or newTracker(s)
         t.total, t.label, t.school, t.iconTex = d.total, d.label, d.school, d.iconTex
         t.mana = d.mana or 0
-        t.curY, t.alpha, t.size = nil, 1, nil
+        t.isMana  = (type(key) == "string" and key:sub(1, 5) == "mana:") or false
+        t.isCount = (type(key) == "string" and key:sub(1, 5) == "miss:") or false
+        t.curX, t.curY, t.alpha, t.size = nil, nil, 1, nil
         t.last, t.pop, t.popT = GetTime(), 1, 1
         t.appliedAlign = nil
         s.trackers[key] = t

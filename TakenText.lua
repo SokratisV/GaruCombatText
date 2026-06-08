@@ -6,18 +6,7 @@ local ADDON, ns = ...
 
 local MELEE_ICON = "Interface\\ICONS\\INV_Sword_04"
 
--- Icons for the miss / avoid count rows (shown when "Show spell icon" is on).
-local AVOID_ICON = {
-    DODGE   = "Interface\\ICONS\\Ability_Rogue_Sprint",
-    PARRY   = "Interface\\ICONS\\Ability_Parry",
-    BLOCK   = "Interface\\ICONS\\Ability_Warrior_DefensiveStance",
-    MISS    = "Interface\\ICONS\\Ability_Warrior_Disarm",
-    ABSORB  = "Interface\\ICONS\\Spell_Holy_PowerWordShield",
-    RESIST  = "Interface\\ICONS\\Spell_Shadow_AntiShadow",
-    IMMUNE  = "Interface\\ICONS\\Spell_Holy_DivineShield",
-    DEFLECT = "Interface\\ICONS\\Ability_Warrior_ShieldWall",
-    EVADE   = "Interface\\ICONS\\Ability_Rogue_Sprint",
-}
+local AVOID_ICON = ns.AVOID_ICON   -- shared table (Core.lua), used when "Show spell icon" is on
 
 local playerGUID
 local testAcc = 0

@@ -44,7 +44,8 @@ function ns.RefreshTimer()
     local host, fcfg
     if c.attach == "enemy" then host, fcfg = ns.frames.target, ns.db.enemyText
     elseif c.attach == "heal" then host, fcfg = ns.healHostFrame, ns.db.healText
-    elseif c.attach == "taken" then host, fcfg = ns.takenHostFrame, ns.db.takenText end
+    elseif c.attach == "taken" then host, fcfg = ns.takenHostFrame, ns.db.takenText
+    elseif c.attach == "actions" then host, fcfg = ns.actionsHostFrame, ns.db.actionsText end
     if host then
         -- auto-clear the feed's stack: push past (max sources x line spacing) in the
         -- feed's grow direction, then add the user's fine offset.

@@ -8,11 +8,12 @@ local ADDON, ns = ...
 local function RE() if ns.RefreshEnemyText then ns.RefreshEnemyText() end end
 local function RH() if ns.RefreshHealText then ns.RefreshHealText() end end
 local function RK() if ns.RefreshTakenText then ns.RefreshTakenText() end end
+local function RAc() if ns.RefreshActionsText then ns.RefreshActionsText() end end
 local function RA() if ns.RefreshAnchors then ns.RefreshAnchors() end end
 local function RT() if ns.RefreshTimer then ns.RefreshTimer() end end
 
 local ATTACH = { {value="free",text="Free (movable)"}, {value="player",text="Player frame"}, {value="target",text="Target frame"} }
-local TIMER_ATTACH = { {value="free",text="Free (movable)"}, {value="enemy",text="Damage Dealt feed"}, {value="taken",text="Damage Taken feed"}, {value="heal",text="Healing feed"} }
+local TIMER_ATTACH = { {value="free",text="Free (movable)"}, {value="enemy",text="Damage Dealt feed"}, {value="taken",text="Damage Taken feed"}, {value="actions",text="Actions feed"}, {value="heal",text="Healing feed"} }
 local UPDOWN = { {value="UP",text="Up"}, {value="DOWN",text="Down"} }
 local ALIGN  = { {value="LEFT",text="Left"}, {value="CENTER",text="Center"}, {value="RIGHT",text="Right"} }
 local LAYOUT = { {value="stack",text="Stacked (line)"}, {value="radial",text="Radial (arc)"} }
@@ -229,6 +230,30 @@ local function fillTaken(c, reflow)
     SYNC = nil
 end
 
+local function fillActions(c, reflow)
+    local a = ns.db.actionsText
+    local syncs = {}; SYNC = syncs
+    Header(c, "Actions (avoided by target)")
+    Button(c, "Copy & mirror from Damage Dealt", function()
+        copyMirror(a, ns.db.enemyText); RA(); RAc(); RT()
+        for _, f in ipairs(syncs) do f() end; reflow()
+    end)
+    Checkbox(c, "Enabled", function() return a.enabled end, function(v) a.enabled = v; RAc() end)
+    Dropdown(c, "Attach to", ATTACH, function() return a.attach end, function(v) a.attach = v; RA(); RAc(); reflow() end)
+    LayoutControls(c, a, RAc, reflow)
+    FreeControls(c, a)
+    Slider(c, "Fine X offset", -150, 150, 1, function() return a.xOffset end, function(v) a.xOffset = v; RAc() end)
+    Slider(c, "Fine Y offset", -150, 150, 1, function() return a.yOffset end, function(v) a.yOffset = v; RAc() end)
+    Slider(c, "Max rows", 1, 12, 1, function() return a.maxLines end, function(v) a.maxLines = v; RT() end)
+    Slider(c, "Font size", 8, 40, 1, function() return a.fontSize end, function(v) a.fontSize = v end)
+    Dropdown(c, "Sort order", SORT, function() return a.sortMode end, function(v) a.sortMode = v end)
+    Checkbox(c, "Count pet / totem attacks", function() return a.includePet end, function(v) a.includePet = v end)
+    Checkbox(c, "Show avoid name", function() return a.showLabel end, function(v) a.showLabel = v end)
+    Checkbox(c, "Show icon", function() return a.showIcon end, function(v) a.showIcon = v end)
+    Checkbox(c, "Remember each target's totals", function() return a.persist end, function(v) a.persist = v; RAc() end)
+    SYNC = nil
+end
+
 local function fillHealing(c, reflow)
     local h = ns.db.healText
     local syncs = {}; SYNC = syncs
@@ -341,7 +366,7 @@ end
 local function build()
     if win then return end
     win = CreateFrame("Frame", "GarUICombatFeedOptions", UIParent, "BackdropTemplate")
-    win:SetSize(440, 580); win:SetPoint("CENTER"); win:SetFrameStrata("DIALOG")   -- above the feeds (HIGH) so it covers them
+    win:SetSize(470, 580); win:SetPoint("CENTER"); win:SetFrameStrata("DIALOG")   -- above the feeds (HIGH) so it covers them
     win:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
     win:SetBackdropColor(0.05, 0.05, 0.06, 0.97); win:SetBackdropBorderColor(ACCENT[1], ACCENT[2], ACCENT[3], 0.55)
     win:SetMovable(true); win:EnableMouse(true); win:RegisterForDrag("LeftButton")
@@ -363,13 +388,15 @@ local function build()
 
     local dmg   = makePage("GCFScrollDamage", fillDamage)
     local taken = makePage("GCFScrollTaken", fillTaken)
+    local act   = makePage("GCFScrollActions", fillActions)
     local heal  = makePage("GCFScrollHealing", fillHealing)
     local timer = makePage("GCFScrollTimer", fillTimer)
     tabX = 14
     makeTab(1, "Damage Dealt", dmg)
     makeTab(2, "Damage Taken", taken)
-    makeTab(3, "Healing", heal)
-    makeTab(4, "Timer", timer)
+    makeTab(3, "Actions", act)
+    makeTab(4, "Healing", heal)
+    makeTab(5, "Timer", timer)
 
     local testBtn = CreateFrame("Button", nil, win, "UIPanelButtonTemplate")
     testBtn:SetSize(100, 22); testBtn:SetPoint("BOTTOMRIGHT", -12, 10)
@@ -380,6 +407,7 @@ local function build()
             if ns.ClearEnemyText then ns.ClearEnemyText() end
             if ns.ClearHealText then ns.ClearHealText() end
             if ns.ClearTakenText then ns.ClearTakenText() end
+            if ns.ClearActionsText then ns.ClearActionsText() end
         end
         updTest()
     end)
