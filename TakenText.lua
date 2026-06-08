@@ -8,7 +8,7 @@ local MELEE_ICON = "Interface\\ICONS\\INV_Sword_04"
 
 -- Icons for the miss / avoid count rows (shown when "Show spell icon" is on).
 local AVOID_ICON = {
-    DODGE   = "Interface\\ICONS\\Ability_Rogue_Evasion",
+    DODGE   = "Interface\\ICONS\\Ability_Rogue_Sprint",
     PARRY   = "Interface\\ICONS\\Ability_Parry",
     BLOCK   = "Interface\\ICONS\\Ability_Warrior_DefensiveStance",
     MISS    = "Interface\\ICONS\\Ability_Warrior_Disarm",
@@ -16,7 +16,7 @@ local AVOID_ICON = {
     RESIST  = "Interface\\ICONS\\Spell_Shadow_AntiShadow",
     IMMUNE  = "Interface\\ICONS\\Spell_Holy_DivineShield",
     DEFLECT = "Interface\\ICONS\\Ability_Warrior_ShieldWall",
-    EVADE   = "Interface\\ICONS\\Ability_Rogue_Evasion",
+    EVADE   = "Interface\\ICONS\\Ability_Rogue_Sprint",
 }
 
 local playerGUID
