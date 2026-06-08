@@ -154,8 +154,8 @@ local function LayoutControls(c, t, refresh, reflow)
     local stackVis  = function() return t.layout ~= "radial" end
     local radialVis = function() return t.layout == "radial" end
     Dropdown(c, "Layout", LAYOUT, function() return t.layout end, function(v) t.layout = v; refresh(); reflow() end)
+    Dropdown(c, "Grow", UPDOWN, function() return t.growth end, function(v) t.growth = v; refresh(); RT() end)
     Dropdown(c, "Text alignment", ALIGN, function() return t.align end, function(v) t.align = v; refresh() end, stackVis)
-    Dropdown(c, "Grow", UPDOWN, function() return t.growth end, function(v) t.growth = v; RT() end, stackVis)
     Slider(c, "Line spacing", 8, 60, 1, function() return t.lineSpacing end, function(v) t.lineSpacing = v; refresh(); RT() end, stackVis)
     Slider(c, "Arc radius", 20, 400, 2, function() return t.radius end, function(v) t.radius = v end, radialVis)
     Slider(c, "Arc span (deg)", 20, 360, 5, function() return t.arc end, function(v) t.arc = v end, radialVis)
