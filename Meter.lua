@@ -395,17 +395,17 @@ local function layoutFloat(s, list, dt, cfg, maxhp)
                 local R      = cfg.radius or 90
                 local span   = math.rad(cfg.arc or 180)
                 local center = math.rad(cfg.arcAngle or 90)
-                -- frac runs 0..1 along the arc; Grow = Down reverses which end fills first.
                 local ang
-                if cfg.arcFixed then
-                    local frac = slot / math.max(1, (cfg.maxLines or 6) - 1)
-                    if cfg.growth == "DOWN" then frac = 1 - frac end
-                    ang = center - span / 2 + frac * span
-                elseif n <= 1 then
-                    ang = center
+                if (not cfg.arcFixed) and n <= 1 then
+                    ang = center                          -- single item: middle of the arc
                 else
-                    local frac = slot / (n - 1)
-                    if cfg.growth == "DOWN" then frac = 1 - frac end
+                    local denom = cfg.arcFixed and math.max(1, (cfg.maxLines or 6) - 1) or (n - 1)
+                    local frac  = slot / denom
+                    -- Map Grow to real screen direction so "Up" always fills upward, no matter
+                    -- which way the arc faces: compare the heights of the two arc ends.
+                    local up        = (cfg.growth ~= "DOWN")
+                    local ascending = math.sin(center + span / 2) >= math.sin(center - span / 2)
+                    if up ~= ascending then frac = 1 - frac end
                     ang = center - span / 2 + frac * span
                 end
                 local tx, ty = R * math.cos(ang), R * math.sin(ang)
