@@ -70,27 +70,26 @@ ns.defaults = {
     enemyText = {   -- Damage Dealt: cumulative damage you deal to your current target
         enabled = true, style = "float", showBar = true, rowHeight = 18,
         barColor = { 0.80, 0.20, 0.20 }, includePet = true,
-        anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "UP", align = "RIGHT",
+        anchor = "CENTER", xOffset = -30, yOffset = 0, growth = "DOWN", align = "LEFT",
         matchFrameWidth = false, textWidth = 300, lineSpacing = 18, maxLines = 6,
         fontSize = 12, maxSize = 34, scaleBySeverity = false, bigPct = 40,
-        schoolColors = true, crit = false, showLabel = true, maxLabel = 0, showIcon = true,
+        schoolColors = true, crit = false, showLabel = false, maxLabel = 0, showIcon = true,
         showMana = true, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, persist = true,
-        hideBlizzardFCT = true, onFocus = false,
-        layout = "stack", radius = 90, arc = 180, arcAngle = 90, arcFixed = false,   -- text layout: stack | radial
-        -- freeform anchor point: "free" = movable (dragged to `point`); else pinned to a frame
-        attach = "free", point = nil,
+        hideBlizzardFCT = false, onFocus = false,
+        layout = "radial", radius = 66, arc = 105, arcAngle = 0, arcFixed = true,
+        attach = "free", point = { "CENTER", 50, -30 },
     },
     healText = {
         enabled = true, style = "float", showBar = true, rowHeight = 16,
-        barColor = { 0.20, 0.80, 0.30 }, anchor = "CENTER", xOffset = 0, yOffset = 0,
-        growth = "DOWN", align = "RIGHT", matchFrameWidth = false, textWidth = 300,
+        barColor = { 0.20, 0.80, 0.30 }, anchor = "CENTER", xOffset = -24, yOffset = 0,
+        growth = "UP", align = "RIGHT", matchFrameWidth = false, textWidth = 300,
         lineSpacing = 18, maxLines = 6, fontSize = 12, maxSize = 30, scaleBySeverity = false,
-        bigPct = 30, schoolColors = true, crit = false, showLabel = true, maxLabel = 0,
+        bigPct = 30, schoolColors = true, crit = false, showLabel = false, maxLabel = 0,
         showIcon = true, sortMode = "amount", threshold = 0, showMana = false,
-        valueMode = "amount", includeMana = false, windowSecs = 5, holdSecs = 5,
-        layout = "stack", radius = 90, arc = 180, arcAngle = 90, arcFixed = false,
-        attach = "free", point = nil,
+        valueMode = "amount", includeMana = true, windowSecs = 5, holdSecs = 5,
+        layout = "radial", radius = 66, arc = 105, arcAngle = 180, arcFixed = true,
+        attach = "free", point = { "CENTER", -50, -30 },
     },
     takenText = {   -- Damage Taken: cumulative damage you take, one row per attack type
         enabled = true, style = "float", showBar = true, rowHeight = 18,
@@ -98,26 +97,26 @@ ns.defaults = {
         anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "UP", align = "LEFT",
         matchFrameWidth = false, textWidth = 300, lineSpacing = 18, maxLines = 6,
         fontSize = 12, maxSize = 34, scaleBySeverity = false, bigPct = 40,
-        schoolColors = true, crit = false, showLabel = true, maxLabel = 0, showIcon = true,
+        schoolColors = true, crit = false, showLabel = false, maxLabel = 0, showIcon = true,
         showMana = false, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, showAvoid = true, holdSecs = 5,
-        layout = "stack", radius = 90, arc = 180, arcAngle = 90, arcFixed = false,
-        attach = "free", point = nil,
+        layout = "radial", radius = 66, arc = 105, arcAngle = 180, arcFixed = true,
+        attach = "free", point = { "CENTER", -50, -30 },
     },
     actionsText = {   -- Actions: how many of your attacks the current target avoided (per target)
         enabled = true, style = "float", includePet = false,
         anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "UP", align = "LEFT",
         matchFrameWidth = false, textWidth = 300, lineSpacing = 18, maxLines = 8,
         fontSize = 12, maxSize = 30, scaleBySeverity = false, bigPct = 40,
-        schoolColors = false, crit = false, showLabel = true, maxLabel = 0, showIcon = true,
+        schoolColors = false, crit = false, showLabel = false, maxLabel = 0, showIcon = true,
         showMana = false, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, persist = true,
-        layout = "stack", radius = 90, arc = 180, arcAngle = 90, arcFixed = false,
-        attach = "free", point = nil,
+        layout = "radial", radius = 66, arc = 105, arcAngle = 0, arcFixed = true,
+        attach = "free", point = { "CENTER", 50, 30 },
     },
     combatTimer = {   -- "Combat M:SS" for your current target; positioned on its own
-        enabled = true, attach = "enemy",   -- "free" | "enemy" (damage feed) | "heal" (healing feed)
-        point = nil, xOffset = 0, yOffset = 0, fontSize = 12,
+        enabled = true, attach = "enemy",   -- "free" | "enemy" | "taken" | "heal"
+        point = { "CENTER", 0, 0 }, xOffset = 27, yOffset = -22, fontSize = 12,
     },
 }
 
@@ -145,16 +144,6 @@ local function initDB()
         c.showCombatTime = false   -- the standalone Combat Timer element handles this now
     end
     if ns.db.healText.valueMode == "permana" then ns.db.healText.valueMode = "both" end  -- removed option
-
-    -- One-time: apply the presentation defaults (font 12, right-aligned, spacing 18)
-    -- to existing saves. Runs once, so you can still tune these sliders afterwards.
-    if (ns.db.cfgVersion or 0) < 1 then
-        ns.db.cfgVersion = 1
-        for _, k in ipairs({ "enemyText", "healText" }) do
-            local c = ns.db[k]
-            c.fontSize, c.align, c.lineSpacing = 12, "RIGHT", 18
-        end
-    end
 end
 
 ns.On("ADDON_LOADED", function(_, name)

@@ -2,7 +2,7 @@
 ## Title: |cff66ccffGaru Combat Text|r
 ## Notes: Standalone combat text: damage dealt, damage taken, healing received & actions avoided. Freeform movable anchors, own settings (/gct).
 ## Author: Sokratis
-## Version: 1.15
+## Version: 1.16
 ## SavedVariables: GaruCombatTextDB
 ## IconTexture: Interface\Icons\Ability_Warrior_BloodFrenzy
 ## X-License: MIT
