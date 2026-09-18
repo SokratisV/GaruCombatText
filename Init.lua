@@ -30,6 +30,8 @@ SlashCmdList.GARUCOMBATTEXT = function(msg)
         if ns.SetLocked then ns.SetLocked(true) end
     elseif msg == "debug" then
         ns.DiagStart(15)
+    elseif msg:match("^probe") then
+        ns.RunProbe(msg:match("^probe%s*(%a*)"))
     elseif msg == "reset" then
         if ns.ResetSettings then ns.ResetSettings() end
     else

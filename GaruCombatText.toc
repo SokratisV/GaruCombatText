@@ -17,4 +17,5 @@ TakenText.lua
 ActionsText.lua
 Timer.lua
 Options.lua
+Probe.lua
 Init.lua
