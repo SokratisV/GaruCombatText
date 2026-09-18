@@ -35,7 +35,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local pf = playerFrame()
     if not pf then return end
 
-    local function icon(id) return GetSpellTexture and GetSpellTexture(id) or nil end
+    local function icon(id) return ns.SpellTexture(id) end
 
     -- mana you spend on your own (self-cast) heals, shown on that spell's line
     if sub == "SPELL_CAST_SUCCESS" then
@@ -131,12 +131,12 @@ function ns.HealTextTest(dt)
     local amt = math.random(60, 900)
     if math.random() < 0.15 then amt = amt * 2 end
     meter:Bump(pf, src.key, src.label, amt, src.school, math.random() < 0.2,
-               GetSpellTexture and GetSpellTexture(tonumber(src.key:match("%d+"))) or nil)
+               ns.SpellTexture(tonumber(src.key:match("%d+"))))
     -- feed mana so the healing/mana value has something to divide by in preview
     local wantMana = cfg.showMana or cfg.valueMode == "permana" or cfg.valueMode == "both" or cfg.valueMode == "mana"
     if wantMana and src.key:sub(1, 5) == "spell" then
         meter:BumpMana(pf, src.key, src.label, math.random(40, 220), src.school,
-                       GetSpellTexture and GetSpellTexture(tonumber(src.key:match("%d+"))) or nil)
+                       ns.SpellTexture(tonumber(src.key:match("%d+"))))
     end
 end
 

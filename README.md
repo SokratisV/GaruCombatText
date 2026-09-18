@@ -1,11 +1,17 @@
 # Garu Combat Text
 
-**Standalone combat text for World of Warcraft (TBC Classic / Anniversary): damage you deal, per target, and healing you receive.**
+**Standalone combat text for World of Warcraft (WoW Forever / TBC Classic): damage you deal, per target, and healing you receive.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 ![Version](https://img.shields.io/badge/version-1.1-brightgreen)
-![WoW](https://img.shields.io/badge/WoW-TBC%20Classic%20%2F%20Anniversary-f8b700)
-![Interface](https://img.shields.io/badge/interface-20505-555)
+![WoW](https://img.shields.io/badge/WoW-Forever%20%2F%20TBC%20Classic-f8b700)
+![Interface](https://img.shields.io/badge/interface-16001%20%7C%2020505-555)
+
+> **Client support.** Runs on **WoW Forever** (interface `16001`) and on the
+> **TBC Classic / Anniversary** client (interface `20505`) from the same files.
+> Forever serves Classic content from the Midnight 12.x client, so it reports a
+> Classic project id but only exposes the modern namespaced API — every call that
+> moved is feature-detected rather than switched on project id.
 
 A focused, dependency-free combat-text addon: running tallies of the **damage you deal to
 your current target**, the **damage you take** (per enemy), and the **healing you receive**

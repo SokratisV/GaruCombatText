@@ -48,7 +48,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
         amount, school, crit = info[15], info[17], info[21]
         key   = "spell:" .. tostring(spellId or spellName or "?")
         label = spellName or "Spell"
-        iconTex = GetSpellTexture and GetSpellTexture(spellId) or nil
+        iconTex = ns.SpellTexture(spellId)
     elseif sub == "ENVIRONMENTAL_DAMAGE" then
         local etype = info[12]
         amount, school = info[13], info[15]

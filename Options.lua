@@ -112,11 +112,30 @@ local function Slider(c, label, lo, hi, step, get, set, vis)
     if SYNC then SYNC[#SYNC + 1] = function() local v = get(); s:SetValue(v); refresh(v) end end
 end
 
+-- Midnight / WoW Forever removed UIDropDownMenu outright: the replacement is a
+-- DropdownButton fed by MenuUtil, which tracks the selected radio and paints the
+-- button text itself (so there's no setText to maintain — GenerateMenu re-reads it).
+-- The legacy branch stays for the older Classic clients that have no MenuUtil.
 local function Dropdown(c, label, choices, get, set, vis)
     uid = uid + 1
     local row = addRow(c, 46, vis)
     local fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     fs:SetPoint("TOPLEFT", PAD, 0); fs:SetText(label)
+
+    if MenuUtil and MenuUtil.CreateRadioMenu then
+        local dd = CreateFrame("DropdownButton", "GCFDrop" .. uid, row, "WowStyle1DropdownTemplate")
+        dd:SetPoint("TOPLEFT", PAD, -16)
+        dd:SetWidth(170)
+        local entries = {}
+        for i, o in ipairs(choices) do entries[i] = { o.text, o.value } end
+        MenuUtil.CreateRadioMenu(dd,
+            function(value) return value == get() end,
+            function(value) set(value) end,
+            unpack(entries))
+        if SYNC then SYNC[#SYNC + 1] = function() dd:GenerateMenu() end end
+        return
+    end
+
     local dd = CreateFrame("Frame", "GCFDrop" .. uid, row, "UIDropDownMenuTemplate")
     dd:SetPoint("TOPLEFT", PAD - 16, -16)
     UIDropDownMenu_SetWidth(dd, 150)

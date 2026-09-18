@@ -76,7 +76,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
         if cost <= 0 then return end
         meter:BumpMana(frame, "spell:" .. tostring(spellId or spellName or "?"),
                        spellName or "Spell", cost, info[14],
-                       GetSpellTexture and GetSpellTexture(spellId) or nil)
+                       ns.SpellTexture(spellId))
         return
     end
 
@@ -90,7 +90,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
         amount, school, crit = info[15], info[17], info[21]
         key   = "spell:" .. tostring(spellId or spellName or "?")
         label = spellName or "Spell"
-        iconTex = GetSpellTexture and GetSpellTexture(spellId) or nil
+        iconTex = ns.SpellTexture(spellId)
     else
         return
     end
@@ -113,8 +113,12 @@ end)
 --------------------------------------------------------------------------
 function ns.ApplyBlizzardFCT()
     local hide = ns.db.enemyText.hideBlizzardFCT
-    pcall(SetCVar, "floatingCombatTextCombatDamage", hide and "0" or "1")
-    pcall(SetCVar, "floatingCombatTextCombatDamageAllAutos", hide and "0" or "1")
+    local v = hide and "0" or "1"
+    -- ns.SetCVar picks the "_v2" spelling on Midnight/Forever and the plain one on
+    -- older Classic clients, and quietly skips names this client doesn't have
+    -- (AllAutos, for instance, only exists on the pre-Midnight clients).
+    ns.SetCVar("floatingCombatTextCombatDamage", v)
+    ns.SetCVar("floatingCombatTextCombatDamageAllAutos", v)
 end
 
 --------------------------------------------------------------------------

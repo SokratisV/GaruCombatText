@@ -30,6 +30,45 @@ ns.On("PLAYER_REGEN_ENABLED", function()
 end)
 
 --------------------------------------------------------------------------
+-- Client / API compatibility
+--------------------------------------------------------------------------
+-- WoW Forever runs Classic content on the Midnight (12.x) client, so it reports a
+-- Classic WOW_PROJECT_ID but exposes the modern addon API: the loose GetSpell* and
+-- SetCVar globals are gone, and the widget set is the retail one. Project id can't
+-- tell it apart, so everything below feature-detects the API it needs instead.
+
+-- Spell icon lookup. C_Spell.GetSpellTexture is the only form on Forever/Midnight;
+-- the GetSpellTexture global is what the older Classic clients ship.
+local C_SpellGetTexture = C_Spell and C_Spell.GetSpellTexture
+function ns.SpellTexture(spellId)
+    if not spellId then return nil end
+    local ok, tex
+    if C_SpellGetTexture then
+        ok, tex = pcall(C_SpellGetTexture, spellId)
+    elseif GetSpellTexture then
+        ok, tex = pcall(GetSpellTexture, spellId)
+    end
+    return ok and tex or nil
+end
+
+-- SetCVar moved under C_CVar; the global is still around on older clients only.
+-- Midnight also renamed the floating-combat-text CVars with a "_v2" suffix, so
+-- write to whichever spelling this client actually knows. Setting an unknown CVar
+-- throws, hence the existence check and the pcall around the write.
+local setCVar = (C_CVar and C_CVar.SetCVar) or SetCVar
+local getCVar = (C_CVar and C_CVar.GetCVar) or GetCVar
+function ns.SetCVar(name, value)
+    if not setCVar or not getCVar then return end
+    for _, candidate in ipairs({ name .. "_v2", name }) do
+        local ok, current = pcall(getCVar, candidate)
+        if ok and current ~= nil then
+            pcall(setCVar, candidate, value)
+            return
+        end
+    end
+end
+
+--------------------------------------------------------------------------
 -- Helpers (the modules + Meter expect these on ns)
 --------------------------------------------------------------------------
 ns.FLAT = "Interface\\Buttons\\WHITE8X8"
