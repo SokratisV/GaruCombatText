@@ -174,21 +174,55 @@ end
 function ns.DiagStart(seconds)
     seconds = seconds or 15
     diag = { seen = 0, mine = 0, routed = 0 }
+
+    -- A private frame registering the event directly, as a control. If this counts
+    -- events while the addon's dispatcher doesn't, the bug is ours; if neither
+    -- counts, the client simply isn't delivering the event.
+    local probe = CreateFrame("Frame")
+    probe.count = 0
+    pcall(probe.RegisterEvent, probe, "COMBAT_LOG_EVENT_UNFILTERED")
+    probe:SetScript("OnEvent", function(self) self.count = self.count + 1 end)
+
+    -- Sample combat state once a second, so "no events" can be told apart from
+    -- "you weren't actually fighting during the window".
+    local inCombat, ticks = 0, 0
+    local sampler = C_Timer.NewTicker(1, function()
+        ticks = ticks + 1
+        if UnitAffectingCombat("player") then inCombat = inCombat + 1 end
+    end)
+
     print("|cff66ccffGaru Combat Text|r: watching the combat log for " .. seconds
-        .. "s -- go hit something.")
+        .. "s -- |cffffd100start attacking now and keep attacking|r.")
+
     C_Timer.After(seconds, function()
         local d = diag
         diag = nil
+        if sampler then sampler:Cancel() end
+        probe:UnregisterAllEvents()
+
+        local valid = "unknown"
+        if C_EventUtils and C_EventUtils.IsEventValid then
+            local ok, v = pcall(C_EventUtils.IsEventValid, "COMBAT_LOG_EVENT_UNFILTERED")
+            if ok then valid = tostring(v) end
+        end
+
         print("|cff66ccffGaru Combat Text|r: combat-log diagnostics")
-        print("  CLEU registered: " .. tostring(ns.registered["COMBAT_LOG_EVENT_UNFILTERED"]))
-        print("  events seen: " .. d.seen
-            .. "  |  passed the 'mine' filter: " .. d.mine
-            .. "  |  routed to a feed: " .. d.routed)
-        local pg, tg = UnitGUID("player"), UnitGUID("target")
-        print("  UnitGUID('player') secret=" .. tostring(ns.IsSecret(pg)) .. " type=" .. type(pg))
-        print("  UnitGUID('target') secret=" .. tostring(ns.IsSecret(tg)) .. " type=" .. type(tg))
-        if d.seen == 0 then
-            print("  |cffff5555No combat-log events reached the addon at all.|r")
+        print("  CLEU registered: " .. tostring(ns.registered["COMBAT_LOG_EVENT_UNFILTERED"])
+            .. "  |  IsEventValid: " .. valid)
+        print("  you were in combat for " .. inCombat .. " of " .. ticks .. "s")
+        print("  events: addon " .. d.seen .. "  |  private probe frame " .. probe.count)
+        print("  passed the 'mine' filter: " .. d.mine .. "  |  routed to a feed: " .. d.routed)
+        print("  C_DamageMeter API present: " .. tostring(C_DamageMeter ~= nil))
+
+        if inCombat == 0 then
+            print("  |cffffd100You weren't in combat during the window|r -- nothing to read. Re-run and attack.")
+        elseif d.seen == 0 and probe.count == 0 then
+            print("  |cffff5555The client delivered no combat-log events at all, to us or to a bare frame.|r")
+            if C_DamageMeter then
+                print("  C_DamageMeter exists, so this client replaces the addon combat log with that API.")
+            end
+        elseif d.seen == 0 then
+            print("  |cffff5555Events reach a bare frame but not the addon|r -- our dispatcher is at fault.")
         elseif d.mine == 0 then
             print("  |cffff5555Events arrive but none count as mine|r -- the source filter is dropping them.")
         elseif d.routed == 0 then
