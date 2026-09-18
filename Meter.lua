@@ -321,7 +321,9 @@ function ns.Meter.SpellManaCost(spellId)
 end
 
 -- Floating, Apex-style growing numbers.
-local function layoutFloat(s, list, dt, cfg, maxhp)
+-- `basis` is what severity scales against: the unit's max HP, or the biggest total
+-- in the feed when the client won't hand us a readable max HP (see update()).
+local function layoutFloat(s, list, dt, cfg, basis)
     local ap = ALIGN_POINT[cfg.align] or "CENTER"
     local up = (cfg.growth ~= "DOWN")
     local n  = math.min(#list, cfg.maxLines)   -- visible count (for the radial arc spread)
@@ -337,10 +339,10 @@ local function layoutFloat(s, list, dt, cfg, maxhp)
                 t.bar:Hide(); t.name:Hide()
             end
 
-            -- size: grows with the running total relative to the unit's max HP
+            -- size: grows with the running total relative to the severity basis
             local size = cfg.fontSize
             if cfg.scaleBySeverity then
-                local sev = math.min(1, (t.total / maxhp) / (math.max(1, cfg.bigPct) / 100))
+                local sev = math.min(1, (t.total / basis) / (math.max(1, cfg.bigPct) / 100))
                 size = cfg.fontSize + (cfg.maxSize - cfg.fontSize) * sev
             end
             size = math.max(6, size)
@@ -551,8 +553,14 @@ end
 local function update(M, s, dt)
     local cfg = M.cfg()
     local now = GetTime()
+
+    -- Severity scaling wants the unit's max HP, but on Midnight / WoW Forever that
+    -- comes back as a secret once we're tainted: comparing it throws, and dividing
+    -- by it yields another secret that could never reach SetFont. Fall back to the
+    -- biggest total currently in the feed (computed below, after the list is built)
+    -- -- that's our own combat-log tally, so it is always a plain number.
     local maxhp = UnitHealthMax(s.frame.unit)
-    maxhp = (maxhp and maxhp > 0) and maxhp or 1
+    if ns.IsSecret(maxhp) or not maxhp or maxhp <= 0 then maxhp = nil end
 
     local aw = areaWidth(M, s)
     if s.areaW ~= aw then s.areaW = aw; s.container:SetWidth(aw) end
@@ -594,10 +602,24 @@ local function update(M, s, dt)
         table.sort(list, function(a, b) return a.total > b.total end)
     end
 
+    -- Severity basis: the unit's max HP when we're allowed to read it, otherwise the
+    -- largest total on show. Scaling then reads as "relative to the biggest number in
+    -- this feed" rather than "relative to the target's health pool" -- the top line
+    -- always sits at max size -- which is the closest thing to the intent that a
+    -- secret max HP leaves us.
+    local basis = maxhp
+    if not basis then
+        basis = 1
+        for i = 1, #list do
+            local v = list[i].total
+            if v and v > basis then basis = v end
+        end
+    end
+
     if cfg.style == "meter" then
         layoutMeter(s, list, dt, cfg)
     else
-        layoutFloat(s, list, dt, cfg, maxhp)
+        layoutFloat(s, list, dt, cfg, basis)
     end
 
     -- Combat-duration header (clients opt in via cfg.showCombatTime, e.g. Damage

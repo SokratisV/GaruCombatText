@@ -37,6 +37,16 @@ end)
 -- SetCVar globals are gone, and the widget set is the retail one. Project id can't
 -- tell it apart, so everything below feature-detects the API it needs instead.
 
+-- Midnight hands addon-tainted code "secret" values for some unit info. A secret
+-- can be stored and passed around, but ordering comparisons on one throw outright
+-- and arithmetic on one produces another secret, so a number derived from it can
+-- never reach a widget setter. Test before touching one; on the older Classic
+-- clients there are no secrets and issecretvalue doesn't exist.
+local issecret = _G.issecretvalue
+function ns.IsSecret(v)
+    return issecret ~= nil and issecret(v)
+end
+
 -- Spell icon lookup. C_Spell.GetSpellTexture is the only form on Forever/Midnight;
 -- the GetSpellTexture global is what the older Classic clients ship.
 local C_SpellGetTexture = C_Spell and C_Spell.GetSpellTexture
