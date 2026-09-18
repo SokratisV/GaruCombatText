@@ -68,6 +68,10 @@ function ns.RunProbe(which)
     end
     print("|cff66ccffGaru Combat Text|r: C_DamageMeter probe")
 
+    -- The API survey alone fills the chat frame, so naming a meter type skips it
+    -- and prints only the data dump. Lets the second half be read without scrolling.
+    if which and which ~= "" then return ns.ProbeMeter(which) end
+
     local fns = {}
     for k, v in pairs(C_DamageMeter) do
         if type(v) == "function" then fns[#fns + 1] = k end
@@ -100,6 +104,10 @@ function ns.RunProbe(which)
         end
     end
 
+    return ns.ProbeMeter(which)
+end
+
+function ns.ProbeMeter(which)
     local typeName = METER_ALIASES[(which or ""):lower()] or "DamageDone"
     local meterType = Enum and Enum.DamageMeterType and Enum.DamageMeterType[typeName]
     local sessionType = Enum and Enum.DamageMeterSessionType
