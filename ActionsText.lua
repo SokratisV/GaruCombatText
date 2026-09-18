@@ -17,6 +17,13 @@ local function destFrame(destGUID, destFlags)
     return nil
 end
 
+-- This feed counts what your target avoided -- dodge, parry, block, miss, resist.
+-- Those are combat-log facts, and C_DamageMeter reports damage, not misses: there
+-- is no meter type that counts them. So where the combat log is gone, this feed
+-- has no data source at all and is switched off rather than left silently empty.
+ns.ActionsAvailable = not ns.UseDamageMeter
+
+if ns.ActionsAvailable then
 ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local cfg = ns.db.actionsText
     if not cfg.enabled then return end
@@ -45,6 +52,7 @@ end)
 ns.On("PLAYER_TARGET_CHANGED", function()
     meter:Retarget(ns.actionsHostFrame)
 end)
+end
 
 --------------------------------------------------------------------------
 -- Test preview (reuses the "combat" test flag)
@@ -70,7 +78,9 @@ end
 function ns.RefreshActionsText()
     local cfg = ns.db.actionsText
     local frames = ns.actionsHostFrame and { ns.actionsHostFrame } or {}
-    meter:Refresh(frames, function(frame) return cfg.enabled and frame == ns.actionsHostFrame end)
+    meter:Refresh(frames, function(frame)
+        return ns.ActionsAvailable and cfg.enabled and frame == ns.actionsHostFrame
+    end)
 end
 
 function ns.BuildActionsText()

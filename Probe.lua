@@ -63,7 +63,7 @@ local METER_ALIASES = {
 
 function ns.RunProbe(which)
     if not C_DamageMeter then
-        ns.Print("C_DamageMeter is not present on this client.")
+        print("|cff66ccffGaru Combat Text|r: C_DamageMeter is not present on this client.")
         return
     end
     print("|cff66ccffGaru Combat Text|r: C_DamageMeter probe")

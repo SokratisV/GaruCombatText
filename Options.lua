@@ -253,6 +253,11 @@ local function fillActions(c, reflow)
     local a = ns.db.actionsText
     local syncs = {}; SYNC = syncs
     Header(c, "Actions (avoided by target)")
+    if not ns.ActionsAvailable then
+        Note(c, "|cffff5555Unavailable on this client.|r Dodges, parries and misses are "
+            .. "combat-log facts, and C_DamageMeter -- what replaced the addon combat log "
+            .. "here -- reports damage, not misses. Settings below have no effect.")
+    end
     Button(c, "Copy & mirror from Damage Dealt", function()
         copyMirror(a, ns.db.enemyText); RA(); RAc(); RT()
         for _, f in ipairs(syncs) do f() end; reflow()

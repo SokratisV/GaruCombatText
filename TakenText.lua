@@ -15,6 +15,8 @@ local meter = ns.Meter.New({ cfg = function() return ns.db.takenText end })
 
 local function host() return ns.takenHostFrame end
 
+-- Wherever C_DamageMeter exists the combat log is gone; DamageMeter.lua feeds this.
+if not ns.UseDamageMeter then
 ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local cfg = ns.db.takenText
     if not cfg.enabled then return end
@@ -64,6 +66,20 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
 
     meter:Bump(frame, key, label, amount, school, crit and true or false, iconTex)
 end)
+end
+
+-- Damage-meter path: poll my own DamageTaken rows and feed the growth. The avoid
+-- rows ("Dodge x4") have no equivalent here -- that API reports damage, not misses.
+if ns.UseDamageMeter then
+    local state = ns.DM.NewState()
+    ns.DM.Register(function()
+        local cfg = ns.db.takenText
+        if not cfg.enabled or ns.test.combat then return end
+        local frame = host()
+        if not frame then return end
+        ns.DM.Pump(state, ns.DM.TYPES.taken, meter, frame)
+    end)
+end
 
 --------------------------------------------------------------------------
 -- Keep the whole feed up through the fight + a grace period: freeze fading

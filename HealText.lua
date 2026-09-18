@@ -23,6 +23,8 @@ local function playerFrame() return ns.healHostFrame end   -- healing-received a
 --------------------------------------------------------------------------
 -- Routing: healing landing on me, from anyone
 --------------------------------------------------------------------------
+-- Wherever C_DamageMeter exists the combat log is gone; DamageMeter.lua feeds this.
+if not ns.UseDamageMeter then
 ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local cfg = ns.db.healText
     if not cfg.enabled then return end       -- count in and out of combat
@@ -84,6 +86,21 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
                    spellName or "Mana", gain, spellSchool, false, icon(spellId))
     end
 end)
+end
+
+-- Damage-meter path. This is the shakiest of the three: HealingDone is keyed by the
+-- healer, so healing received has to be picked out by matching each spell row's
+-- other party against my own name. Mana gained has no equivalent at all.
+if ns.UseDamageMeter then
+    local state = ns.DM.NewState()
+    ns.DM.Register(function()
+        local cfg = ns.db.healText
+        if not cfg.enabled or ns.test.combat then return end
+        local pf = playerFrame()
+        if not pf then return end
+        ns.DM.PumpIncoming(state, ns.DM.TYPES.healing, meter, pf, UnitName("player"))
+    end)
+end
 
 --------------------------------------------------------------------------
 -- Lifecycle: freeze the window in combat, hold Y seconds after, then roll again

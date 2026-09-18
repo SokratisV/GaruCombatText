@@ -54,6 +54,16 @@ function ns.IsSecret(v)
     return issecret ~= nil and issecret(v)
 end
 
+-- Restricted APIs refuse by returning *nothing* rather than by erroring, and a
+-- secret boolean still reports as "boolean" to type(). So a predicate only counts
+-- as answered when it hands back a real, non-secret boolean; anything else means
+-- "the client won't say", which is not the same as "no".
+function ns.Truth(v)
+    if ns.IsSecret(v) then return nil end
+    if type(v) ~= "boolean" then return nil end
+    return v
+end
+
 -- Spell icon lookup. C_Spell.GetSpellTexture is the only form on Forever/Midnight;
 -- the GetSpellTexture global is what the older Classic clients ship.
 local C_SpellGetTexture = C_Spell and C_Spell.GetSpellTexture
@@ -66,6 +76,21 @@ function ns.SpellTexture(spellId)
         ok, tex = pcall(GetSpellTexture, spellId)
     end
     return ok and tex or nil
+end
+
+-- Spell name, for labelling a row the damage meter reports by id alone.
+local C_SpellGetInfo = C_Spell and C_Spell.GetSpellInfo
+function ns.SpellName(spellId)
+    if not spellId then return nil end
+    if C_SpellGetInfo then
+        local ok, info = pcall(C_SpellGetInfo, spellId)
+        if ok and type(info) == "table" then return info.name end
+    end
+    if _G.GetSpellInfo then
+        local ok, name = pcall(_G.GetSpellInfo, spellId)
+        if ok then return name end
+    end
+    return nil
 end
 
 -- SetCVar moved under C_CVar; the global is still around on older clients only.
@@ -213,6 +238,7 @@ function ns.DiagStart(seconds)
         print("  events: addon " .. d.seen .. "  |  private probe frame " .. probe.count)
         print("  passed the 'mine' filter: " .. d.mine .. "  |  routed to a feed: " .. d.routed)
         print("  C_DamageMeter API present: " .. tostring(C_DamageMeter ~= nil))
+        print("  feeding from: " .. (ns.UseDamageMeter and "C_DamageMeter" or "combat log"))
 
         if inCombat == 0 then
             print("  |cffffd100You weren't in combat during the window|r -- nothing to read. Re-run and attack.")

@@ -48,6 +48,9 @@ local function destFrame(destGUID, destFlags)
     return nil
 end
 
+-- Wherever C_DamageMeter exists the combat log is gone, so don't even register for
+-- an event that will never arrive; DamageMeter.lua feeds this meter instead.
+if not ns.UseDamageMeter then
 ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local cfg = ns.db.enemyText
     if not cfg.enabled then return end
@@ -102,6 +105,20 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
 
     meter:Bump(frame, key, label, amount, school, crit and true or false, iconTex)
 end)
+end
+
+-- Damage-meter path: poll the player's own DamageDone rows and feed the growth.
+if ns.UseDamageMeter then
+    local state = ns.DM.NewState()
+    ns.DM.Register(function()
+        local cfg = ns.db.enemyText
+        if not cfg.enabled or ns.test.combat then return end
+        local frame = ns.frames and ns.frames.target
+        if not frame then return end
+        ns.DM.Pump(state, ns.DM.TYPES.damage, meter, frame)
+    end)
+    ns.On("PLAYER_TARGET_CHANGED", function() ns.DM.Reset(state) end)
+end
 
 ns.On("PLAYER_TARGET_CHANGED", function()
     meter:Retarget(ns.frames and ns.frames.target)
