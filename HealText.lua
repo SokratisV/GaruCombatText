@@ -29,8 +29,10 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     playerGUID = playerGUID or UnitGUID("player")
 
     local info = { CombatLogGetCurrentEventInfo() }
-    local sub, srcGUID, destGUID = info[2], info[4], info[8]
-    if destGUID ~= playerGUID then return end
+    local sub, srcGUID, srcFlags, destGUID, destFlags =
+        info[2], info[4], info[6], info[8], info[10]
+    -- healing landing on ME. Flags first, GUID as a fallback: see ns.SameGUID.
+    if not (ns.UnitIsMe(destFlags) or ns.SameGUID(destGUID, playerGUID)) then return end
 
     local pf = playerFrame()
     if not pf then return end
@@ -41,7 +43,9 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     if sub == "SPELL_CAST_SUCCESS" then
         -- track mana if it's shown OR needed for a healing/mana value
         local wantMana = cfg.showMana or cfg.valueMode == "permana" or cfg.valueMode == "both" or cfg.valueMode == "mana"
-        if not wantMana or srcGUID ~= playerGUID then return end
+        if not wantMana then return end
+        -- ...and only for mana I spent myself, never a pet's.
+        if not (ns.SourceIsMine(srcFlags, false) or ns.SameGUID(srcGUID, playerGUID)) then return end
         local spellId, spellName = info[12], info[13]
         -- absorb/shield spells (PW:S, Ice Barrier, ...) aren't healing - never
         -- give them a line in the healing section, even just for their mana.

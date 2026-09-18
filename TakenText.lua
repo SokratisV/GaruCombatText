@@ -21,8 +21,9 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     playerGUID = playerGUID or UnitGUID("player")
 
     local info = { CombatLogGetCurrentEventInfo() }
-    local sub, destGUID = info[2], info[8]
-    if destGUID ~= playerGUID then return end   -- only damage dealt TO me
+    local sub, destGUID, destFlags = info[2], info[8], info[10]
+    -- only damage dealt TO me. Flags first, GUID as a fallback: see ns.SameGUID.
+    if not (ns.UnitIsMe(destFlags) or ns.SameGUID(destGUID, playerGUID)) then return end
 
     local frame = host()
     if not frame then return end

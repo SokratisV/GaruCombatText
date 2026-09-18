@@ -10,9 +10,16 @@ local ADDON, ns = ...
 --------------------------------------------------------------------------
 local dispatcher = CreateFrame("Frame")
 local handlers, queue = {}, {}
+-- Registration outcome per event, so "nothing is happening" can be told apart from
+-- "the event never registered on this client". /gct debug reports it.
+ns.registered = {}
 function ns.On(event, fn)
     if not handlers[event] then
-        if not pcall(dispatcher.RegisterEvent, dispatcher, event) then return end
+        if not pcall(dispatcher.RegisterEvent, dispatcher, event) then
+            ns.registered[event] = false
+            return
+        end
+        ns.registered[event] = true
         handlers[event] = {}
     end
     handlers[event][#handlers[event] + 1] = fn
@@ -104,6 +111,92 @@ function ns.SetCVar(name, value)
             return
         end
     end
+end
+
+--------------------------------------------------------------------------
+-- Combat-log identity
+--------------------------------------------------------------------------
+-- Every feed has to answer two questions about each combat-log event: "did I
+-- cause this?" and "did it land on my target, or on me?". Both used to be answered
+-- by comparing GUIDs, which breaks on Midnight: UnitGUID can come back as a
+-- secret, a secret never equals a plain string, so every event is dropped --
+-- silently, with no error. That is exactly the "preview works, combat shows
+-- nothing" shape.
+--
+-- The combat log already carries both answers in its own object flags, which are
+-- plain numbers and cannot go secret. Ask those first, and keep the GUID compare
+-- as a fallback for clients or events that don't set the special flags.
+local bit_band = bit and bit.band or function() return 0 end
+
+local AFFIL_MINE    = COMBATLOG_OBJECT_AFFILIATION_MINE or 0x00000001
+local TYPE_PET      = COMBATLOG_OBJECT_TYPE_PET or 0x00001000
+local TYPE_GUARDIAN = COMBATLOG_OBJECT_TYPE_GUARDIAN or 0x00002000
+local PET_MASK      = TYPE_PET + TYPE_GUARDIAN
+local TARGET_FLAG   = COMBATLOG_OBJECT_TARGET or 0x00010000
+local FOCUS_FLAG    = COMBATLOG_OBJECT_FOCUS or 0x00020000
+
+-- A secret never equals a plain value, so reporting "no match" for one loses
+-- nothing real and avoids inspecting it (which throws).
+function ns.SameGUID(a, b)
+    if ns.IsSecret(a) or ns.IsSecret(b) then return false end
+    if a == nil or b == nil then return false end
+    return a == b
+end
+
+-- Did I -- or my pet, when the feed wants pets -- cause this event?
+function ns.SourceIsMine(flags, includePet)
+    flags = flags or 0
+    if bit_band(flags, AFFIL_MINE) == 0 then return false end
+    if bit_band(flags, PET_MASK) ~= 0 then return includePet and true or false end
+    return true
+end
+
+-- Is this object me (not my pet)?
+function ns.UnitIsMe(flags)
+    flags = flags or 0
+    return bit_band(flags, AFFIL_MINE) ~= 0 and bit_band(flags, PET_MASK) == 0
+end
+
+function ns.UnitIsMyTarget(flags) return bit_band(flags or 0, TARGET_FLAG) ~= 0 end
+function ns.UnitIsMyFocus(flags)  return bit_band(flags or 0, FOCUS_FLAG) ~= 0 end
+
+--------------------------------------------------------------------------
+-- Combat-log diagnostics (/gct debug)
+--------------------------------------------------------------------------
+-- Preview data is handed straight to the feeds, so when the preview draws and
+-- real combat doesn't, the cause is always either "no event arrived" or "a filter
+-- dropped it". These counters say which, on this client, rather than guessing.
+local diag
+function ns.DiagBump(bucket)
+    if diag then diag[bucket] = (diag[bucket] or 0) + 1 end
+end
+
+function ns.DiagStart(seconds)
+    seconds = seconds or 15
+    diag = { seen = 0, mine = 0, routed = 0 }
+    print("|cff66ccffGaru Combat Text|r: watching the combat log for " .. seconds
+        .. "s -- go hit something.")
+    C_Timer.After(seconds, function()
+        local d = diag
+        diag = nil
+        print("|cff66ccffGaru Combat Text|r: combat-log diagnostics")
+        print("  CLEU registered: " .. tostring(ns.registered["COMBAT_LOG_EVENT_UNFILTERED"]))
+        print("  events seen: " .. d.seen
+            .. "  |  passed the 'mine' filter: " .. d.mine
+            .. "  |  routed to a feed: " .. d.routed)
+        local pg, tg = UnitGUID("player"), UnitGUID("target")
+        print("  UnitGUID('player') secret=" .. tostring(ns.IsSecret(pg)) .. " type=" .. type(pg))
+        print("  UnitGUID('target') secret=" .. tostring(ns.IsSecret(tg)) .. " type=" .. type(tg))
+        if d.seen == 0 then
+            print("  |cffff5555No combat-log events reached the addon at all.|r")
+        elseif d.mine == 0 then
+            print("  |cffff5555Events arrive but none count as mine|r -- the source filter is dropping them.")
+        elseif d.routed == 0 then
+            print("  |cffff5555Your events arrive but none route to a feed|r -- the target filter is dropping them.")
+        else
+            print("  |cff55ff55Events are reaching the feeds.|r")
+        end
+    end)
 end
 
 --------------------------------------------------------------------------

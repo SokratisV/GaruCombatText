@@ -5,12 +5,7 @@ local ADDON, ns = ...
 -- wand, item, pet). Anchored beside the target frame (and optionally focus).
 -- Built on the shared ns.Meter engine; this file is just routing + lifecycle.
 
-local bit_band = bit and bit.band or function() return 0 end
 
-local AFFIL_MINE    = COMBATLOG_OBJECT_AFFILIATION_MINE or 0x00000001
-local TYPE_PET      = COMBATLOG_OBJECT_TYPE_PET or 0x00001000
-local TYPE_GUARDIAN = COMBATLOG_OBJECT_TYPE_GUARDIAN or 0x00002000
-local MINE_PET_MASK = TYPE_PET + TYPE_GUARDIAN
 local MELEE_ICON    = "Interface\\ICONS\\INV_Sword_04"
 
 local playerGUID
@@ -42,10 +37,14 @@ end
 --------------------------------------------------------------------------
 -- Routing: damage I (or my pet) deal to the target / focus
 --------------------------------------------------------------------------
-local function destFrame(destGUID)
+-- Flags first, GUIDs only as a fallback: see the note above ns.SameGUID in Core.
+local function destFrame(destGUID, destFlags)
     if not ns.frames then return nil end
-    if destGUID == UnitGUID("target") then return ns.frames.target end
-    if ns.db.enemyText.onFocus and destGUID == UnitGUID("focus") then return ns.frames.focus end
+    local onFocus = ns.db.enemyText.onFocus
+    if ns.UnitIsMyTarget(destFlags) then return ns.frames.target end
+    if onFocus and ns.UnitIsMyFocus(destFlags) then return ns.frames.focus end
+    if ns.SameGUID(destGUID, UnitGUID("target")) then return ns.frames.target end
+    if onFocus and ns.SameGUID(destGUID, UnitGUID("focus")) then return ns.frames.focus end
     return nil
 end
 
@@ -55,22 +54,25 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     playerGUID = playerGUID or UnitGUID("player")
 
     local info = { CombatLogGetCurrentEventInfo() }
-    local sub, srcGUID, srcFlags, destGUID = info[2], info[4], info[6], info[8]
+    local sub, srcGUID, srcFlags, destGUID, destFlags =
+        info[2], info[4], info[6], info[8], info[10]
+    ns.DiagBump("seen")
 
     -- is the source me (or, optionally, my pet/guardian)?
-    local mine = (srcGUID == playerGUID)
-    if not mine and cfg.includePet then
-        srcFlags = srcFlags or 0
-        mine = (bit_band(srcFlags, AFFIL_MINE) ~= 0) and (bit_band(srcFlags, MINE_PET_MASK) ~= 0)
-    end
+    local mine = ns.SourceIsMine(srcFlags, cfg.includePet)
+        or ns.SameGUID(srcGUID, playerGUID)
     if not mine then return end
+    ns.DiagBump("mine")
 
-    local frame = destFrame(destGUID)
+    local frame = destFrame(destGUID, destFlags)
     if not frame then return end
+    ns.DiagBump("routed")
 
     -- mana spent: attribute a cast's mana cost to that spell's line (player only)
     if sub == "SPELL_CAST_SUCCESS" then
-        if not cfg.showMana or srcGUID ~= playerGUID then return end
+        if not cfg.showMana then return end
+        -- my own mana only, never a pet's, so the pet flag is not accepted here
+        if not (ns.SourceIsMine(srcFlags, false) or ns.SameGUID(srcGUID, playerGUID)) then return end
         local spellId, spellName = info[12], info[13]
         local cost = spellManaCost(spellId)
         if cost <= 0 then return end

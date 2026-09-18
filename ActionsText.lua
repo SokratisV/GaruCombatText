@@ -5,18 +5,15 @@ local ADDON, ns = ...
 -- Damage Dealt: anchored to the target, switches and (optionally) persists per target.
 -- Count rows ("Dodge x4") on the shared ns.Meter engine.
 
-local bit_band = bit and bit.band or function() return 0 end
-local AFFIL_MINE    = COMBATLOG_OBJECT_AFFILIATION_MINE or 0x00000001
-local TYPE_PET      = COMBATLOG_OBJECT_TYPE_PET or 0x00001000
-local TYPE_GUARDIAN = COMBATLOG_OBJECT_TYPE_GUARDIAN or 0x00002000
-local MINE_PET_MASK = TYPE_PET + TYPE_GUARDIAN
 
 local playerGUID
 local testAcc = 0
 local meter = ns.Meter.New({ cfg = function() return ns.db.actionsText end })
 
-local function destFrame(destGUID)
-    if destGUID == UnitGUID("target") then return ns.actionsHostFrame end
+-- Flags first, GUIDs only as a fallback: see the note above ns.SameGUID in Core.
+local function destFrame(destGUID, destFlags)
+    if ns.UnitIsMyTarget(destFlags) then return ns.actionsHostFrame end
+    if ns.SameGUID(destGUID, UnitGUID("target")) then return ns.actionsHostFrame end
     return nil
 end
 
@@ -26,19 +23,17 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     playerGUID = playerGUID or UnitGUID("player")
 
     local info = { CombatLogGetCurrentEventInfo() }
-    local sub, srcGUID, srcFlags, destGUID = info[2], info[4], info[6], info[8]
+    local sub, srcGUID, srcFlags, destGUID, destFlags =
+        info[2], info[4], info[6], info[8], info[10]
     if sub ~= "SWING_MISSED" and sub ~= "SPELL_MISSED"
         and sub ~= "RANGE_MISSED" and sub ~= "SPELL_PERIODIC_MISSED" then return end
 
     -- source must be me (or my pet/guardian, optionally)
-    local mine = (srcGUID == playerGUID)
-    if not mine and cfg.includePet then
-        srcFlags = srcFlags or 0
-        mine = (bit_band(srcFlags, AFFIL_MINE) ~= 0) and (bit_band(srcFlags, MINE_PET_MASK) ~= 0)
-    end
+    local mine = ns.SourceIsMine(srcFlags, cfg.includePet)
+        or ns.SameGUID(srcGUID, playerGUID)
     if not mine then return end
 
-    local frame = destFrame(destGUID)
+    local frame = destFrame(destGUID, destFlags)
     if not frame then return end
 
     local missType = (sub == "SWING_MISSED") and info[12] or info[15]
