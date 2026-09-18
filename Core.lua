@@ -65,14 +65,42 @@ end
 -- Midnight also renamed the floating-combat-text CVars with a "_v2" suffix, so
 -- write to whichever spelling this client actually knows. Setting an unknown CVar
 -- throws, hence the existence check and the pcall around the write.
+--
+-- Writing a gameplay CVar is protected during combat lockdown: doing it from
+-- tainted addon code pops Blizzard's "has been blocked from an action only
+-- available to the Blizzard UI" dialog. So we never write in combat -- we record
+-- what we want and apply it the moment combat ends. Writes are also skipped when
+-- the CVar already holds the value, which is what most calls turn out to be.
 local setCVar = (C_CVar and C_CVar.SetCVar) or SetCVar
 local getCVar = (C_CVar and C_CVar.GetCVar) or GetCVar
+
+local desiredCVar = {}     -- [cvar] = value to apply once we're allowed to
+local flushQueued = false
+
+local function flushCVars()
+    flushQueued = false
+    for cvar, value in pairs(desiredCVar) do
+        desiredCVar[cvar] = nil
+        local ok, current = pcall(getCVar, cvar)
+        if ok and current ~= nil and tostring(current) ~= tostring(value) then
+            pcall(setCVar, cvar, value)
+        end
+    end
+end
+
 function ns.SetCVar(name, value)
     if not setCVar or not getCVar then return end
     for _, candidate in ipairs({ name .. "_v2", name }) do
         local ok, current = pcall(getCVar, candidate)
         if ok and current ~= nil then
-            pcall(setCVar, candidate, value)
+            if tostring(current) == tostring(value) then return end   -- already right
+            desiredCVar[candidate] = value
+            -- RunWhenSafe applies it now when we're out of combat, or queues it for
+            -- PLAYER_REGEN_ENABLED. One flusher covers however many CVars pile up.
+            if not flushQueued then
+                flushQueued = true
+                ns.RunWhenSafe(flushCVars)
+            end
             return
         end
     end
