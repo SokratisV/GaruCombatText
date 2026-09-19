@@ -45,8 +45,8 @@ local function Header(c, text, vis)
     fs:SetPoint("TOPLEFT", PAD, 0); fs:SetText(text); fs:SetTextColor(unpack(ACCENT))
 end
 
-local function Note(c, text, vis)
-    local row = addRow(c, 44, vis)
+local function Note(c, text, vis, height)
+    local row = addRow(c, height or 44, vis)
     local fs = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     fs:SetPoint("TOPLEFT", PAD, -2); fs:SetWidth(CW - 24); fs:SetJustifyH("LEFT"); fs:SetText(text)
 end
@@ -199,6 +199,7 @@ local function fillDamage(c, reflow)
     local et = ns.db.enemyText
     local syncs = {}; SYNC = syncs
     Header(c, "Damage Dealt (per target)")
+    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends, so this fills in afterwards and stays until the next fight starts.", function() return ns.SummaryMode end, 58)
     Button(c, "Copy & mirror from Healing", function()
         copyMirror(et, ns.db.healText); RA(); RE(); RT()
         for _, f in ipairs(syncs) do f() end; reflow()
@@ -227,6 +228,7 @@ local function fillTaken(c, reflow)
     local tk = ns.db.takenText
     local syncs = {}; SYNC = syncs
     Header(c, "Damage Taken (by type)")
+    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends, so this fills in afterwards and stays until the next fight starts.", function() return ns.SummaryMode end, 58)
     Button(c, "Copy & mirror from Damage Dealt", function()
         copyMirror(tk, ns.db.enemyText); RA(); RK(); RT()
         for _, f in ipairs(syncs) do f() end; reflow()
@@ -245,7 +247,7 @@ local function fillTaken(c, reflow)
     Checkbox(c, "Color by damage school", function() return tk.schoolColors end, function(v) tk.schoolColors = v end)
     Checkbox(c, "Show misses & avoids (dodge/parry/block/...)", function() return tk.showAvoid end, function(v) tk.showAvoid = v; RK() end)
     Slider(c, "Ignore hits below", 0, 3000, 25, function() return tk.threshold end, function(v) tk.threshold = v end)
-    Slider(c, "Keep after combat (s)", 0, 60, 1, function() return tk.holdSecs end, function(v) tk.holdSecs = v end)
+    Slider(c, "Keep after combat (s)", 0, 60, 1, function() return tk.holdSecs end, function(v) tk.holdSecs = v end, function() return not ns.SummaryMode end)
     SYNC = nil
 end
 
@@ -282,6 +284,7 @@ local function fillHealing(c, reflow)
     local h = ns.db.healText
     local syncs = {}; SYNC = syncs
     Header(c, "Healing Received (per spell)")
+    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends, so this fills in afterwards and stays until the next fight starts.", function() return ns.SummaryMode end, 58)
     Button(c, "Copy & mirror from Damage Dealt", function()
         copyMirror(h, ns.db.enemyText); RA(); RH(); RT()
         for _, f in ipairs(syncs) do f() end; reflow()
@@ -302,8 +305,8 @@ local function fillHealing(c, reflow)
     Checkbox(c, "Show mana spent on heals", function() return h.showMana end, function(v) h.showMana = v end)
     Checkbox(c, "Count mana gains (Innervate, etc.)", function() return h.includeMana end, function(v) h.includeMana = v end)
     Slider(c, "Ignore heals below", 0, 5000, 25, function() return h.threshold end, function(v) h.threshold = v end)
-    Slider(c, "Rolling window (s)", 1, 30, 1, function() return h.windowSecs end, function(v) h.windowSecs = v end)
-    Slider(c, "Keep after combat (s)", 0, 60, 1, function() return h.holdSecs end, function(v) h.holdSecs = v end)
+    Slider(c, "Rolling window (s)", 1, 30, 1, function() return h.windowSecs end, function(v) h.windowSecs = v end, function() return not ns.SummaryMode end)
+    Slider(c, "Keep after combat (s)", 0, 60, 1, function() return h.holdSecs end, function(v) h.holdSecs = v end, function() return not ns.SummaryMode end)
     SYNC = nil
 end
 

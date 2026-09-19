@@ -31,6 +31,17 @@ DM.available = (C_DamageMeter ~= nil)
 -- feeds use it to decide which way to get their data.
 ns.UseDamageMeter = DM.available and true or false
 
+-- ...and, because this client withholds the meter's numbers for the duration of a
+-- fight and only releases them once it ends, the same flag means the feeds can only
+-- be a SUMMARY of the fight just finished. Measured: out of combat the totals read
+-- normally; from the first moment of combat every one of them is unreadable, and
+-- stays that way until combat drops. No polling interval or event changes that.
+--
+-- Summary mode therefore turns off the whole live-feed apparatus -- rolling
+-- windows, hold timers, fades. A summary should simply stay put until the next
+-- fight replaces it.
+ns.SummaryMode = ns.UseDamageMeter
+
 DM.TYPES = MeterType and {
     damage  = MeterType.DamageDone,
     taken   = MeterType.DamageTaken,
@@ -55,6 +66,38 @@ local function localSource(meterType)
         end
     end
     return nil, session
+end
+
+-- How long the fight being summarised lasted, or nil. Used in place of the live
+-- combat clock, which counted from the first hit we saw -- and in summary mode we
+-- see no hits at all, only the total afterwards.
+function DM.SessionSeconds()
+    if not DM.available or not C_DamageMeter.GetSessionDurationSeconds then return nil end
+    local ok, secs = pcall(C_DamageMeter.GetSessionDurationSeconds, SessionType.Current)
+    if not ok or ns.IsSecret(secs) or type(secs) ~= "number" or secs <= 0 then return nil end
+    return secs
+end
+
+-- The meter can be switched off or unavailable; nothing works if it is, and saying
+-- so beats drawing empty feeds forever.
+function DM.IsUsable()
+    if not DM.available then return false end
+    if C_DamageMeter.IsDamageMeterAvailable then
+        local ok, v = pcall(C_DamageMeter.IsDamageMeterAvailable)
+        if ok and type(v) == "boolean" then return v end
+    end
+    return true
+end
+
+function ns.PrintStatus()
+    print("|cff66ccffGaru Combat Text|r: reading from "
+        .. (ns.UseDamageMeter and "C_DamageMeter (post-fight summaries)" or "the combat log (live)"))
+    if ns.UseDamageMeter then
+        print("   meter available: " .. tostring(DM.IsUsable())
+            .. "  |  last fight: " .. (DM.SessionSeconds() and (math.floor(DM.SessionSeconds()) .. "s") or "none"))
+        print("   This client hides damage numbers during a fight, so the feeds fill in")
+        print("   once it ends. Actions (dodge/parry/miss) has no data source at all here.")
+    end
 end
 
 local labelCache = {}

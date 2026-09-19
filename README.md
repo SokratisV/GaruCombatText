@@ -1,11 +1,31 @@
 # Garu Combat Text
 
-**Standalone combat text for World of Warcraft (WoW Forever / TBC Classic): damage you deal, per target, and healing you receive.**
+**Damage you deal and take, and healing you receive, broken down per spell.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-![Version](https://img.shields.io/badge/version-1.1-brightgreen)
+![Version](https://img.shields.io/badge/version-2.1.0-brightgreen)
 ![WoW](https://img.shields.io/badge/WoW-Forever%20%2F%20TBC%20Classic-f8b700)
 ![Interface](https://img.shields.io/badge/interface-16001%20%7C%2020505-555)
+
+## On WoW Forever: a post-fight summary
+
+Midnight removed the addon combat log and replaced it with `C_DamageMeter`, which reports
+per-fight aggregates rather than individual hits -- and this client withholds even those
+while a fight is in progress, releasing them only once it ends. Measured: out of combat
+the totals read normally; from the first moment of combat every one is unreadable until
+combat drops.
+
+Live combat text is therefore not possible on Forever. The feeds instead clear when a
+fight starts and fill with that fight's figures when it ends, staying put until the next
+one. The rolling-window and fade-timing settings are hidden there, because a summary has
+nothing to roll or fade.
+
+Also unavailable on Forever, for want of any field carrying them: per-hit crits, spell
+schools, mana spent, and the whole **Actions** feed (dodge/parry/miss counts are
+combat-log facts, and this API reports damage, not misses).
+
+On the Classic clients nothing changes: the combat log is still there and every feed
+works live, exactly as before.
 
 > **Client support.** Runs on **WoW Forever** (interface `16001`) and on the
 > **TBC Classic / Anniversary** client (interface `20505`) from the same files.

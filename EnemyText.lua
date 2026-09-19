@@ -59,17 +59,14 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local info = { CombatLogGetCurrentEventInfo() }
     local sub, srcGUID, srcFlags, destGUID, destFlags =
         info[2], info[4], info[6], info[8], info[10]
-    ns.DiagBump("seen")
 
     -- is the source me (or, optionally, my pet/guardian)?
     local mine = ns.SourceIsMine(srcFlags, cfg.includePet)
         or ns.SameGUID(srcGUID, playerGUID)
     if not mine then return end
-    ns.DiagBump("mine")
 
     local frame = destFrame(destGUID, destFlags)
     if not frame then return end
-    ns.DiagBump("routed")
 
     -- mana spent: attribute a cast's mana cost to that spell's line (player only)
     if sub == "SPELL_CAST_SUCCESS" then
@@ -119,6 +116,7 @@ if ns.UseDamageMeter then
     end)
     ns.DM.RegisterClear(function() meter:Clear(); ns.DM.Reset(state) end)
     ns.On("PLAYER_TARGET_CHANGED", function() ns.DM.Reset(state) end)
+    meter.noFade = true   -- a summary stays until the next fight clears it
 end
 
 ns.On("PLAYER_TARGET_CHANGED", function()
@@ -174,7 +172,10 @@ function ns.ClearEnemyText()
 end
 
 -- Seconds of combat with the current target (freezes 3s after the last hit), or nil.
+-- In summary mode there are no hits to time, so the meter's own figure for the
+-- fight just finished is the only honest answer.
 function ns.CombatDuration()
+    if ns.SummaryMode then return ns.DM.SessionSeconds() end
     local cs, lh = meter:CombatInfo(ns.frames and ns.frames.target)
     if not cs then return nil end
     local now = GetTime()

@@ -83,9 +83,18 @@ if ns.UseDamageMeter then
 end
 
 --------------------------------------------------------------------------
+-- Fade lifecycle (live mode only)
+--------------------------------------------------------------------------
 -- Keep the whole feed up through the fight + a grace period: freeze fading
 -- while in combat, and for `holdSecs` after it ends, then let it fade out.
---------------------------------------------------------------------------
+--
+-- None of this applies to a summary. There the numbers arrive *at* the end of the
+-- fight, so a hold timer started when combat drops is already counting down
+-- against an empty feed -- which is exactly why this fed straight into "the damage
+-- taken immediately fades away". A summary just stays until the next fight.
+if ns.SummaryMode then
+    meter.noFade = true
+else
 local inCombat, fadeGen = false, 0
 ns.On("PLAYER_REGEN_DISABLED", function()
     inCombat = true
@@ -104,6 +113,7 @@ ns.On("PLAYER_REGEN_ENABLED", function()
         meter.noFade = false
     end
 end)
+end
 
 --------------------------------------------------------------------------
 -- Test preview (reuses the "combat" test flag)

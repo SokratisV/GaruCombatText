@@ -1,8 +1,8 @@
 ## Interface: 16001, 20505
 ## Title: |cff66ccffGaru Combat Text|r
-## Notes: Standalone combat text: damage dealt, damage taken, healing received & actions avoided. Freeform movable anchors, own settings (/gct).
+## Notes: Damage dealt & taken and healing received, per spell. Live on Classic; on WoW Forever the client hides combat numbers until a fight ends, so it shows a post-fight summary (/gct).
 ## Author: Sokratis
-## Version: 2.0.0
+## Version: 2.1.0
 ## SavedVariables: GaruCombatTextDB
 ## IconTexture: Interface\Icons\Ability_Warrior_BloodFrenzy
 ## X-License: MIT
@@ -18,5 +18,4 @@ TakenText.lua
 ActionsText.lua
 Timer.lua
 Options.lua
-Probe.lua
 Init.lua

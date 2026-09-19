@@ -106,6 +106,12 @@ end
 --------------------------------------------------------------------------
 -- Lifecycle: freeze the window in combat, hold Y seconds after, then roll again
 --------------------------------------------------------------------------
+-- A summary has no rolling window to manage: the figures arrive once, complete,
+-- after the fight. Freeze the window permanently and skip the hold machinery.
+if ns.SummaryMode then
+    meter:SetRolling(false)
+    meter.noFade = true
+else
 local function cancelHold()
     if holdTimer then holdTimer:Cancel(); holdTimer = nil end
 end
@@ -128,6 +134,7 @@ ns.On("PLAYER_REGEN_ENABLED", function()     -- leaving combat
         meter:SetRolling(true)
     end
 end)
+end
 
 --------------------------------------------------------------------------
 -- Test preview (reuses the "combat" test flag)
