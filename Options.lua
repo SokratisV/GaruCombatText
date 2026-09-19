@@ -199,7 +199,7 @@ local function fillDamage(c, reflow)
     local et = ns.db.enemyText
     local syncs = {}; SYNC = syncs
     Header(c, ns.SummaryMode and "Damage Dealt (this fight)" or "Damage Dealt (per target)")
-    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays available for the hold window set on the Damage Dealt tab.", function() return ns.SummaryMode end, 72)
+    Note(c, "|cffffd100Post-fight summary on this client.|r Numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays for the hold window set on the Damage Dealt tab. Kill several things in one pull and each corpse shows the whole pull: this client reports no per-enemy breakdown.", function() return ns.SummaryMode end, 86)
 
     local summaryVis = function() return ns.SummaryMode end
     Header(c, "Post-fight summary", summaryVis)
@@ -212,7 +212,7 @@ local function fillDamage(c, reflow)
     Checkbox(c, "Only report against something that died",
         function() return ns.db.summary.requireDead end,
         function(v) ns.db.summary.requireDead = v end, summaryVis)
-    Note(c, "The window starts the first time you look at a target's summary, and runs per target. Select something else and you get that one's figures; come back before its window closes and the first is still there. Turn the last option off if you want the summary on anything you select, not just corpses.", summaryVis, 72)
+    Note(c, "The window runs per target and starts the first time you look at that target's summary, so a corpse you get to late is still readable, and one you have already watched lapse stays gone. Turn the last option off if you want the summary on anything you select, not just corpses.", summaryVis, 72)
 
     Button(c, "Copy & mirror from Healing", function()
         copyMirror(et, ns.db.healText); RA(); RE(); RT()
@@ -242,7 +242,7 @@ local function fillTaken(c, reflow)
     local tk = ns.db.takenText
     local syncs = {}; SYNC = syncs
     Header(c, "Damage Taken (by type)")
-    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays available for the hold window set on the Damage Dealt tab.", function() return ns.SummaryMode end, 72)
+    Note(c, "|cffffd100Post-fight summary on this client.|r Numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays for the hold window set on the Damage Dealt tab. Kill several things in one pull and each corpse shows the whole pull: this client reports no per-enemy breakdown.", function() return ns.SummaryMode end, 86)
     Button(c, "Copy & mirror from Damage Dealt", function()
         copyMirror(tk, ns.db.enemyText); RA(); RK(); RT()
         for _, f in ipairs(syncs) do f() end; reflow()
@@ -297,8 +297,9 @@ end
 local function fillHealing(c, reflow)
     local h = ns.db.healText
     local syncs = {}; SYNC = syncs
-    Header(c, "Healing Received (per spell)")
-    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays available for the hold window set on the Damage Dealt tab.", function() return ns.SummaryMode end, 72)
+    Header(c, ns.SummaryMode and "Healing Cast (per spell)" or "Healing Received (per spell)")
+    Note(c, "|cffffd100Post-fight summary on this client.|r Numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays for the hold window set on the Damage Dealt tab. Kill several things in one pull and each corpse shows the whole pull: this client reports no per-enemy breakdown.", function() return ns.SummaryMode end, 86)
+    Note(c, "|cffff8080Healing received is not available on this client.|r Its only healing meter is keyed by the caster and never says who a heal landed on, so what this feed reports here is the healing |cffffd100you cast|r. Heal yourself and it is the same number; heal someone else and it is not.", function() return ns.SummaryMode end, 72)
     Button(c, "Copy & mirror from Damage Dealt", function()
         copyMirror(h, ns.db.enemyText); RA(); RH(); RT()
         for _, f in ipairs(syncs) do f() end; reflow()

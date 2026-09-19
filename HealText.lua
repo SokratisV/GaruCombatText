@@ -88,13 +88,17 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
 end)
 end
 
--- Damage-meter path. This is the shakiest of the three: HealingDone is keyed by the
--- healer, so healing received has to be picked out by matching each spell row's
--- other party against my own name. Mana gained has no equivalent at all.
+-- Damage-meter path, and the one place this port cannot keep its promise. Healing
+-- RECEIVED has no data source on this client: the only healing meter is HealingDone,
+-- keyed by the caster, and the field that would say who a heal landed on
+-- (combatSpellDetails.unitName) comes back blank on a source's own rows -- measured,
+-- not assumed. So what the feed reports here is the healing you CAST. Heal yourself
+-- and the two are the same number; heal somebody else and they are not. Mana gained
+-- has no equivalent at all.
 if ns.UseDamageMeter then
     ns.DM.RegisterFeed({
         meter   = meter,
-        capture = function(me) return ns.DM.CaptureIncoming(ns.DM.TYPES.healing, me) end,
+        capture = function() return ns.DM.Capture(ns.DM.TYPES.healing) end,
         frame   = playerFrame,
         enabled = function() return ns.db.healText.enabled and not ns.test.combat end,
     })

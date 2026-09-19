@@ -105,15 +105,14 @@ end)
 end
 
 -- Damage-meter path: read the player's own DamageDone rows out of the finished
--- fight. byTarget asks for the per-enemy split as well, so clicking one of two
--- corpses shows what went into that one rather than the fight's total.
+-- fight. There is no per-corpse split to be had on this client (see DamageMeter),
+-- so every corpse from a pull shows that pull's figures.
 if ns.UseDamageMeter then
     ns.DM.RegisterFeed({
-        meter    = meter,
-        byTarget = true,
-        capture  = function() return ns.DM.CaptureOutgoing(ns.DM.TYPES.damage) end,
-        frame    = function() return ns.frames and ns.frames.target end,
-        enabled  = function() return ns.db.enemyText.enabled and not ns.test.combat end,
+        meter   = meter,
+        capture = function() return ns.DM.Capture(ns.DM.TYPES.damage) end,
+        frame   = function() return ns.frames and ns.frames.target end,
+        enabled = function() return ns.db.enemyText.enabled and not ns.test.combat end,
     })
     -- The summary's lifetime is its own (DamageMeter drives the fade and the clear),
     -- and its per-target memory is too -- so the engine's row ageing and its GUID

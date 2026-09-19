@@ -75,7 +75,7 @@ if ns.UseDamageMeter then
     -- did, and the API offers no breakdown that would say otherwise.
     ns.DM.RegisterFeed({
         meter   = meter,
-        capture = function() return ns.DM.CaptureOutgoing(ns.DM.TYPES.taken) end,
+        capture = function() return ns.DM.Capture(ns.DM.TYPES.taken) end,
         frame   = host,
         enabled = function() return ns.db.takenText.enabled and not ns.test.combat end,
     })

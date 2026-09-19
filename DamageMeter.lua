@@ -95,7 +95,8 @@ function ns.PrintStatus()
         print("   meter available: " .. tostring(DM.IsUsable())
             .. "  |  last fight: " .. (DM.SessionSeconds() and (math.floor(DM.SessionSeconds()) .. "s") or "none"))
         print("   This client hides damage numbers during a fight, so the feeds fill in")
-        print("   once it ends. Actions (dodge/parry/miss) has no data source at all here.")
+        print("   once it ends. Actions (dodge/parry/miss) has no data source at all here,")
+        print("   and Healing reports what you cast, not what landed on you.")
         local s = ns.db and ns.db.summary
         print("   summary: " .. (DM.Shown() and "on screen now" or "waiting for a target")
             .. "  |  holds for " .. tostring(s and s.holdSecs or 15) .. "s"
@@ -124,17 +125,32 @@ end
 -- Current is per-fight rather than a running tally: the API exposes a separate
 -- Overall session for that, and probing out of combat read Current 147 against
 -- Overall 501. Current is the fight that just ended; Overall is everything.
+--
+-- Two things this used to guess at have now been measured (/gct probe over a real
+-- fight). Both came back no, so don't build on them again:
+--
+--   * THERE IS NO PER-TARGET BREAKDOWN. EnemyDamageTaken does list one source per
+--     enemy -- keyed by creatureID, with sourceGUID nil -- but that source's spell
+--     rows collapse to a single entry with spellID 0 carrying the enemy's entire
+--     total, attributed to whoever dealt it. Per-enemy totals, no spell split. The
+--     feeds are per-spell, so there is nothing to build a per-corpse breakdown out
+--     of, and every corpse from a fight shows that fight's figures.
+--
+--   * combatSpellDetails.unitName IS BLANK on a source's own rows. It is filled in
+--     only on the receiving side (EnemyDamageTaken names the damager in it), so
+--     healing received cannot be picked out by matching it. HealingDone is read the
+--     same way as the other two instead: the local player's own rows, which is
+--     healing you cast -- the same number as healing received for a self-heal, and
+--     not the same thing at all in a group.
 
 -- Accumulate spell rows into `into` as [key] = { id, label, amount, icon }.
--- `filter` (optional) decides which rows belong to us.
-local function rowsFrom(spells, into, filter)
+local function rowsFrom(spells, into)
     for i = 1, #spells do
         local sp = spells[i]
         if type(sp) == "table" then
             local id, amt = sp.spellID, sp.totalAmount
             if (not ns.IsSecret(id)) and (not ns.IsSecret(amt))
-                and type(amt) == "number" and amt > 0
-                and ((not filter) or filter(sp)) then
+                and type(amt) == "number" and amt > 0 then
                 local key = "spell:" .. tostring(id or 0)
                 local r = into[key]
                 if r then
@@ -156,8 +172,11 @@ local function spellsOf(meterType, guid, creatureID)
     return type(spells) == "table" and spells or nil
 end
 
--- The player's own rows for one meter, for the fight just finished.
-function DM.CaptureOutgoing(meterType)
+-- The local player's own rows for one meter, for the fight just finished. Which
+-- direction that is belongs to the meter, not to us: the player's row in DamageDone
+-- is damage dealt, in DamageTaken it is damage suffered, in HealingDone it is
+-- healing cast. All three read the same way.
+function DM.Capture(meterType)
     if not DM.available or not meterType then return nil end
     local src = localSource(meterType)
     if not src then return nil end
@@ -168,68 +187,6 @@ function DM.CaptureOutgoing(meterType)
     return next(rows) and rows or nil
 end
 
--- Incoming version, for healing received. HealingDone is keyed by the HEALER, so
--- "what landed on me" means walking every source and keeping the spell rows whose
--- other party is me. Whether the client fills combatSpellDetails.unitName in at all
--- decides whether this works: when it is blank nothing matches and the feed stays
--- empty, which is the right failure -- far better than showing somebody else's
--- healing as though it were yours.
-function DM.CaptureIncoming(meterType, unitName)
-    if not DM.available or not meterType or not unitName then return nil end
-    local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType, SessionType.Current, meterType)
-    if not ok or type(session) ~= "table" then return nil end
-    local sources = session.combatSources
-    if type(sources) ~= "table" then return nil end
-
-    local function mine(sp)
-        local d = sp.combatSpellDetails
-        local who = type(d) == "table" and d.unitName or nil
-        return (not ns.IsSecret(who)) and who == unitName
-    end
-
-    local rows = {}
-    for i = 1, #sources do
-        local s = sources[i]
-        if type(s) == "table" then
-            local spells = spellsOf(meterType, s.sourceGUID, s.sourceCreatureID)
-            if spells then rowsFrom(spells, rows, mine) end
-        end
-    end
-    return next(rows) and rows or nil
-end
-
--- Per-enemy breakdown of the damage dealt, when this client offers one.
--- EnemyDamageTaken is a meter whose *sources* are the enemies, so each source is one
--- mob and its spell rows are what landed on it -- exactly the split the summary
--- wants, keyed by GUID so there is no name matching to get wrong.
---
--- Unverified against a live fight. If the session comes back in a shape this does
--- not recognise it returns nothing, and every corpse then shows the fight's totals
--- instead: the behaviour we already had, not a broken one.
-function DM.CaptureByTarget()
-    local mt = MeterType and MeterType.EnemyDamageTaken
-    if not DM.available or not mt then return nil end
-    local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType, SessionType.Current, mt)
-    if not ok or type(session) ~= "table" then return nil end
-    local sources = session.combatSources
-    if type(sources) ~= "table" then return nil end
-
-    local out, any = {}, false
-    for i = 1, #sources do
-        local s = sources[i]
-        local guid = type(s) == "table" and s.sourceGUID or nil
-        if type(guid) == "string" and not ns.IsSecret(guid) then
-            local spells = spellsOf(mt, guid, s.sourceCreatureID)
-            if spells then
-                local rows = {}
-                rowsFrom(spells, rows)
-                if next(rows) then out[guid], any = rows, true end
-            end
-        end
-    end
-    return any and out or nil
-end
-
 --------------------------------------------------------------------------
 -- Post-fight presentation
 --------------------------------------------------------------------------
@@ -237,7 +194,8 @@ end
 -- the moment combat drops: it appears when you select what you were fighting, holds
 -- for a configurable window, and can be brought back by re-selecting that target
 -- until the window runs out. Each target gets its own window, started the first time
--- its summary is shown, so flicking between two corpses shows each one's figures.
+-- its summary is shown, so a corpse you get to late is still readable. What they all
+-- show is the fight's figures: see above for why there is no per-corpse split.
 
 local feeds = {}
 
@@ -267,15 +225,15 @@ local function hideAll()
     shownGUID = nil
 end
 
--- Draws the summary for one target, and says whether there was anything to draw --
--- a corpse you never fought has no rows against it, and should cost neither a
--- window nor an empty feed.
+-- Draws the summary against one target, and says whether there was anything to
+-- draw -- with no fight captured there is nothing to show, and that should cost
+-- neither a window nor an empty feed.
 local function paint(guid)
     local drew = false
     for i = 1, #feeds do
         local f = feeds[i]
         f.meter:Forget()
-        local rows = (f.targets and f.targets[guid]) or f.rows
+        local rows = f.rows
         local frame = (rows and f.enabled()) and f.frame() or nil
         if frame then
             drew = true
@@ -345,15 +303,10 @@ if DM.available then
     local settleUntil = 0
 
     local function captureAll()
-        local me = UnitName("player")
         for i = 1, #feeds do
             local f = feeds[i]
-            local rows = f.capture(me)
+            local rows = f.capture()
             if rows then f.rows = rows end
-            if f.byTarget then
-                local t = DM.CaptureByTarget()
-                if t then f.targets = t end
-            end
         end
     end
 
@@ -390,7 +343,7 @@ if DM.available then
         inCombat = true
         -- A new fight invalidates the last one outright: its rows, its per-target
         -- split and every window still open against it.
-        for i = 1, #feeds do feeds[i].rows, feeds[i].targets = nil, nil end
+        for i = 1, #feeds do feeds[i].rows = nil end
         wipe(expiry)
         hideAll()
     end)
@@ -461,6 +414,6 @@ function ns.PrintProbe()
 
     print(("   player=%s  target=%s dead=%s"):format(
         show(UnitName("player")), show(UnitGUID("target")), show(UnitIsDead("target"))))
-    print(("   captured: %s"):format(DM.CaptureByTarget() and
-        "EnemyDamageTaken gave a per-target split" or "no per-target split -- corpses share the fight total"))
+    print("   (EnemyDamageTaken lists enemies by creatureID but collapses their spell")
+    print("    rows into one spellID-0 total, so there is no per-corpse breakdown to use.)")
 end

@@ -19,16 +19,23 @@ Live combat text is therefore not possible on Forever. What you get instead is a
 and it is shown like one rather than like a stream:
 
 - Nothing appears while you are fighting, and nothing appears the moment combat drops.
-- Select what you killed and its summary appears, holding for **15 seconds** by default.
-- Select something else and you get that one's figures; the first is remembered.
+- Select what you killed and the summary appears, holding for **15 seconds** by default.
 - Go back to it before its window closes and it is still there.
+- Each target keeps its own window, started when you first look at it, so a corpse you
+  get to late is still readable.
 
 The hold window, the fade at the end of it, and whether a target has to be dead at all
 are on the **Damage Dealt** tab. The per-row rolling-window and fade-timing settings are
 hidden on this client, because a summary has no rows ageing out one at a time.
 
-Whether each corpse shows its own numbers or they all show the fight's total depends on
-whether this client offers a per-enemy breakdown; `/gct probe` says which you are getting.
+Kill several things in one pull and every corpse shows the whole pull. There is no
+per-enemy breakdown to be had: `EnemyDamageTaken` does list the enemies, but it collapses
+each one's spell rows into a single total, and these feeds are per-spell.
+
+**Healing received is not available on Forever at all.** The only healing meter is keyed
+by the caster and never records who a heal landed on, so on this client that feed reports
+the healing **you cast** — identical for a self-heal, and not the same thing in a group.
+The tab is titled *Healing Cast* there to say so.
 
 Also unavailable on Forever, for want of any field carrying them: per-hit crits, spell
 schools, mana spent, and the whole **Actions** feed (dodge/parry/miss counts are
