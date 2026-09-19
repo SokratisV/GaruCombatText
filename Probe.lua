@@ -70,6 +70,7 @@ function ns.RunProbe(which)
 
     -- The API survey alone fills the chat frame, so naming a meter type skips it
     -- and prints only the data dump. Lets the second half be read without scrolling.
+    if which == "live" then return ns.ProbeLive(12) end
     if which and which ~= "" then return ns.ProbeMeter(which) end
 
     local fns = {}
@@ -105,6 +106,46 @@ function ns.RunProbe(which)
     end
 
     return ns.ProbeMeter(which)
+end
+
+-- "It only shows when combat ends" means the question is whether these totals move
+-- DURING a fight or only get finalised at the end of one. That decides whether live
+-- combat text is possible on this client at all, so sample them once a second and
+-- print the series.
+function ns.ProbeLive(seconds)
+    seconds = seconds or 12
+    if not C_DamageMeter or not Enum or not Enum.DamageMeterSessionType then
+        print("|cff66ccffGaru Combat Text|r: no C_DamageMeter to sample.")
+        return
+    end
+    local ST, MT = Enum.DamageMeterSessionType, Enum.DamageMeterType
+    local rows, ticks = {}, 0
+
+    local function total(sessionType)
+        local ok, s = pcall(C_DamageMeter.GetCombatSessionFromType, sessionType, MT.DamageDone)
+        if not ok or type(s) ~= "table" then return "-" end
+        local t = s.totalAmount
+        if ns.IsSecret(t) or type(t) ~= "number" then return "?" end
+        return tostring(t)
+    end
+
+    print("|cff66ccffGaru Combat Text|r: sampling DamageDone for " .. seconds
+        .. "s -- |cffffd100attack now and keep attacking|r.")
+    local ticker
+    ticker = C_Timer.NewTicker(1, function()
+        ticks = ticks + 1
+        rows[#rows + 1] = ("%ds %s cur=%s ovr=%s"):format(
+            ticks,
+            UnitAffectingCombat("player") and "|cffff5555FIGHT|r" or "idle",
+            total(ST.Current), total(ST.Overall))
+        if ticks >= seconds then
+            ticker:Cancel()
+            print("|cff66ccffGaru Combat Text|r: live sample (cur = Current session, ovr = Overall)")
+            for _, r in ipairs(rows) do print("   " .. r) end
+            print("   If cur/ovr only move once the fight ends, live combat text isn't")
+            print("   possible from this API and the feeds are post-fight summaries.")
+        end
+    end)
 end
 
 function ns.ProbeMeter(which)

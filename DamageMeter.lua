@@ -98,7 +98,7 @@ end
 -- A feed keeps one of these. It holds the last totals seen, so the next poll can
 -- work out what actually happened since.
 function DM.NewState()
-    return { last = {}, spells = {}, sessionTotal = -1 }
+    return { last = {}, spells = {}, sessionTotal = -1, rebase = false }
 end
 
 -- Shared tail of both pumps: diff `totals` against what we saw last time and push
@@ -111,6 +111,16 @@ local function feedDeltas(state, totals, meter, frame, session)
     if ns.IsSecret(total) or type(total) ~= "number" then total = nil end
     if total and total < state.sessionTotal then wipe(state.last) end
     state.sessionTotal = total or -1
+
+    -- Adopting the current figures without emitting them: used on a target change,
+    -- so the new target's feed starts from now instead of inheriting the totals
+    -- built up against the previous one.
+    if state.rebase then
+        state.rebase = false
+        wipe(state.last)
+        for key, sp in pairs(totals) do state.last[key] = sp.amount end
+        return false
+    end
 
     local added = false
     for key, sp in pairs(totals) do
@@ -178,9 +188,12 @@ function DM.PumpIncoming(state, meterType, meter, frame, unitName)
     return feedDeltas(state, totals, meter, frame, session)
 end
 
+-- Re-baseline rather than forget. Wiping the remembered totals looks harmless but
+-- isn't: the next poll would read the session's running total against a baseline of
+-- zero and feed the whole fight in as one delta. Instead, mark the state so the
+-- next poll adopts the current totals silently and starts counting from there.
 function DM.Reset(state)
-    wipe(state.last)
-    state.sessionTotal = -1
+    state.rebase = true
 end
 
 --------------------------------------------------------------------------
