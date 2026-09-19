@@ -121,11 +121,17 @@ function ns.ProbeLive(seconds)
     local ST, MT = Enum.DamageMeterSessionType, Enum.DamageMeterType
     local rows, ticks = {}, 0
 
+    -- Distinguishes the two ways a number can be unreadable, because they mean very
+    -- different things: SECRET is the client deliberately withholding it, nil is
+    -- simply no data.
     local function total(sessionType)
         local ok, s = pcall(C_DamageMeter.GetCombatSessionFromType, sessionType, MT.DamageDone)
-        if not ok or type(s) ~= "table" then return "-" end
+        if not ok then return "err" end
+        if type(s) ~= "table" then return "nosession" end
         local t = s.totalAmount
-        if ns.IsSecret(t) or type(t) ~= "number" then return "?" end
+        if ns.IsSecret(t) then return "SECRET" end
+        if t == nil then return "nil" end
+        if type(t) ~= "number" then return type(t) end
         return tostring(t)
     end
 
@@ -134,10 +140,16 @@ function ns.ProbeLive(seconds)
     local ticker
     ticker = C_Timer.NewTicker(1, function()
         ticks = ticks + 1
-        rows[#rows + 1] = ("%ds %s cur=%s ovr=%s"):format(
+        -- IsDamageMeterAvailable is the likeliest official gate, so track it too.
+        local avail = "?"
+        if C_DamageMeter.IsDamageMeterAvailable then
+            local ok, v = pcall(C_DamageMeter.IsDamageMeterAvailable)
+            avail = tostring(ok and v)
+        end
+        rows[#rows + 1] = ("%ds %s avail=%s cur=%s ovr=%s"):format(
             ticks,
             UnitAffectingCombat("player") and "|cffff5555FIGHT|r" or "idle",
-            total(ST.Current), total(ST.Overall))
+            avail, total(ST.Current), total(ST.Overall))
         if ticks >= seconds then
             ticker:Cancel()
             print("|cff66ccffGaru Combat Text|r: live sample (cur = Current session, ovr = Overall)")

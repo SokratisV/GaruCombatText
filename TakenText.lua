@@ -79,6 +79,7 @@ if ns.UseDamageMeter then
         if not frame then return end
         ns.DM.Pump(state, ns.DM.TYPES.taken, meter, frame)
     end)
+    ns.DM.RegisterClear(function() meter:Clear(); ns.DM.Reset(state) end)
 end
 
 --------------------------------------------------------------------------

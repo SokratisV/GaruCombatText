@@ -201,9 +201,14 @@ end
 --------------------------------------------------------------------------
 -- The meter fires its own update events; a slow ticker behind them covers the gap
 -- between the last event and a fight ending, and costs nothing when idle.
-local pumps = {}
+local pumps, clears = {}, {}
 function DM.Register(fn)
     pumps[#pumps + 1] = fn
+end
+
+-- A feed's "start a new fight" hook: wipe what's on screen and re-baseline.
+function DM.RegisterClear(fn)
+    clears[#clears + 1] = fn
 end
 
 if DM.available then
@@ -220,5 +225,19 @@ if DM.available then
         if since < 0.25 then return end
         since = 0
         runAll()
+    end)
+
+    -- This client withholds the meter's numbers for the duration of a fight and
+    -- only lets them be read once it ends, so the feeds can only ever be a summary
+    -- of the fight just finished. Clear at the start of one so each fight shows its
+    -- own figures instead of accumulating, and poll a few times after it ends
+    -- because the session isn't finalised the instant combat drops.
+    ns.On("PLAYER_REGEN_DISABLED", function()
+        for i = 1, #clears do clears[i]() end
+    end)
+    ns.On("PLAYER_REGEN_ENABLED", function()
+        for _, delay in ipairs({ 0.2, 0.8, 1.6, 3.0 }) do
+            C_Timer.After(delay, runAll)
+        end
     end)
 end

@@ -100,6 +100,7 @@ if ns.UseDamageMeter then
         if not pf then return end
         ns.DM.PumpIncoming(state, ns.DM.TYPES.healing, meter, pf, UnitName("player"))
     end)
+    ns.DM.RegisterClear(function() meter:Clear(); ns.DM.Reset(state) end)
 end
 
 --------------------------------------------------------------------------
