@@ -15,10 +15,20 @@ while a fight is in progress, releasing them only once it ends. Measured: out of
 the totals read normally; from the first moment of combat every one is unreadable until
 combat drops.
 
-Live combat text is therefore not possible on Forever. The feeds instead clear when a
-fight starts and fill with that fight's figures when it ends, staying put until the next
-one. The rolling-window and fade-timing settings are hidden there, because a summary has
-nothing to roll or fade.
+Live combat text is therefore not possible on Forever. What you get instead is a report,
+and it is shown like one rather than like a stream:
+
+- Nothing appears while you are fighting, and nothing appears the moment combat drops.
+- Select what you killed and its summary appears, holding for **15 seconds** by default.
+- Select something else and you get that one's figures; the first is remembered.
+- Go back to it before its window closes and it is still there.
+
+The hold window, the fade at the end of it, and whether a target has to be dead at all
+are on the **Damage Dealt** tab. The per-row rolling-window and fade-timing settings are
+hidden on this client, because a summary has no rows ageing out one at a time.
+
+Whether each corpse shows its own numbers or they all show the fight's total depends on
+whether this client offers a per-enemy breakdown; `/gct probe` says which you are getting.
 
 Also unavailable on Forever, for want of any field carrying them: per-hit crits, spell
 schools, mana spent, and the whole **Actions** feed (dodge/parry/miss counts are
@@ -73,6 +83,8 @@ Screenshots: drop images into docs/ and reference them here, e.g.
 | `/gct` (or `/garucombattext`) | Open the settings panel. |
 | `/gct unlock` / `/gct lock` | Show / hide the draggable anchor boxes. |
 | `/gct test` | Toggle a live preview. |
+| `/gct status` | Which data source is feeding the addon, and the summary's hold window. |
+| `/gct probe` | Dump what `C_DamageMeter` returns for the fight just finished (Forever only). |
 | `/gct reset` | Restore default settings. |
 
 ## License

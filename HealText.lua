@@ -92,15 +92,13 @@ end
 -- healer, so healing received has to be picked out by matching each spell row's
 -- other party against my own name. Mana gained has no equivalent at all.
 if ns.UseDamageMeter then
-    local state = ns.DM.NewState()
-    ns.DM.Register(function()
-        local cfg = ns.db.healText
-        if not cfg.enabled or ns.test.combat then return end
-        local pf = playerFrame()
-        if not pf then return end
-        ns.DM.PumpIncoming(state, ns.DM.TYPES.healing, meter, pf, UnitName("player"))
-    end)
-    ns.DM.RegisterClear(function() meter:Clear(); ns.DM.Reset(state) end)
+    ns.DM.RegisterFeed({
+        meter   = meter,
+        capture = function(me) return ns.DM.CaptureIncoming(ns.DM.TYPES.healing, me) end,
+        frame   = playerFrame,
+        enabled = function() return ns.db.healText.enabled and not ns.test.combat end,
+    })
+    meter.ignorePersist = true
 end
 
 --------------------------------------------------------------------------

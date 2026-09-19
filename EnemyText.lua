@@ -104,27 +104,31 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
 end)
 end
 
--- Damage-meter path: poll the player's own DamageDone rows and feed the growth.
+-- Damage-meter path: read the player's own DamageDone rows out of the finished
+-- fight. byTarget asks for the per-enemy split as well, so clicking one of two
+-- corpses shows what went into that one rather than the fight's total.
 if ns.UseDamageMeter then
-    local state = ns.DM.NewState()
-    ns.DM.Register(function()
-        local cfg = ns.db.enemyText
-        if not cfg.enabled or ns.test.combat then return end
-        local frame = ns.frames and ns.frames.target
-        if not frame then return end
-        ns.DM.Pump(state, ns.DM.TYPES.damage, meter, frame)
-    end)
-    ns.DM.RegisterClear(function() meter:Clear(); ns.DM.Reset(state) end)
-    meter.noFade = true   -- a summary stays until the next fight clears it
+    ns.DM.RegisterFeed({
+        meter    = meter,
+        byTarget = true,
+        capture  = function() return ns.DM.CaptureOutgoing(ns.DM.TYPES.damage) end,
+        frame    = function() return ns.frames and ns.frames.target end,
+        enabled  = function() return ns.db.enemyText.enabled and not ns.test.combat end,
+    })
+    -- The summary's lifetime is its own (DamageMeter drives the fade and the clear),
+    -- and its per-target memory is too -- so the engine's row ageing and its GUID
+    -- snapshot store both stay out of it.
+    meter.noFade = true
+    meter.ignorePersist = true
 end
 
 -- Per-target bookkeeping, live mode only.
 --
 -- Retarget swaps the stream to whatever was stored against the new target's GUID,
--- which for a fresh target is nothing -- so the feed blanks. That is correct when
--- the numbers are per-target, and wrong in summary mode, where they belong to the
--- fight rather than to whoever you happen to be clicking. It made the summary
--- vanish the moment you targeted anything.
+-- which for a fresh target is nothing -- so the feed blanks. That is right for a
+-- live feed. A summary answers target changes differently (DamageMeter repaints it
+-- from its own per-target capture, and only for something dead), so it must not go
+-- through here as well.
 if not ns.SummaryMode then
     ns.On("PLAYER_TARGET_CHANGED", function()
         meter:Retarget(ns.frames and ns.frames.target)
@@ -181,9 +185,12 @@ end
 
 -- Seconds of combat with the current target (freezes 3s after the last hit), or nil.
 -- In summary mode there are no hits to time, so the meter's own figure for the
--- fight just finished is the only honest answer.
+-- fight just finished is the only honest answer -- and it belongs on screen only
+-- while that fight's summary is, rather than lingering over an empty anchor.
 function ns.CombatDuration()
-    if ns.SummaryMode then return ns.DM.SessionSeconds() end
+    if ns.SummaryMode then
+        return ns.DM.Shown() and ns.DM.SessionSeconds() or nil
+    end
     local cs, lh = meter:CombatInfo(ns.frames and ns.frames.target)
     if not cs then return nil end
     local now = GetTime()

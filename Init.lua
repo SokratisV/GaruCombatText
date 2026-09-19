@@ -30,6 +30,9 @@ SlashCmdList.GARUCOMBATTEXT = function(msg)
         if ns.SetLocked then ns.SetLocked(true) end
     elseif msg == "status" then
         ns.PrintStatus()
+    elseif msg == "probe" then
+        if ns.PrintProbe then ns.PrintProbe()
+        else print("|cff66ccffGaru Combat Text|r: nothing to probe on this client.") end
     elseif msg == "reset" then
         if ns.ResetSettings then ns.ResetSettings() end
     else

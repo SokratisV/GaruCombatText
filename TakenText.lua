@@ -71,15 +71,15 @@ end
 -- Damage-meter path: poll my own DamageTaken rows and feed the growth. The avoid
 -- rows ("Dodge x4") have no equivalent here -- that API reports damage, not misses.
 if ns.UseDamageMeter then
-    local state = ns.DM.NewState()
-    ns.DM.Register(function()
-        local cfg = ns.db.takenText
-        if not cfg.enabled or ns.test.combat then return end
-        local frame = host()
-        if not frame then return end
-        ns.DM.Pump(state, ns.DM.TYPES.taken, meter, frame)
-    end)
-    ns.DM.RegisterClear(function() meter:Clear(); ns.DM.Reset(state) end)
+    -- No per-target split here: this is what the fight did to you, not what one mob
+    -- did, and the API offers no breakdown that would say otherwise.
+    ns.DM.RegisterFeed({
+        meter   = meter,
+        capture = function() return ns.DM.CaptureOutgoing(ns.DM.TYPES.taken) end,
+        frame   = host,
+        enabled = function() return ns.db.takenText.enabled and not ns.test.combat end,
+    })
+    meter.ignorePersist = true
 end
 
 --------------------------------------------------------------------------

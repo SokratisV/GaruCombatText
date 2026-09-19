@@ -219,6 +219,11 @@ ns.defaults = {
     general = {
         fontSize = 12, fontOutline = "OUTLINE",
     },
+    summary = {   -- post-fight summary behaviour (WoW Forever / any client with C_DamageMeter)
+        holdSecs = 15,      -- how long a target's summary stays reachable once first shown
+        fadeTime = 0.6,     -- the tail end of that window, spent dimming out
+        requireDead = true, -- only report against something that died
+    },
     enemyText = {   -- Damage Dealt: cumulative damage you deal to your current target
         enabled = true, style = "float", showBar = true, rowHeight = 18,
         barColor = { 0.80, 0.20, 0.20 }, includePet = true,

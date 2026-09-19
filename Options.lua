@@ -199,7 +199,21 @@ local function fillDamage(c, reflow)
     local et = ns.db.enemyText
     local syncs = {}; SYNC = syncs
     Header(c, ns.SummaryMode and "Damage Dealt (this fight)" or "Damage Dealt (per target)")
-    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends, so this fills in afterwards and stays until the next fight starts.", function() return ns.SummaryMode end, 58)
+    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays available for the hold window set on the Damage Dealt tab.", function() return ns.SummaryMode end, 72)
+
+    local summaryVis = function() return ns.SummaryMode end
+    Header(c, "Post-fight summary", summaryVis)
+    Slider(c, "Keep on screen (s)", 3, 120, 1,
+        function() return ns.db.summary.holdSecs end,
+        function(v) ns.db.summary.holdSecs = v end, summaryVis)
+    Slider(c, "Fade out over (s)", 0, 5, 0.1,
+        function() return ns.db.summary.fadeTime end,
+        function(v) ns.db.summary.fadeTime = v end, summaryVis)
+    Checkbox(c, "Only report against something that died",
+        function() return ns.db.summary.requireDead end,
+        function(v) ns.db.summary.requireDead = v end, summaryVis)
+    Note(c, "The window starts the first time you look at a target's summary, and runs per target. Select something else and you get that one's figures; come back before its window closes and the first is still there. Turn the last option off if you want the summary on anything you select, not just corpses.", summaryVis, 72)
+
     Button(c, "Copy & mirror from Healing", function()
         copyMirror(et, ns.db.healText); RA(); RE(); RT()
         for _, f in ipairs(syncs) do f() end; reflow()
@@ -228,7 +242,7 @@ local function fillTaken(c, reflow)
     local tk = ns.db.takenText
     local syncs = {}; SYNC = syncs
     Header(c, "Damage Taken (by type)")
-    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends, so this fills in afterwards and stays until the next fight starts.", function() return ns.SummaryMode end, 58)
+    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays available for the hold window set on the Damage Dealt tab.", function() return ns.SummaryMode end, 72)
     Button(c, "Copy & mirror from Damage Dealt", function()
         copyMirror(tk, ns.db.enemyText); RA(); RK(); RT()
         for _, f in ipairs(syncs) do f() end; reflow()
@@ -284,7 +298,7 @@ local function fillHealing(c, reflow)
     local h = ns.db.healText
     local syncs = {}; SYNC = syncs
     Header(c, "Healing Received (per spell)")
-    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends, so this fills in afterwards and stays until the next fight starts.", function() return ns.SummaryMode end, 58)
+    Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays available for the hold window set on the Damage Dealt tab.", function() return ns.SummaryMode end, 72)
     Button(c, "Copy & mirror from Damage Dealt", function()
         copyMirror(h, ns.db.enemyText); RA(); RH(); RT()
         for _, f in ipairs(syncs) do f() end; reflow()

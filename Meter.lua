@@ -138,7 +138,11 @@ local function restoreInto(s, guid)
 end
 
 local function switchGUID(M, s, guid)
-    if M.cfg().persist then
+    -- ignorePersist: the summary keeps its own per-target memory and repaints the
+    -- stream itself, so the engine's snapshot store must stay out of the way --
+    -- otherwise selecting a second corpse restores the first one's rows on top of
+    -- the summary we are about to draw.
+    if M.cfg().persist and not M.ignorePersist then
         snapshot(s)
         s.guid = guid
         restoreInto(s, guid)
@@ -565,7 +569,7 @@ local function update(M, s, dt)
     local aw = areaWidth(M, s)
     if s.areaW ~= aw then s.areaW = aw; s.container:SetWidth(aw) end
 
-    local noFade = cfg.persist or M.noFade
+    local noFade = M.noFade or (cfg.persist and not M.ignorePersist)
 
     local list = s.sorted
     wipe(list)
@@ -641,6 +645,18 @@ local function update(M, s, dt)
         else
             s.timeFS:Hide()
         end
+    end
+
+    -- Summary mode: the feed is a report with a lifetime rather than a live stream,
+    -- so the whole stack dims out together as its window closes instead of each row
+    -- ageing out on its own. The owner clears once the window has actually run out;
+    -- this only paints the last moment of it.
+    if M.expireAt then
+        local left = M.expireAt - now
+        local over = M.expireOver or 0.5
+        s.container:SetAlpha(left < over and math.max(0, left) / over or 1)
+    else
+        s.container:SetAlpha(1)
     end
 end
 
@@ -723,6 +739,24 @@ function ns.Meter.New(opts)
 
     function M:Clear()
         for _, s in pairs(M.streams) do resetStream(s) end
+    end
+
+    -- Clear, and forget the per-GUID snapshots with it. Plain Clear empties what is
+    -- on screen but leaves the store, so the next target switch would restore an
+    -- earlier fight's rows. The summary owns its own memory and wants neither.
+    function M:Forget()
+        for _, s in pairs(M.streams) do
+            resetStream(s)
+            wipe(s.store)
+            if s.timeStore then wipe(s.timeStore) end
+            s.guid = nil
+        end
+    end
+
+    -- Dim the feed out as `at` (a GetTime stamp) approaches, over `over` seconds.
+    -- Passing nil goes back to full opacity.
+    function M:SetExpiry(at, over)
+        M.expireAt, M.expireOver = at, over
     end
 
     function M:Trackers(frame)
