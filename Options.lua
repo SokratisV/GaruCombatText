@@ -198,7 +198,7 @@ end
 local function fillDamage(c, reflow)
     local et = ns.db.enemyText
     local syncs = {}; SYNC = syncs
-    Header(c, "Damage Dealt (per target)")
+    Header(c, ns.SummaryMode and "Damage Dealt (this fight)" or "Damage Dealt (per target)")
     Note(c, "|cffffd100Post-fight summary on this client.|r Damage numbers are hidden while a fight is in progress and released when it ends, so this fills in afterwards and stays until the next fight starts.", function() return ns.SummaryMode end, 58)
     Button(c, "Copy & mirror from Healing", function()
         copyMirror(et, ns.db.healText); RA(); RE(); RT()
@@ -217,7 +217,7 @@ local function fillDamage(c, reflow)
     Checkbox(c, "Show source name", function() return et.showLabel end, function(v) et.showLabel = v end)
     Checkbox(c, "Show spell icon", function() return et.showIcon end, function(v) et.showIcon = v end)
     Checkbox(c, "Show mana spent per spell", function() return et.showMana end, function(v) et.showMana = v end)
-    Checkbox(c, "Remember each target's totals", function() return et.persist end, function(v) et.persist = v; RE() end)
+    Checkbox(c, "Remember each target's totals", function() return et.persist end, function(v) et.persist = v; RE() end, function() return not ns.SummaryMode end)
     Checkbox(c, "Color by damage school", function() return et.schoolColors end, function(v) et.schoolColors = v end)
     Checkbox(c, "Hide Blizzard floating text", function() return et.hideBlizzardFCT end, function(v) et.hideBlizzardFCT = v; RE() end)
     Slider(c, "Ignore hits below", 0, 3000, 25, function() return et.threshold end, function(v) et.threshold = v end)

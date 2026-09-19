@@ -115,16 +115,24 @@ if ns.UseDamageMeter then
         ns.DM.Pump(state, ns.DM.TYPES.damage, meter, frame)
     end)
     ns.DM.RegisterClear(function() meter:Clear(); ns.DM.Reset(state) end)
-    ns.On("PLAYER_TARGET_CHANGED", function() ns.DM.Reset(state) end)
     meter.noFade = true   -- a summary stays until the next fight clears it
 end
 
-ns.On("PLAYER_TARGET_CHANGED", function()
-    meter:Retarget(ns.frames and ns.frames.target)
-end)
-ns.On("PLAYER_FOCUS_CHANGED", function()
-    meter:Retarget(ns.frames and ns.frames.focus)
-end)
+-- Per-target bookkeeping, live mode only.
+--
+-- Retarget swaps the stream to whatever was stored against the new target's GUID,
+-- which for a fresh target is nothing -- so the feed blanks. That is correct when
+-- the numbers are per-target, and wrong in summary mode, where they belong to the
+-- fight rather than to whoever you happen to be clicking. It made the summary
+-- vanish the moment you targeted anything.
+if not ns.SummaryMode then
+    ns.On("PLAYER_TARGET_CHANGED", function()
+        meter:Retarget(ns.frames and ns.frames.target)
+    end)
+    ns.On("PLAYER_FOCUS_CHANGED", function()
+        meter:Retarget(ns.frames and ns.frames.focus)
+    end)
+end
 
 --------------------------------------------------------------------------
 -- Blizzard floating combat text (the numbers it floats over the target)
