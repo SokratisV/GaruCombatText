@@ -262,8 +262,15 @@ if DM.available then
     ns.On("DAMAGE_METER_COMBAT_SESSION_UPDATED", runAll)
     ns.On("DAMAGE_METER_RESET", runAll)
 
+    -- Poll only while a finished fight is settling. Nothing is readable during one,
+    -- and once the numbers have landed they don't change again until the next fight
+    -- ends -- so a permanent 4Hz sweep was pure waste. PumpIncoming in particular
+    -- walks every source in the session, which in a raid is a lot of calls a second
+    -- to discard. The event hooks above still catch anything outside the window.
+    local settleUntil = 0
     local ticker, since = CreateFrame("Frame"), 0
     ticker:SetScript("OnUpdate", function(_, dt)
+        if GetTime() > settleUntil then return end
         since = since + dt
         if since < 0.25 then return end
         since = 0
@@ -279,8 +286,8 @@ if DM.available then
         for i = 1, #clears do clears[i]() end
     end)
     ns.On("PLAYER_REGEN_ENABLED", function()
-        for _, delay in ipairs({ 0.2, 0.8, 1.6, 3.0 }) do
-            C_Timer.After(delay, runAll)
-        end
+        -- The session isn't finalised the instant combat drops, so let the ticker
+        -- sweep the next few seconds rather than polling once and hoping.
+        settleUntil = GetTime() + 4
     end)
 end
