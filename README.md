@@ -86,8 +86,21 @@ Screenshots: drop images into docs/ and reference them here, e.g.
 | `/gct unlock` / `/gct lock` | Show / hide the draggable anchor boxes. |
 | `/gct test` | Toggle a live preview. |
 | `/gct status` | Which data source is feeding the addon, and the summary's hold window. |
-| `/gct probe` | Dump what `C_DamageMeter` returns for the fight just finished (Forever only). |
+| `/gct probe` | After a fight on Forever: how many hits came through readable, and how each was placed. |
+| `/gct trace` | Forever: start/stop recording every cast, swing and hit into the saved settings (written to disk on `/reload`). |
 | `/gct reset` | Restore default settings. |
+
+## Tests
+
+Offline checks, in a real Lua runtime: every file compiles, scripted fights go
+through the WoW Forever matcher, and the whole addon loads against a stubbed game
+and is checked feed by feed, as Forever and as Classic. Each run also breaks the
+addon on purpose a few ways and fails if the tests stop noticing.
+
+```bash
+python -m pip install --target tests/.lupa lupa
+python -I tests/run.py
+```
 
 ## License
 

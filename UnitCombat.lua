@@ -227,7 +227,64 @@ local function newStats()
              casts = 0, swings = 0, unplaced = 0, missesPlaced = 0, rules = {} }
 end
 stats = newStats()
-local function rule(name) stats.rules[name] = (stats.rules[name] or 0) + 1 end
+
+--------------------------------------------------------------------------
+-- Fight recorder (/gct trace)
+--------------------------------------------------------------------------
+-- What the matcher was told and what it made of it, kept in saved variables
+-- (GaruCombatTextDB.trace) so a real fight can be read back off disk after a
+-- /reload and the matcher improved from it, rather than guessed at from the probe's
+-- totals. Off until asked for; plain values only (a secret is written "s"); the
+-- newest TRACE_MAX lines are kept. Each line starts with seconds since load.
+--   P                                    the addon loaded (a /reload or login)
+--   R+ / R-                              combat started / ended
+--   T <target>                           target changed
+--   C <unit> <spell> <school> <direct> <ticks> <offensive>   a cast of yours
+--   C <unit> <spell> auto                Auto Shot / Shoot: left to its swing
+--   S <arg1> <arg2> <hand>               PLAYER_SWING, its payload as it came
+--   U <unit> <event> <flag> <amount> <school>                a UNIT_COMBAT report
+--   > <decision> [key]                   what became of the report above it
+local TRACE_MAX = 600
+local traceT0 = GetTime()
+local function w(v)
+    if ns.IsSecret(v) then return "s" end
+    if v == nil then return "-" end
+    if v == "" then return '""' end
+    return tostring(v)
+end
+local function tracing()
+    local t = ns.db and ns.db.trace
+    return t ~= nil and t.on == true and type(t.lines) == "table"
+end
+local function note(...)
+    if not tracing() then return end
+    local lines = ns.db.trace.lines
+    local parts = { ("%.2f"):format(GetTime() - traceT0) }
+    for i = 1, select("#", ...) do parts[#parts + 1] = w((select(i, ...))) end
+    lines[#lines + 1] = table.concat(parts, " ")
+    while #lines > TRACE_MAX do table.remove(lines, 1) end
+end
+function UC.Tracing() return tracing() end
+function UC.SetTrace(on)
+    if not ns.db then return end
+    ns.db.trace = ns.db.trace or {}
+    ns.db.trace.on = on and true or false
+    if on then
+        ns.db.trace.lines = {}
+        traceT0 = GetTime()
+        local v = C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, "Version")
+        note("P", v, select(2, UnitClass("player")))
+    end
+end
+function UC.TraceSize()
+    return tracing() and #ns.db.trace.lines or 0
+end
+ns.On("PLAYER_ENTERING_WORLD", function() note("P") end)
+
+local function rule(name)
+    stats.rules[name] = (stats.rules[name] or 0) + 1
+    UC.lastRule = name
+end
 
 --------------------------------------------------------------------------
 -- What you have done, recently
@@ -288,7 +345,7 @@ end
 
 local function onCast(unit, spell)
     if not (str(unit) and (unit == "player" or unit == "pet")) or not num(spell) then return end
-    if AUTO_RANGED[spell] then return end
+    if AUTO_RANGED[spell] then note("C", unit, spell, "auto") return end
     local t = now()
     tidy(t)
     stats.casts = stats.casts + 1
@@ -334,6 +391,7 @@ local function onCast(unit, spell)
         end
     end
 
+    note("C", unit, spell, school, f and f.direct, f and f.ticks, offensive and true or false)
     emit("cast", { unit = unit, spell = spell, label = ns.SpellName(spell), school = school,
                    offensive = offensive and true or false })
 end
@@ -412,6 +470,9 @@ local function spellRecord(spell, rec, unit)
 end
 
 local function out(rec)
+    -- A miss names what missed: "miss:DODGE/swing", "miss:RESIST/spell:686".
+    local placed = rec.missType and ("miss:" .. rec.missType .. (rec.key and ("/" .. rec.key) or "")) or rec.key
+    if rec.hidden then note(">", UC.lastRule, placed, "hidden") else note(">", UC.lastRule, placed) end
     if rec.missType then
         stats.missesPlaced = stats.missesPlaced + 1
         emit("avoided", { missType = rec.missType, pet = rec.pet })
@@ -512,8 +573,12 @@ local function placeOnTarget(rec, t)
     if physical or isMiss then
         local h = { at = t, rec = rec, physical = physical }
         held[#held + 1] = h
+        note(">", "held for a late swing")
         C_Timer.After(LATE_SWING + 0.02, function()
-            if not h.done then h.done = true; stats.unplaced = stats.unplaced + 1 end
+            if not h.done then
+                h.done = true; stats.unplaced = stats.unplaced + 1
+                note(">", "no late swing came: unplaced", rec.missType or rec.amount)
+            end
             for i = #held, 1, -1 do if held[i].done then table.remove(held, i) end end
         end)
         return
@@ -521,6 +586,7 @@ local function placeOnTarget(rec, t)
 
     -- 7. Someone else's.
     stats.unplaced = stats.unplaced + 1
+    note(">", "unplaced")
 end
 
 --------------------------------------------------------------------------
@@ -530,6 +596,7 @@ local function placeHealOnMe(amount, school, crit, t)
     local rec = { amount = amount, school = school, crit = crit }
     local function mine(spell, cast, name)
         rule(name)
+        note(">", name, "spell:" .. spell)
         spellRecord(spell, rec, "player")
         rec.spell, rec.first = spell, not cast.mana
         cast.mana = true
@@ -550,6 +617,7 @@ local function placeHealOnMe(amount, school, crit, t)
         end
     end
     rule("someone else's heal")
+    note(">", "someone else's heal")
     rec.key, rec.label, rec.icon = "heal:other", "Healing", "Interface\\ICONS\\Spell_Holy_Heal"
     emit("healed", rec)
 end
@@ -564,6 +632,7 @@ local function onUnitCombat(unit, event, flag, amount, school)
     if not str(unit) or not str(event) then return end
     if unit ~= "target" and unit ~= "player" then return end
     if unit == "target" and yes(UnitIsUnit("target", "player")) then return end
+    note("U", unit, event, flag, amount, school)
 
     local t = now()
     tidy(t)
@@ -619,10 +688,28 @@ end
 
 ns.On("UNIT_COMBAT", function(_, ...) onUnitCombat(...) end)
 ns.On("UNIT_SPELLCAST_SUCCEEDED", function(_, unit, _, spell) onCast(unit, spell) end)
-ns.On("PLAYER_SWING", function(_, _, swingType) onSwing(swingType) end)
+-- The swing's payload is recorded as it came, both arguments: which one carries
+-- the swing type was taken from FCT rather than seen here.
+ns.On("PLAYER_SWING", function(_, a, swingType)
+    note("S", a, swingType, num(swingType) and hands()[swingType] or nil)
+    onSwing(swingType)
+end)
+ns.On("PLAYER_TARGET_CHANGED", function() note("T", UnitGUID("target")) end)
+ns.On("PLAYER_REGEN_ENABLED", function() note("R-") end)
 ns.On("PLAYER_REGEN_DISABLED", function()
+    note("R+")
     lastStats = (stats.target + stats.player > 0) and stats or lastStats
-    stats = newStats()
+    -- The cast or swing that opened the fight came just before combat began (a
+    -- bolt puts you in combat when it lands, not when it leaves your hands), and
+    -- belongs to this fight's count, not the last one's.
+    local opened = newStats()
+    local t = now()
+    local seen = {}   -- Immolate is in both lists, once
+    for _, c in ipairs(casts) do if t - c.at <= DIRECT_WINDOW then seen[c.at] = true end end
+    for _, d in ipairs(dots) do if t - d.from <= DIRECT_WINDOW then seen[d.from] = true end end
+    for _ in pairs(seen) do opened.casts = opened.casts + 1 end
+    for _, s in ipairs(swings) do if t - s.at <= RANGED_WINDOW then opened.swings = opened.swings + 1 end end
+    stats = opened
 end)
 
 --------------------------------------------------------------------------

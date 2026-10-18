@@ -30,6 +30,19 @@ SlashCmdList.GARUCOMBATTEXT = function(msg)
         if ns.SetLocked then ns.SetLocked(true) end
     elseif msg == "status" then
         ns.PrintStatus()
+    elseif msg == "trace" then
+        -- The fight recorder: every cast, swing and hit, and what was made of it,
+        -- saved with the settings so it can be read back off disk.
+        if not (ns.UseUnitCombat and ns.UC.SetTrace) then
+            print("|cff66ccffGaru Combat Text|r: the recorder is for the WoW Forever client.")
+        elseif ns.UC.Tracing() then
+            local n = ns.UC.TraceSize()
+            ns.UC.SetTrace(false)
+            print("|cff66ccffGaru Combat Text|r: recorder OFF (" .. n .. " lines kept). /reload to write them to disk.")
+        else
+            ns.UC.SetTrace(true)
+            print("|cff66ccffGaru Combat Text|r: recorder ON. Fight something, then /reload to write it to disk.")
+        end
     elseif msg == "probe" then
         if ns.UseUnitCombat and ns.UC.PrintProbe then ns.UC.PrintProbe()
         elseif ns.PrintProbe then ns.PrintProbe()

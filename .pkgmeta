@@ -12,4 +12,5 @@ ignore:
   - .gitattributes
   - .gitignore
   - .pkgmeta
+  - tests      # offline checks, run from a dev checkout
   - logo.png   # CurseForge project art — not needed inside the addon zip

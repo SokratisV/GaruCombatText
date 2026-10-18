@@ -3,6 +3,10 @@
 Thumbs.db
 desktop.ini
 
+# The tests' Lua runtime (pip install --target tests/.lupa lupa)
+tests/.lupa/
+__pycache__/
+
 # Editor/temp files
 *.bak
 *.tmp
