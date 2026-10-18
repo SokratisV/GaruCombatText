@@ -6,11 +6,16 @@ package-as: GaruCombatText
 # separate "nolib" zip.
 enable-nolib-creation: no
 
-# Repo-meta files that shouldn't ship inside the addon zip.
+# Repo-meta files that shouldn't ship inside the addon zip. One path per line and
+# nothing after it: the packager reads "tests   # a note" as a path named that, so a
+# comment on the same line silently ships the file (v2.1.0 carried tests/ and
+# logo.png that way).
+#   tests     the offline checks, run from a dev checkout
+#   logo.png  CurseForge project art, not needed inside the addon
 ignore:
   - .github
   - .gitattributes
   - .gitignore
   - .pkgmeta
-  - tests      # offline checks, run from a dev checkout
-  - logo.png   # CurseForge project art — not needed inside the addon zip
+  - tests
+  - logo.png
