@@ -227,8 +227,17 @@ Enum = { PlayerSwingType = { MainHand = 0, OffHand = 1, Ranged = 2 } }
 function GetLocale() return "enUS" end
 function InCombatLockdown() return false end
 local target = "Creature-A"
-function UnitGUID(u) if u == "target" then return target end if u == "player" then return "Player-1" end end
-function UnitIsUnit(a, b) return a == b end
+plates = {}   -- other enemies' nameplates: token -> GUID
+function UnitGUID(u)
+    if u == "target" then return target end
+    if u == "player" then return "Player-1" end
+    return plates[u]
+end
+function UnitIsUnit(a, b)
+    if plates[a] and b == "target" then return plates[a] == target end
+    return a == b
+end
+function UnitCanAttack(_, u) return plates[u] ~= nil end
 function UnitExists(u) return u ~= "pet" end
 function UnitName() return "Tester" end
 function UnitClass() return "Warlock", "WARLOCK" end
@@ -239,6 +248,7 @@ STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF"
 local DESC = {
     [686] = "Sends a shadowy bolt at the enemy, causing 13 to 18 Shadow damage.",
     [2050] = "Heal your target for 47 to 58.",
+    [172]  = "Corrupts the target, causing 40 Shadow damage over 12 sec.",
 }
 C_Spell = {
     GetSpellDescription = function(id) return DESC[id] end,
@@ -395,6 +405,40 @@ if FOREVER then
     local tr = em and em:Trackers(ns.frames.target)
     check("the corpse shows the killing blow in its Melee total", tr and tr.swing and tr.swing.total == 91,
           tr and tr.swing and tostring(tr.swing.total) or "no Melee row")
+
+    -- Every enemy, end to end: one set of totals across a target switch and another
+    -- enemy's nameplate, the meter's figures once the fight is over, and a fresh
+    -- start on the next fight's first hit.
+    ns.db.enemyText.scope = "all"; ns.EnemyScopeChanged()
+    local function total(k)
+        local t = em:Trackers(ns.frames.target)
+        return t and t[k] and t[k].total
+    end
+    advance(40)
+    target = "Creature-G1"; fire("PLAYER_TARGET_CHANGED")
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 686)
+    advance(41); fire("UNIT_COMBAT", "target", "WOUND", "", 300, 32)
+    fire("PLAYER_REGEN_DISABLED")
+    advance(41.5); target = "Creature-G2"; fire("PLAYER_TARGET_CHANGED")   -- on to the next one
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 686)
+    advance(42.5); fire("UNIT_COMBAT", "target", "WOUND", "", 250, 32)
+    check("every enemy: one total across targets", total("spell:686") == 550, tostring(total("spell:686")))
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 172)                  -- Corruption on G2
+    advance(43); target = "Creature-G3"; fire("PLAYER_TARGET_CHANGED")
+    plates.nameplate7 = "Creature-G2"
+    advance(45.5); fire("UNIT_COMBAT", "nameplate7", "WOUND", "", 12, 32)  -- G2's tick, on its plate
+    check("every enemy: a tick on another enemy's nameplate", total("spell:172") == 12, tostring(total("spell:172")))
+    advance(47.5); fire("PLAYER_REGEN_ENABLED")
+    ns.DM.Capture = function() return { ["spell:686"] = { id = 686, amount = 600 }, ["spell:172"] = { id = 172, amount = 24 } } end
+    advance(54)
+    check("every enemy: the meter's totals once the fight is over", total("spell:686") == 600 and total("spell:172") == 24,
+          tostring(total("spell:686")) .. " / " .. tostring(total("spell:172")))
+    advance(60); fire("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 686)
+    advance(61); fire("UNIT_COMBAT", "target", "WOUND", "", 111, 32)
+    check("every enemy: the next fight's first hit starts new totals", total("spell:686") == 111 and total("spell:172") == nil,
+          tostring(total("spell:686")) .. " / " .. tostring(total("spell:172")))
+    plates.nameplate7 = nil
+    ns.db.enemyText.scope = "target"; ns.EnemyScopeChanged()
 
     -- What reached each feed's meter.
     local b = fed("enemyText", "spell:686", 300)
@@ -647,6 +691,29 @@ do
 end
 
 if not FOREVER then
+    -- Every enemy on Classic: the combat log's hits on any enemy, not just your target.
+    local info
+    CombatLogGetCurrentEventInfo = function() return unpack(info) end
+    local function cleu(destGUID, destFlags, amount)
+        info = { 0, "SPELL_DAMAGE", false, "Player-1", "Me", 0x511, 0, destGUID, "Mob", destFlags, 0,
+                 133, "Fireball", 4, amount, 0, 4, 0, 0, 0, false }
+        fire("COMBAT_LOG_EVENT_UNFILTERED")
+    end
+    local em = meterOf("enemyText")
+    local function fireball()
+        local t = em:Trackers(ns.frames.target)
+        return t and t["spell:133"] and t["spell:133"].total
+    end
+    target = "Creature-T"; fire("PLAYER_TARGET_CHANGED")
+    cleu("Creature-Other", 0xa48, 70)
+    check("Classic, your target: a hit on another enemy is not counted", fireball() == nil, tostring(fireball()))
+    ns.db.enemyText.scope = "all"; ns.EnemyScopeChanged()
+    cleu("Creature-Other", 0xa48, 70)
+    cleu("Creature-T", 0x10a48, 30)
+    check("Classic, every enemy: hits on any enemy, one total", fireball() == 100, tostring(fireball()))
+    ns.db.enemyText.scope = "target"; ns.EnemyScopeChanged()
+    CombatLogGetCurrentEventInfo = nil
+
     -- Classic: the combat-log path is the live one, UnitCombat stays out of it.
     check("no UNIT_COMBAT listener on Classic", (function()
         for f in pairs(onEvent) do if f.events.UNIT_COMBAT then return false end end

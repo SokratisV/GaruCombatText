@@ -39,6 +39,7 @@ local UPDOWN = { { value = "UP", text = "Up" }, { value = "DOWN", text = "Down" 
 local ALIGN  = { { value = "LEFT", text = "Left" }, { value = "CENTER", text = "Centre" }, { value = "RIGHT", text = "Right" } }
 local LAYOUT = { { value = "stack", text = "Stacked" }, { value = "radial", text = "Radial (arc)" } }
 local FACING = { { value = 90, text = "Up" }, { value = 270, text = "Down" }, { value = 0, text = "Right" }, { value = 180, text = "Left" } }
+local SCOPE  = { { value = "target", text = "Your target" }, { value = "all", text = "Every enemy" } }
 local SORT   = { { value = "amount", text = "Biggest first" }, { value = "lowest", text = "Smallest first" },
                  { value = "recent", text = "Most recent" } }
 local VALUE  = { { value = "amount", text = "Healing" }, { value = "both", text = "Healing and mana" },
@@ -171,6 +172,14 @@ local pages, pageByKey
 
 local function definePages()
     local notSummary = function() return not ns.SummaryMode end
+    -- Count: your target or every enemy (Damage Dealt and Actions)
+    local function perTarget(db) return function() return not ns.SummaryMode and ns.db[db].scope ~= "all" end end
+    local function everyEnemy(db) return function() return not ns.SummaryMode and ns.db[db].scope == "all" end end
+    local PLATES = " On this client, hits on enemies other than your target are only reported on their nameplates, so those need to be shown (Interface options, Nameplates: Enemy)."
+    local function scopeDesc(what)
+        return "Your target: " .. what .. " for whichever enemy you have selected, each keeping its own totals. Every enemy: one set of totals for the whole fight, whoever you hit, held for a while after it and cleared by the next fight's first hit."
+            .. (ns.UseUnitCombat and PLATES or "")
+    end
     local function half(row) row.half = true return row end
 
     pages = {
@@ -229,7 +238,12 @@ local function definePages()
         FeedPage({
             key = "dealt", db = "enemyText", refresh = RE,
             title = "Damage Dealt",
-            desc = "The damage you deal to your target, one row per source: melee, each spell, wand, pet. Each target keeps its own totals, and they come back when you select it again.",
+            desc = function()
+                if ns.db.enemyText.scope == "all" then
+                    return "The damage you deal to every enemy this fight, one row per source: melee, each spell, wand, pet."
+                end
+                return "The damage you deal to your target, one row per source: melee, each spell, wand, pet. Each target keeps its own totals, and they come back when you select it again."
+            end,
             banner = function()
                 if ns.UseUnitCombat then
                     return "Worked out from your casts and swings",
@@ -243,16 +257,24 @@ local function definePages()
                 half(Toggle("enemyText", "schoolColors", "School colours", "Colours each row by its damage school.")),
             },
             counting = {
+                Choice("enemyText", "scope", "Count", function() return scopeDesc("the damage") .. (ns.UseUnitCombat and " Once the fight is over, every number is set to Blizzard's damage meter's, so they end exact." or "") end,
+                    SCOPE, function() ns.EnemyScopeChanged(); RE(); RT() end, { vis = notSummary }),
                 half(Toggle("enemyText", "includePet", "Pet and totems", "Counts your pet's and totems' damage too.")),
                 half(Toggle("enemyText", "showMana", "Mana spent", "Puts the mana each spell cost on its line.")),
-                Toggle("enemyText", "persist", "Remember each target", "Each target keeps its totals while you look at another, and they come back when you select it again.", RE, { vis = notSummary }),
+                Toggle("enemyText", "persist", "Remember each target", "Each target keeps its totals while you look at another, and they come back when you select it again.", RE, { vis = perTarget("enemyText") }),
+                Slider("enemyText", "holdSecs", "Hold after combat", "How long the fight's totals stay up once combat ends, before they fade.", 0, 60, 1, nil, { vis = everyEnemy("enemyText"), fmt = seconds }),
                 Slider("enemyText", "threshold", "Ignore hits below", "Hits smaller than this are left out.", 0, 3000, 25),
             },
         }),
         FeedPage({
             key = "actions", db = "actionsText", refresh = RAc,
             title = "Actions",
-            desc = "How often your target avoided you this fight: dodges, parries, blocks, misses, resists. Each target keeps its own count.",
+            desc = function()
+                if ns.db.actionsText.scope == "all" then
+                    return "How often every enemy avoided you this fight: dodges, parries, blocks, misses, resists."
+                end
+                return "How often your target avoided you this fight: dodges, parries, blocks, misses, resists. Each target keeps its own count."
+            end,
             banner = function()
                 if ns.UseUnitCombat then
                     return "Worked out from your swings and casts",
@@ -270,8 +292,11 @@ local function definePages()
                 half(Toggle("actionsText", "showIcon", "Icons", "An icon beside each count.")),
             },
             counting = {
+                Choice("actionsText", "scope", "Count", function() return scopeDesc("what was avoided") end,
+                    SCOPE, function() ns.ActionsScopeChanged(); RAc() end, { vis = notSummary }),
                 half(Toggle("actionsText", "includePet", "Pet and totems", "Counts what your target avoided of your pet's and totems' attacks too.")),
-                half(Toggle("actionsText", "persist", "Remember each target", "Each target keeps its count while you look at another.", RAc)),
+                half(Toggle("actionsText", "persist", "Remember each target", "Each target keeps its count while you look at another.", RAc, { vis = perTarget("actionsText") })),
+                Slider("actionsText", "holdSecs", "Hold after combat", "How long the fight's count stays up once combat ends, before it fades.", 0, 60, 1, nil, { vis = everyEnemy("actionsText"), fmt = seconds }),
             },
         }),
         {

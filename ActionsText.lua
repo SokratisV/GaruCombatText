@@ -10,8 +10,17 @@ local playerGUID
 local testAcc = 0
 local meter = ns.Meter.New({ cfg = function() return ns.db.actionsText end })
 
+-- Count: your target, or every enemy as one set for the fight (as Damage Dealt).
+local function everyEnemy() return meter.isGlobal ~= nil and meter.isGlobal() end
+if not ns.SummaryMode then ns.Meter.AddScope(meter, "actionsText") end
+function ns.ActionsScopeChanged() if meter.ScopeChanged then meter:ScopeChanged() end end
+
 -- Flags first, GUIDs only as a fallback: see the note above ns.SameGUID in Core.
 local function destFrame(destGUID, destFlags)
+    if everyEnemy() then
+        if ns.UnitIsMe(destFlags) or ns.SameGUID(destGUID, UnitGUID("player")) then return nil end
+        return ns.actionsHostFrame
+    end
     if ns.UnitIsMyTarget(destFlags) then return ns.actionsHostFrame end
     if ns.SameGUID(destGUID, UnitGUID("target")) then return ns.actionsHostFrame end
     return nil
@@ -30,6 +39,7 @@ if ns.UseUnitCombat then
         if r.pet and not cfg.includePet then return end
         local frame = ns.actionsHostFrame
         if not frame then return end
+        if everyEnemy() then meter:Fresh() elseif r.onTarget == false then return end
         local m = r.missType
         meter:Bump(frame, "miss:" .. m, m:sub(1, 1) .. m:sub(2):lower(), 1, 1, false, ns.AVOID_ICON[m])
     end)
@@ -59,6 +69,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local missType = (sub == "SWING_MISSED") and info[12] or info[15]
     if not missType then return end
     local pretty = missType:sub(1, 1) .. missType:sub(2):lower()
+    if everyEnemy() then meter:Fresh() end
     meter:Bump(frame, "miss:" .. missType, pretty, 1, 1, false, ns.AVOID_ICON[missType])
 end)
 end

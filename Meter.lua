@@ -137,12 +137,25 @@ local function restoreInto(s, guid)
     end
 end
 
+-- Per-target memory is on when the feed asks for it -- and never for a summary,
+-- which keeps its own, or for an every-enemy feed, which has one set of totals.
+local function persistOn(M)
+    return M.cfg().persist and not M.ignorePersist and not (M.isGlobal and M.isGlobal())
+end
+
+-- What a frame's stream is keyed by: the unit it shows (your target), or, for an
+-- every-enemy feed, one key for the whole fight whoever you have selected.
+local function keyOf(M, frame)
+    if M.isGlobal and M.isGlobal() then return "all" end
+    return UnitGUID(frame.unit)
+end
+
 local function switchGUID(M, s, guid)
     -- ignorePersist: the summary keeps its own per-target memory and repaints the
     -- stream itself, so the engine's snapshot store must stay out of the way --
     -- otherwise selecting a second corpse restores the first one's rows on top of
     -- the summary we are about to draw.
-    if M.cfg().persist and not M.ignorePersist then
+    if persistOn(M) then
         snapshot(s)
         s.guid = guid
         restoreInto(s, guid)
@@ -569,7 +582,7 @@ local function update(M, s, dt)
     local aw = areaWidth(M, s)
     if s.areaW ~= aw then s.areaW = aw; s.container:SetWidth(aw) end
 
-    local noFade = M.noFade or (cfg.persist and not M.ignorePersist)
+    local noFade = M.noFade or persistOn(M)
 
     local list = s.sorted
     wipe(list)
@@ -714,7 +727,7 @@ function ns.Meter.New(opts)
     function M:Stream(frame)
         local s = getStream(M, frame)
         if not s then return nil end
-        local curGUID = UnitGUID(frame.unit)
+        local curGUID = keyOf(M, frame)
         if s.guid ~= curGUID then switchGUID(M, s, curGUID) end
         return s
     end
@@ -743,7 +756,7 @@ function ns.Meter.New(opts)
             bump(M, s, key, label, amount, school, crit, iconTex)
             return
         end
-        if not (M.cfg().persist and not M.ignorePersist) then return end
+        if not persistOn(M) then return end
         local snap = s.store[guid]
         if not snap then snap = {}; s.store[guid] = snap end
         local d = snap[key]
@@ -754,10 +767,30 @@ function ns.Meter.New(opts)
         end
     end
 
+    -- Set a row to a known total: the meter's figure for the whole fight, once it
+    -- ends (UnitCombat.lua). A correction, not a hit: no pop, and it does not start
+    -- a new fight's totals.
+    function M:SetTotal(frame, key, label, total, school, iconTex)
+        local s = self:Stream(frame)
+        if not s or not total then return end
+        local t = s.trackers[key]
+        if t then
+            t.total = total
+        elseif total > 0 then
+            bump(M, s, key, label, total, school, false, iconTex)
+            s.trackers[key].pop, s.trackers[key].popT = 1, 1
+        end
+    end
+
     -- re-sync a frame to its current GUID (e.g. on target change)
     function M:Retarget(frame)
         local s = frame and M.streams[frame]
-        if s then switchGUID(M, s, UnitGUID(frame.unit)) end
+        -- only on a real change: an every-enemy feed keeps its key, and switching
+        -- to the same key would reset a stream that has no per-target memory
+        if s then
+            local key = keyOf(M, frame)
+            if s.guid ~= key then switchGUID(M, s, key) end
+        end
     end
 
     function M:Clear()
@@ -812,3 +845,50 @@ function ns.Meter.New(opts)
 
     return M
 end
+
+--------------------------------------------------------------------------
+-- Every-enemy scope
+--------------------------------------------------------------------------
+-- A feed that is per target can instead count everything you hit, as one set of
+-- totals for the fight. It is kept up through the fight and for holdSecs after it,
+-- then fades; the next fight's first hit clears it and starts again. That first
+-- hit, rather than combat starting, because the opening blow is reported just
+-- before the game says combat began (/gct trace, 18 Oct 2026), and clearing then
+-- would throw it away.
+--   cfgKey: the feed's settings; its .scope is "target" or "all".
+-- Gives the meter M:isGlobal(), M:Fresh() (call before adding anything: clears the
+-- last fight if this is the first of a new one) and M:ScopeChanged().
+function ns.Meter.AddScope(M, cfgKey)
+    local inCombat, gen, fresh = false, 0, false
+    M.isGlobal = function()
+        local c = ns.db and ns.db[cfgKey]
+        return c ~= nil and c.scope == "all"
+    end
+    function M:Fresh()
+        if fresh and M.isGlobal() then
+            fresh = false
+            M:Clear()
+            M.noFade = true   -- a fight is starting: hold its rows, whatever combat says yet
+        end
+    end
+    function M:ScopeChanged()
+        gen, fresh = gen + 1, false
+        M.noFade = nil
+        M:Clear()
+    end
+    ns.On("PLAYER_REGEN_DISABLED", function()
+        inCombat, gen = true, gen + 1
+        if M.isGlobal() then M.noFade = true end
+    end)
+    ns.On("PLAYER_REGEN_ENABLED", function()
+        inCombat, gen = false, gen + 1
+        if not M.isGlobal() then return end
+        fresh = true                       -- the next hit starts a new fight
+        local g = gen
+        local hold = (ns.db[cfgKey].holdSecs or 8)
+        C_Timer.After(hold, function()
+            if g == gen and not inCombat and M.isGlobal() then M.noFade = nil end
+        end)
+    end)
+end
+

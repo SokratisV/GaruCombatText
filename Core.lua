@@ -233,6 +233,7 @@ ns.defaults = {
         schoolColors = true, crit = false, showLabel = false, maxLabel = 0, showIcon = true,
         showMana = true, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, persist = true,
+        scope = "target", holdSecs = 8,   -- "target": per target; "all": every enemy, per fight
         hideBlizzardFCT = false, onFocus = false,
         layout = "radial", radius = 66, arc = 105, arcAngle = 0, arcFixed = true,
         attach = "free", point = { "CENTER", 50, -30 },
@@ -260,7 +261,7 @@ ns.defaults = {
         layout = "radial", radius = 66, arc = 105, arcAngle = 180, arcFixed = true,
         attach = "free", point = { "CENTER", -50, -30 },
     },
-    actionsText = {   -- Actions: how many of your attacks the current target avoided (per target)
+    actionsText = {   -- Actions: how many of your attacks your target (or every enemy) avoided
         enabled = true, style = "float", includePet = false,
         anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "UP", align = "LEFT",
         matchFrameWidth = false, textWidth = 300, lineSpacing = 18, maxLines = 8,
@@ -268,6 +269,7 @@ ns.defaults = {
         schoolColors = false, crit = false, showLabel = false, maxLabel = 0, showIcon = true,
         showMana = false, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, persist = true,
+        scope = "target", holdSecs = 8,
         layout = "radial", radius = 66, arc = 105, arcAngle = 0, arcFixed = true,
         attach = "free", point = { "CENTER", 50, 30 },
     },

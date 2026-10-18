@@ -32,8 +32,16 @@ function GetLocale() return "enUS" end
 
 local target, petTarget = "Creature-A", nil
 local class = "WARLOCK"
-function UnitGUID(u) if u == "target" then return target end if u == "player" then return "Player-1" end end
+-- Other enemies' nameplates, for counting every enemy: token -> GUID, and which are friends.
+local plates, friendly = {}, {}
+function UnitGUID(u)
+    if u == "target" then return target end
+    if u == "player" then return "Player-1" end
+    return plates[u]
+end
+function UnitCanAttack(_, u) return plates[u] ~= nil and not friendly[u] end
 function UnitIsUnit(a, b)
+    if plates[a] and b == "target" then return plates[a] == target end
     if a == "target" and b == "player" then return false end
     if a == "pettarget" and b == "target" then return petTarget ~= nil and petTarget == target end
     return a == b
@@ -58,6 +66,7 @@ local DESC = {
     [3044] = "An instant shot that causes 13 Arcane damage.",
     [78]   = "A strong attack that increases melee damage by 11.",
     [689]  = "Transfers 2 health every 1 sec from the target to the caster.  Lasts 5 sec.",
+    [1449] = "Sends out a blast of arcane energy, dealing 32 to 36 Arcane damage to all enemies within 10 yards.",
 }
 local HELPFUL = { [2050] = true, [139] = true, [8936] = true }
 C_Spell = {
@@ -78,7 +87,7 @@ assert(ns.UseUnitCombat, "UseUnitCombat should be on where C_DamageMeter exists"
 assert(not ns.CombatLogLive, "CombatLogLive should be off where C_DamageMeter exists")
 
 local got = {}
-for _, kind in ipairs({ "dealt", "avoided", "taken", "dodged", "healed", "energized", "settled" }) do
+for _, kind in ipairs({ "dealt", "avoided", "taken", "dodged", "healed", "energized", "settled", "settledAll" }) do
     ns.UC.Subscribe(kind, function(r) got[#got + 1] = { kind = kind, r = r, at = clock } end)
 end
 
@@ -274,6 +283,87 @@ peace(364)
 meterRows = { ["spell:6603"] = { id = 6603, amount = 80 } }
 nothing("a target switch is not a kill", 370)
 
+-- 15. Counting every enemy: hits on other enemies' nameplates count too, and the
+--     meter's totals for the fight replace the feed's once it is over.
+local function onPlate(t, token, amount, school) advance(t); fire("UNIT_COMBAT", token, "WOUND", "", amount, school) end
+local function where(kind, k, onTarget)
+    return function(r)
+        if r.key ~= k then return false, "key " .. tostring(r.key) end
+        if r.onTarget ~= onTarget then return false, "onTarget " .. tostring(r.onTarget) end
+        return true
+    end
+end
+ns.db = { enemyText = { scope = "target" }, actionsText = { scope = "target" } }
+plates.nameplate1 = "Creature-A1"
+
+-- per target: other enemies' plates are not even looked at
+retarget(400, "Creature-B1")
+cast(400, 172)
+retarget(400.5, "Creature-C1")
+onPlate(403, "nameplate1", 10, 32)
+nothing("counting your target: a hit on another enemy's plate is ignored", 403.5)
+
+ns.db.enemyText.scope = "all"
+retarget(410, "Creature-A1")
+cast(410, 172)                                            -- Corruption on A
+retarget(411, "Creature-B2")                              -- then on to B
+onPlate(413, "nameplate1", 10, 32)                        -- A's tick, on A's plate
+expect("every enemy: a DoT ticking on the mob you left", 413.01, "dealt", where("dealt", "spell:172", false))
+
+plates.nameplate2 = "Creature-B2"                         -- B's own plate
+cast(420, 686); cast(420.4, 686)                          -- two bolts in flight
+hit(421, 280, 32); onPlate(421, "nameplate2", 280, 32)    -- the first lands, reported twice
+expect("the target's hit, once", 421.01, "dealt", where("dealt", "spell:686", true))
+nothing("...not again from the target's own plate", 421.3)
+hit(421.4, 275, 32)                                       -- the second, which a duplicate would have robbed
+expect("...so the second bolt still has its cast", 421.41, "dealt", key("spell:686", 275))
+
+plates.nameplate3 = "Player-Friend"; friendly.nameplate3 = true
+swing(430); onPlate(430.3, "nameplate3", 50, 1)
+nothing("a friend's plate: never counted", 431.5)
+
+plates.nameplate4, plates.nameplate5 = "Creature-D1", "Creature-E1"
+cast(440, 1449)                                           -- Arcane Explosion
+hit(440.05, 34, 64); onPlate(440.08, "nameplate4", 33, 64); onPlate(440.1, "nameplate5", 35, 64)
+expect("area: on the target", 440.2, "dealt", where("dealt", "spell:1449", true))
+expect("area: on a second enemy", 440.2, "dealt", where("dealt", "spell:1449", false))
+expect("area: on a third enemy", 440.2, "dealt", where("dealt", "spell:1449", false))
+onPlate(440.6, "nameplate4", 30, 64)
+nothing("area: once per enemy, and only in its cast's moment", 441)
+
+swing(450); onPlate(450.4, "nameplate4", 45, 1)
+nothing("a swing at your target never takes a hit on another enemy", 451.5)
+
+-- Damage Dealt counting every enemy, Actions still per target: another enemy's
+-- resist must say it was not on your target, or Actions would take it as one.
+local function plateMiss(t, token, what, school) advance(t); fire("UNIT_COMBAT", token, what, "", 0, school) end
+plates.nameplate6 = "Creature-H1"
+retarget(455, "Creature-H1")
+cast(455, 3044)                                           -- Arcane Shot at H1
+retarget(455.1, "Creature-B2")                            -- then on to B
+plateMiss(455.3, "nameplate6", "RESIST", 64)              -- H1 resists it, on its plate
+expect("another enemy's resist is marked as not on your target", 455.4, "avoided", function(r)
+    return r.onTarget == false and r.missType == "RESIST", "onTarget " .. tostring(r.onTarget) end)
+
+-- once the fight is over, the meter's totals are the feed's
+retarget(460, "Creature-F1"); fight(460)
+cast(460, 686); hit(461, 300, 32); expect("bolt", 461.01, "dealt", key("spell:686", 300))
+swing(462); hit(462.5, 40, 1); expect("swing", 462.51, "dealt", key("swing", 40))
+peace(463)
+meterRows = { ["spell:686"] = { id = 686, amount = 610 }, ["spell:6603"] = { id = 6603, amount = 85 } }
+-- The meter is looked at several times as it settles; each look sets the same
+-- totals again, which changes nothing.
+local settledAll = {}
+advance(470)
+for i = #got, 1, -1 do
+    if got[i].kind == "settledAll" then settledAll[got[i].r.key] = got[i].r.total; table.remove(got, i) end
+end
+if settledAll["spell:686"] == 610 and settledAll["swing"] == 85 then pass = pass + 1
+else fail = fail + 1; print("FAIL  every enemy: the meter's totals, per spell, once the fight is over: " ..
+    tostring(settledAll["spell:686"]) .. " / " .. tostring(settledAll["swing"])) end
+nothing("every enemy: and no per-target kill top-up as well", 470)
+ns.db.enemyText.scope = "target"
+
 -- 13. What descriptions say.
 local function facts(name, id, want)
     local f = ns.UC.Facts(id) or {}
@@ -295,6 +385,8 @@ facts("Lesser Heal", 2050, { heals = true, hot = false, direct = true })
 facts("Renew",       139,  { heals = true, hot = true, direct = false })
 facts("Regrowth",    8936, { heals = true, hot = true, direct = true })
 facts("Heroic Strike", 78, { damages = true, school = 1, direct = true })
+facts("Arcane Explosion", 1449, { damages = true, school = 64, direct = true, area = true })
+facts("Shadow Bolt is not an area spell", 686, { area = nil })
 
 print(("%d passed, %d failed"):format(pass, fail))
 if fail > 0 then error("failures") end

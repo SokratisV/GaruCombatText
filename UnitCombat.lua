@@ -108,6 +108,10 @@ local AUTO_RANGED = { [75] = true, [5019] = true }
 -- 15 sec.": both; "Heals a friendly target for 47 to 58.": heals, at once.
 -- English clients only. Elsewhere, or until the text has loaded, a spell is
 -- matched as "may hit, school unknown" and its school is learned from its hits.
+local AREA_WORDS = { "enemies within", "nearby enemies", "all enemies", "enemies in ", "in the area",
+                     "selected area", "area of effect", "targets within", "additional targets",
+                     "nearest ally", "nearby targets", "enemy targets" }
+
 local function parse(text)
     local lower = text:lower()
     local f = {}
@@ -162,6 +166,14 @@ local function parse(text)
         f.school, f.direct = PHYSICAL, true
     end
     f.duration = tonumber(lower:match("over (%d+) sec")) or tonumber(lower:match("for (%d+) sec"))
+    -- Hits more than its target: "all enemies within 10 yards" (Arcane Explosion),
+    -- "nearby enemies" (Swipe, Thunder Clap), "enemies in a cone" (Cone of Cold),
+    -- "in a selected area" (Flamestrike, Blizzard), "up to 3 targets" (Multi-Shot),
+    -- "additional targets" (Chain Lightning), "his nearest ally" (Cleave).
+    for _, w in ipairs(AREA_WORDS) do
+        if lower:find(w, 1, true) then f.area = true break end
+    end
+    if lower:find("up to %d+ targets") then f.area = true end
     -- Only ticks: it never hits at once, so its cast must not wait for a hit (it
     -- would take the next bolt's, cast after it).
     if f.ticks and not f.direct then f.direct = false end
@@ -227,7 +239,7 @@ end
 --------------------------------------------------------------------------
 local stats, lastStats
 local function newStats()
-    return { at = GetTime(), target = 0, targetHidden = 0, player = 0, playerHidden = 0,
+    return { at = GetTime(), target = 0, targetHidden = 0, plates = 0, player = 0, playerHidden = 0,
              casts = 0, swings = 0, unplaced = 0, missesPlaced = 0, rules = {} }
 end
 stats = newStats()
@@ -321,6 +333,7 @@ end
 
 local function tidy(t)
     trim(casts, function(c)
+        if c.area and t - c.at <= 0.3 then return true end   -- AREA_MOMENT: its other hits
         return not c.used and t - c.at <= (c.school == PHYSICAL and PHYSICAL_WINDOW or DIRECT_WINDOW)
     end)
     trim(swings, function(s)
@@ -382,7 +395,7 @@ local function onCast(unit, spell)
     if offensive then
         if not f or f.direct ~= false then
             casts[#casts + 1] = { spell = spell, unit = unit, at = t, school = school, key = key,
-                                  unknown = (f == nil or f.school == nil) }
+                                  unknown = (f == nil or f.school == nil), area = f and f.area, hits = {} }
         end
         if f and f.ticks then
             -- A recast refreshes the DoT rather than stacking a second one.
@@ -395,7 +408,8 @@ local function onCast(unit, spell)
             local known = periods[spell]
             dots[#dots + 1] = { spell = spell, unit = unit, school = school, key = key, from = t,
                                 to = t + (f.duration or DOT_FALLBACK) + DOT_SLACK,
-                                period = known or 3, guessed = (known == nil) }
+                                period = known or 3, guessed = (known == nil),
+                                area = f and f.area, lastBy = {} }
         end
     end
 
@@ -429,15 +443,16 @@ local function onSwing(swingType)
     stats.swings = stats.swings + 1
     -- The order of a hit and its swing is not fixed: a hit already waiting for one
     -- takes this swing.
+    local key = targetKey()
     for _, h in ipairs(held) do
-        if not h.done and t - h.at <= LATE_SWING and (hand == "ranged" or h.physical) then
+        if not h.done and h.key == key and t - h.at <= LATE_SWING and (hand == "ranged" or h.physical) then
             h.done = true
             rule("late swing")
             placeSwing(h.rec, hand)
             return
         end
     end
-    swings[#swings + 1] = { hand = hand, at = t }
+    swings[#swings + 1] = { hand = hand, at = t, key = key }
 end
 
 local function swingKey(hand)
@@ -447,9 +462,9 @@ end
 --------------------------------------------------------------------------
 -- Hits on your target: whose, and with what
 --------------------------------------------------------------------------
-local function petAttacking()
+local function petAttacking(unit)
     if not yes(UnitExists("pet")) then return false end
-    return yes(UnitIsUnit("pettarget", "target"))
+    return yes(UnitIsUnit("pettarget", unit or "target"))
 end
 
 -- A DoT whose tick lands on its learned beat.
@@ -514,10 +529,10 @@ local function out(rec)
     -- A miss names what missed: "miss:DODGE/swing", "miss:RESIST/spell:686".
     local placed = rec.missType and ("miss:" .. rec.missType .. (rec.key and ("/" .. rec.key) or "")) or rec.key
     if rec.hidden then note(">", UC.lastRule, placed, "hidden") else note(">", UC.lastRule, placed) end
-    if rec.key and not rec.pet then blow(rec.key) end
+    if rec.key and not rec.pet and rec.onTarget ~= false then blow(rec.key) end
     if rec.missType then
         stats.missesPlaced = stats.missesPlaced + 1
-        emit("avoided", { missType = rec.missType, pet = rec.pet })
+        emit("avoided", { missType = rec.missType, pet = rec.pet, onTarget = rec.onTarget })
     elseif rec.amount then
         if not rec.pet then
             tally[rec.key] = (tally[rec.key] or 0) + rec.amount
@@ -540,8 +555,17 @@ end
 -- Physical-looking misses come off swings; spell-looking ones off casts.
 local SWING_MISSES = { MISS = true, DODGE = true, PARRY = true, BLOCK = true, DEFLECT = true, EVADE = true }
 
-local function placeOnTarget(rec, t)
-    local key = targetKey()
+-- An area spell's hits land on every enemy near it in its cast's own moment (FCT
+-- 0.3.42: every recorded Frost Nova, Arcane Explosion and Flamestrike hit did),
+-- so a hit on another enemy then is that cast's too -- once per enemy.
+local AREA_MOMENT = 0.3
+
+-- Whose hit this was, on your target or (for an every-enemy feed) another enemy's
+-- nameplate. key: the unit's key, which casts and DoTs remember; unit: its token.
+local function placeOnTarget(rec, t, key, unit)
+    key = key or targetKey()
+    unit = unit or "target"
+    rec.onTarget = (unit == "target")
     local school = rec.school
     local physical = (school == nil or school == PHYSICAL)
     local isMiss = rec.missType ~= nil
@@ -556,8 +580,9 @@ local function placeOnTarget(rec, t)
         end
     end
 
-    -- 2. The oldest cast of yours of this school still in flight. A swing-type
-    --    miss looks for a swing first.
+    -- 2. The oldest cast of yours at this unit, of this school, still in flight;
+    --    or an area spell of yours cast this moment. A swing-type miss looks for a
+    --    swing first.
     local swingFirst = isMiss and SWING_MISSES[rec.missType]
     local function tryCast()
         for _, c in ipairs(casts) do
@@ -565,6 +590,7 @@ local function placeOnTarget(rec, t)
             if not c.used and c.key == key and t >= c.at and t - c.at <= window
                 and sameSchool(c.school, school) then
                 c.used = true
+                c.hits[key] = true
                 if c.unknown and school and not learnedSchool[c.spell] then
                     learnedSchool[c.spell] = school
                 end
@@ -573,11 +599,20 @@ local function placeOnTarget(rec, t)
                 return true
             end
         end
+        for _, c in ipairs(casts) do
+            if c.area and not c.hits[key] and math.abs(t - c.at) <= AREA_MOMENT and sameSchool(c.school, school) then
+                c.hits[key] = true
+                rule("area")
+                out(spellRecord(c.spell, rec, c.unit))
+                return true
+            end
+        end
     end
     local function trySwing()
         for _, s in ipairs(swings) do
             local window = (s.hand == "ranged") and RANGED_WINDOW or SWING_WINDOW
-            if not s.used and t - s.at <= window and (physical or s.hand == "ranged") then
+            -- a swing is aimed at one unit: only a hit on that one is its
+            if not s.used and s.key == key and t - s.at <= window and (physical or s.hand == "ranged") then
                 s.used = true
                 rule("swing")
                 placeSwing(rec, s.hand)
@@ -591,13 +626,23 @@ local function placeOnTarget(rec, t)
         if tryCast() then return end
     end
 
-    -- 3. A DoT of yours whose beat is not known yet.
+    -- 3. A DoT of yours whose beat is not known yet -- on this unit, or anywhere
+    --    for one that covers an area (Consecration, Blizzard), each enemy on its own.
     if not isMiss then
         for _, d in ipairs(dots) do
-            if d.key == key and t >= d.from and sameSchool(d.school, school)
-                and ((d.last and t - d.last >= TICK_GAP) or (not d.last and t - d.from >= 0.8)) then
-                tick(d, t); rule("tick")
-                return out(spellRecord(d.spell, rec, d.unit))
+            if t >= d.from and sameSchool(d.school, school) then
+                if d.key == key and not d.area then
+                    if (d.last and t - d.last >= TICK_GAP) or (not d.last and t - d.from >= 0.8) then
+                        tick(d, t); rule("tick")
+                        return out(spellRecord(d.spell, rec, d.unit))
+                    end
+                elseif d.area then
+                    local last = d.lastBy[key]
+                    if (last and t - last >= TICK_GAP) or (not last and t - d.from >= 0.8) then
+                        d.lastBy[key] = t; rule("area tick")
+                        return out(spellRecord(d.spell, rec, d.unit))
+                    end
+                end
             end
         end
     end
@@ -607,7 +652,7 @@ local function placeOnTarget(rec, t)
 
     -- 5. Your pet, if it is on this unit (its swings are not reported, so at most
     --    one hit a second).
-    if physical and not isMiss and t - petLast >= PET_GAP and petAttacking() then
+    if physical and not isMiss and t - petLast >= PET_GAP and petAttacking(unit) then
         petLast = t
         rule("pet")
         rec.key, rec.label, rec.icon, rec.pet = "pet:swing", UnitName("pet") or "Pet", MELEE_ICON, true
@@ -617,7 +662,7 @@ local function placeOnTarget(rec, t)
 
     -- 6. Physical, unexplained: wait a moment in case its swing is reported late.
     if physical or isMiss then
-        local h = { at = t, rec = rec, physical = physical }
+        local h = { at = t, rec = rec, physical = physical, key = key }
         held[#held + 1] = h
         note(">", "held for a late swing")
         C_Timer.After(LATE_SWING + 0.02, function()
@@ -674,8 +719,17 @@ end
 local FEEDBACK = { MISS = true, DODGE = true, PARRY = true, BLOCK = true, RESIST = true, EVADE = true,
                    IMMUNE = true, DEFLECT = true, ABSORB = true, REFLECT = true }
 
+-- Hits on enemies other than your target come on their nameplates, and are only
+-- wanted by a feed counting every enemy.
+local function wantAll()
+    local db = ns.db
+    if not db then return false end
+    return (db.enemyText and db.enemyText.scope == "all") or (db.actionsText and db.actionsText.scope == "all") or false
+end
+
 local function onUnitCombat(unit, event, flag, amount, school)
     if not str(unit) or not str(event) then return end
+    local plateKey
     if unit ~= "target" and unit ~= "player" then
         -- Whether a killing blow turns up on the dead unit's nameplate instead is
         -- not known: the recorder notes any that do, since that would let the blow
@@ -686,7 +740,13 @@ local function onUnitCombat(unit, event, flag, amount, school)
                 note("U", unit, event, flag, amount, school, "dead")
             end
         end
-        return
+        if not (wantAll() and unit:find("^nameplate%d+$")) then return end
+        -- your target's own plate reports the same hit as "target" does
+        if yes(UnitIsUnit(unit, "target")) then return end
+        -- an enemy; a friend's plate, or one the game will not say, is left out
+        if not yes(UnitCanAttack("player", unit)) then return end
+        plateKey = UnitGUID(unit)
+        if not str(plateKey) then return end
     end
     if unit == "target" and yes(UnitIsUnit("target", "player")) then return end
     note("U", unit, event, flag, amount, school)
@@ -719,10 +779,11 @@ local function onUnitCombat(unit, event, flag, amount, school)
         return
     end
 
-    -- On your target: only harm counts.
+    -- On your target (or another enemy): only harm counts.
+    local counted = plateKey and "plates" or "target"
     local rec
     if event == "WOUND" then
-        stats.target = stats.target + 1
+        stats[counted] = stats[counted] + 1
         if hidden then
             -- Still matched, so the cast it belongs to is used up and cannot claim
             -- the next hit; it just adds nothing to the totals.
@@ -735,12 +796,12 @@ local function onUnitCombat(unit, event, flag, amount, school)
                     school = school }
         end
     elseif FEEDBACK[event] then
-        stats.target = stats.target + 1
+        stats[counted] = stats[counted] + 1
         rec = { missType = event, school = school }
     else
         return
     end
-    placeOnTarget(rec, t)
+    placeOnTarget(rec, t, plateKey, plateKey and unit)
 end
 
 ns.On("UNIT_COMBAT", function(_, ...) onUnitCombat(...) end)
@@ -780,8 +841,18 @@ local function keyLabel(key)
 end
 
 -- Once the meter gives the fight's totals: credit each kill's missing blow.
+-- Damage Dealt counting every enemy: the meter's totals for the fight are exactly
+-- that feed's figures, so each of its spells is set to the meter's number once the
+-- fight is over -- every hit on every enemy, killing blows included, and anything
+-- the matching missed or took wrongly. Set, not added: looking again changes nothing.
+local function everyEnemyDealt()
+    return ns.db and ns.db.enemyText and ns.db.enemyText.scope == "all"
+end
+
 local function settle(fight)
-    if fight ~= fightNo or inCombat or #kills == 0 then return end
+    if fight ~= fightNo or inCombat then return end
+    local all = everyEnemyDealt()
+    if not all and #kills == 0 then return end
     local DM = ns.DM
     local rows = DM and DM.Capture and DM.TYPES and DM.Capture(DM.TYPES.damage)
     if not rows then return end   -- not released yet; a later attempt will see it
@@ -790,6 +861,19 @@ local function settle(fight)
         -- the meter's melee is spell 6603 (Auto Attack), or 0
         if key == "spell:6603" or key == "spell:0" then key = "swing" end
         meter[key] = (meter[key] or 0) + r.amount
+    end
+    if all then
+        for key, total in pairs(meter) do
+            local label, icon, school = keyLabel(key)
+            total = math.floor(total + 0.5)
+            emit("settledAll", { key = key, label = label, icon = icon, school = school, total = total })
+            if tally[key] ~= total then
+                note(">", "settled all", key, total, tally[key] or 0)
+                stats.settled = (stats.settled or 0) + 1
+                tally[key] = total
+            end
+        end
+        return   -- one set of totals, now exact: no per-target kills to top up
     end
     local byKey = {}
     for _, k in ipairs(kills) do
@@ -870,6 +954,9 @@ function UC.PrintProbe()
         return n == 0 and "|cff40ff40none hidden|r" or ("|cffff4040" .. n .. " of " .. of .. " hidden|r")
     end
     print(("   on your target: %d reports, amounts %s"):format(s.target, hiddenWord(s.targetHidden, s.target)))
+    if (s.plates or 0) > 0 then
+        print(("   on other enemies' nameplates (counting every enemy): %d reports"):format(s.plates))
+    end
     local placed, parts = 0, {}
     for name, n in pairs(s.rules) do
         if not name:find("heal") then placed = placed + n; parts[#parts + 1] = name .. " " .. n end
@@ -885,7 +972,7 @@ function UC.PrintProbe()
     if #hp > 0 then print("   heals on you: " .. table.concat(hp, ", ")) end
     print(("   your casts seen: %d, swings seen: %d"):format(s.casts, s.swings))
     if (s.settled or 0) + (s.refused or 0) > 0 then
-        print(("   killing blows settled from the meter after the fight: %d%s"):format(s.settled or 0,
+        print(("   corrected from the meter after the fight: %d%s"):format(s.settled or 0,
             (s.refused or 0) > 0 and ("  (refused, too large to be one blow: " .. s.refused .. ")") or ""))
     end
     if s.targetHidden > 0 or s.playerHidden > 0 then

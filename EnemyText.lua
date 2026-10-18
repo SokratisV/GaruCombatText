@@ -13,6 +13,12 @@ local testAcc = 0
 
 local meter = ns.Meter.New({ cfg = function() return ns.db.enemyText end })
 
+-- Count: your target (a set of totals per target) or every enemy (one set for the
+-- fight). Not for the post-fight summary, which is the whole fight already.
+local function everyEnemy() return meter.isGlobal ~= nil and meter.isGlobal() end
+if not ns.SummaryMode then ns.Meter.AddScope(meter, "enemyText") end
+function ns.EnemyScopeChanged() if meter.ScopeChanged then meter:ScopeChanged() end end
+
 --------------------------------------------------------------------------
 -- This client's mana cost for a spell, or 0 if unknown / not a mana spell.
 --------------------------------------------------------------------------
@@ -40,6 +46,11 @@ end
 -- Flags first, GUIDs only as a fallback: see the note above ns.SameGUID in Core.
 local function destFrame(destGUID, destFlags)
     if not ns.frames then return nil end
+    -- every enemy: anything you hit, but yourself (Life Tap and the like)
+    if everyEnemy() then
+        if ns.UnitIsMe(destFlags) or ns.SameGUID(destGUID, UnitGUID("player")) then return nil end
+        return ns.frames.target
+    end
     local onFocus = ns.db.enemyText.onFocus
     if ns.UnitIsMyTarget(destFlags) then return ns.frames.target end
     if onFocus and ns.UnitIsMyFocus(destFlags) then return ns.frames.focus end
@@ -76,6 +87,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
         local spellId, spellName = info[12], info[13]
         local cost = spellManaCost(spellId)
         if cost <= 0 then return end
+        if everyEnemy() then meter:Fresh() end
         meter:BumpMana(frame, "spell:" .. tostring(spellId or spellName or "?"),
                        spellName or "Spell", cost, info[14],
                        ns.SpellTexture(spellId))
@@ -100,6 +112,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     amount = tonumber(amount) or 0
     if amount <= 0 or amount < (cfg.threshold or 0) then return end
 
+    if everyEnemy() then meter:Fresh() end
     meter:Bump(frame, key, label, amount, school, crit and true or false, iconTex)
 end)
 end
@@ -115,13 +128,25 @@ if ns.UseUnitCombat then
         if r.amount < (cfg.threshold or 0) then return end
         local frame = ns.frames and ns.frames.target
         if not frame then return end
+        -- hits on other enemies' nameplates come only for an every-enemy feed
+        if everyEnemy() then meter:Fresh() elseif r.onTarget == false then return end
         meter:Bump(frame, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
+    end)
+    -- Every enemy: once the fight is over, the meter's totals for it, which are
+    -- exactly this feed's figures -- every hit on every enemy, the killing blows
+    -- included, and anything the matching missed or took wrongly.
+    ns.UC.Subscribe("settledAll", function(r)
+        local cfg = ns.db.enemyText
+        if not cfg.enabled or ns.test.combat or not everyEnemy() then return end
+        local frame = ns.frames and ns.frames.target
+        if not frame then return end
+        meter:SetTotal(frame, r.key, r.label, r.total, r.school, r.icon)
     end)
     -- A killing blow, settled from the meter once the fight is over (UnitCombat.lua):
     -- it goes on the dead unit's own totals, wherever your target is by then.
     ns.UC.Subscribe("settled", function(r)
         local cfg = ns.db.enemyText
-        if not cfg.enabled or ns.test.combat then return end
+        if not cfg.enabled or ns.test.combat or everyEnemy() then return end
         if r.amount < (cfg.threshold or 0) then return end
         local frame = ns.frames and ns.frames.target
         if not frame then return end
@@ -134,7 +159,12 @@ if ns.UseUnitCombat then
         local cost = spellManaCost(c.spell)
         if cost <= 0 then return end
         local frame = ns.frames and ns.frames.target
-        if not frame or not UnitExists("target") then return end
+        if not frame then return end
+        if everyEnemy() then
+            meter:Fresh()
+        elseif not UnitExists("target") then
+            return
+        end
         meter:BumpMana(frame, "spell:" .. c.spell, c.label or "Spell", cost, c.school, ns.SpellTexture(c.spell))
     end)
 end

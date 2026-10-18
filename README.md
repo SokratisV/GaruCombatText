@@ -20,7 +20,9 @@ worked out, not read.** Your casts (with their spell) and your weapon swings are
 and each hit on your target is matched to them by timing and school, helped by what each
 spell's own description says it does.
 
-- **Damage Dealt** is per spell again, with crits, schools and mana spent.
+- **Damage Dealt** is per spell again, with crits, schools and mana spent. Counting every
+  enemy, it also reads other enemies' nameplates (so enemy nameplates need to be shown), and
+  once the fight ends its numbers are set to Blizzard's damage meter's, so they end exact.
 - **Actions** is back: your target's dodges, parries and resists, matched to your swings
   and casts.
 - **Damage Taken** is grouped **by school** (Physical, Fire, ...): the game says how you
@@ -59,7 +61,8 @@ Screenshots: drop images into docs/ and reference them here, e.g.
 - ⚔️ **Damage dealt (per target)** — the cumulative damage you deal to your current target,
   one ever-growing number/row per source (melee, each spell, wand, pet, totem),
   school-colored, with an optional combat-time header. Tracks each target separately and can
-  remember their totals when you re-select them.
+  remember their totals when you re-select them — or, with **Count: Every enemy**, adds up
+  everything you hit as one set of totals for the fight (Actions has the same choice).
 - 🛡️ **Damage taken (by type)** — the cumulative damage you take this fight from **all
   enemies combined, grouped by attack type** (all melee together, each incoming spell, each
   environmental type), school-colored. Optionally also counts your **misses & avoids** —
