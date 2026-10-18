@@ -2,6 +2,10 @@
 -- checks where each hit is placed. Run by tests/run.py, which sets UC_SRC to the
 -- file's source.
 
+-- WoW's own table helpers, which the addon uses as globals.
+function wipe(t) for k in pairs(t) do t[k] = nil end return t end
+tinsert, tremove = table.insert, table.remove
+
 local clock = 0
 function GetTime() return clock end
 local timers = {}
@@ -74,7 +78,7 @@ assert(ns.UseUnitCombat, "UseUnitCombat should be on where C_DamageMeter exists"
 assert(not ns.CombatLogLive, "CombatLogLive should be off where C_DamageMeter exists")
 
 local got = {}
-for _, kind in ipairs({ "dealt", "avoided", "taken", "dodged", "healed", "energized" }) do
+for _, kind in ipairs({ "dealt", "avoided", "taken", "dodged", "healed", "energized", "settled" }) do
     ns.UC.Subscribe(kind, function(r) got[#got + 1] = { kind = kind, r = r, at = clock } end)
 end
 
@@ -223,6 +227,52 @@ hit(152, 2, 32); expect("Drain Life tick 2", 152.01, "dealt", key("spell:689", 2
 retarget(199, "Creature-C")
 cast(200, 172); cast(200.5, 686); hit(201.5, 260, 32)
 expect("a bolt cast after Corruption keeps its hit", 201.51, "dealt", key("spell:686", 260))
+
+-- 14. Killing blows: never reported, settled from the meter once the fight ends.
+--     The shape is the recorded one (/gct trace, 18 Oct 2026): the killing swing's
+--     PLAYER_SWING and the target clearing come in the same frame, and no hit follows.
+local meterRows
+ns.DM = { TYPES = { damage = 0 }, Capture = function() return meterRows end }
+local function fight(t) advance(t); fire("PLAYER_REGEN_DISABLED") end
+local function peace(t) advance(t); fire("PLAYER_REGEN_ENABLED") end
+class = "DRUID"
+
+retarget(300, "Creature-K1"); fight(300)
+swing(301); hit(301.5, 44, 1)
+expect("before the kill: a swing", 301.51, "dealt", key("swing", 44))
+swing(303); retarget(303, nil)                 -- the kill: no hit is ever reported
+peace(303.3)
+meterRows = { ["spell:6603"] = { id = 6603, amount = 91 } }   -- the meter counted the killing 47
+expect("the killing swing, settled to the dead mob", 304, "settled", function(r)
+    if r.guid ~= "Creature-K1" then return false, "guid " .. tostring(r.guid) end
+    return r.key == "swing" and r.amount == 47, tostring(r.key) .. " " .. tostring(r.amount)
+end)
+nothing("settled once, not on every later look at the meter", 309)
+
+-- A kill whose blow was reported (a DoT tick, in the same frame) adds nothing.
+retarget(320, "Creature-K2"); fight(320)
+cast(320, 172); hit(323, 10, 32); expect("tick", 323.01, "dealt", key("spell:172", 10))
+hit(326, 10, 32); expect("the killing tick, reported", 326.01, "dealt", key("spell:172", 10))
+retarget(326, nil)
+peace(326.4)
+meterRows = { ["spell:172"] = { id = 172, amount = 20 } }
+nothing("nothing missing, nothing settled", 332)
+
+-- A gap far beyond one blow means other mobs' damage is mixed in: not guessed at.
+retarget(340, "Creature-K3"); fight(340)
+swing(341); hit(341.5, 40, 1); expect("swing", 341.51, "dealt", key("swing", 40))
+swing(343); retarget(343, nil)
+peace(343.3)
+meterRows = { ["spell:6603"] = { id = 6603, amount = 900 } }
+nothing("a top-up of 860 after hits of 40 is refused", 349)
+
+-- Switching to another mob mid-fight is not a kill.
+retarget(360, "Creature-K4"); fight(360)
+swing(361); hit(361.5, 40, 1); expect("swing", 361.51, "dealt", key("swing", 40))
+swing(363); retarget(363, "Creature-K5")
+peace(364)
+meterRows = { ["spell:6603"] = { id = 6603, amount = 80 } }
+nothing("a target switch is not a kill", 370)
 
 -- 13. What descriptions say.
 local function facts(name, id, want)

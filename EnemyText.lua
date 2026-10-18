@@ -117,6 +117,16 @@ if ns.UseUnitCombat then
         if not frame then return end
         meter:Bump(frame, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
     end)
+    -- A killing blow, settled from the meter once the fight is over (UnitCombat.lua):
+    -- it goes on the dead unit's own totals, wherever your target is by then.
+    ns.UC.Subscribe("settled", function(r)
+        local cfg = ns.db.enemyText
+        if not cfg.enabled or ns.test.combat then return end
+        if r.amount < (cfg.threshold or 0) then return end
+        local frame = ns.frames and ns.frames.target
+        if not frame then return end
+        meter:BumpGUID(frame, r.guid, r.key, r.label, r.amount, r.school, false, r.icon)
+    end)
     ns.UC.Subscribe("cast", function(c)
         local cfg = ns.db.enemyText
         if not cfg.enabled or not cfg.showMana or ns.test.combat then return end

@@ -731,6 +731,29 @@ function ns.Meter.New(opts)
         return s
     end
 
+    -- Add to the totals of one particular unit, on screen or not: a killing blow
+    -- settled after the fight (UnitCombat.lua), when the dead unit may no longer be
+    -- your target. Off screen it goes into what is remembered for that unit, so it
+    -- shows when the unit is selected again; with per-target memory off there is
+    -- nowhere to keep it, and it is dropped.
+    function M:BumpGUID(frame, guid, key, label, amount, school, crit, iconTex)
+        local s = getStream(M, frame)
+        if not s or not guid then return end
+        if s.guid == guid then
+            bump(M, s, key, label, amount, school, crit, iconTex)
+            return
+        end
+        if not (M.cfg().persist and not M.ignorePersist) then return end
+        local snap = s.store[guid]
+        if not snap then snap = {}; s.store[guid] = snap end
+        local d = snap[key]
+        if d then
+            d.total = (d.total or 0) + amount
+        else
+            snap[key] = { total = amount, mana = 0, label = label, school = school, iconTex = iconTex }
+        end
+    end
+
     -- re-sync a frame to its current GUID (e.g. on target change)
     function M:Retarget(frame)
         local s = frame and M.streams[frame]

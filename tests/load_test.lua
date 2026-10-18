@@ -3,6 +3,10 @@
 -- feed's meter. Run by tests/run.py, which sets ORDER (file names), FILES (name ->
 -- source) and FOREVER (true: C_DamageMeter present and the combat log dead).
 
+-- WoW's own table helpers, which the addon uses as globals.
+function wipe(t) for k in pairs(t) do t[k] = nil end return t end
+tinsert, tremove = table.insert, table.remove
+
 local clock = 0
 function GetTime() return clock end
 local timers = {}
@@ -129,6 +133,10 @@ rawset(_G, "GetSpellInfo", nil)
 
 local ns = {}
 local bumps = {}   -- every Bump/BumpMana a feed makes: { feed, mana, key, label, amount, crit, school }
+allMeters = {}     -- every meter a feed made, to look inside one afterwards
+local function meterOf(feedKey)
+    for _, M in ipairs(allMeters) do if M.cfg() == ns.db[feedKey] then return M end end
+end
 for _, name in ipairs(ORDER) do
     local chunk, err = loadstring(FILES[name], "@" .. name)
     if not chunk then error("load " .. name .. ": " .. tostring(err)) end
@@ -139,6 +147,7 @@ for _, name in ipairs(ORDER) do
         local New = ns.Meter.New
         ns.Meter.New = function(opts)
             local M = New(opts)
+            allMeters[#allMeters + 1] = M
             local function feed()
                 for _, k in ipairs({ "enemyText", "healText", "takenText", "actionsText" }) do
                     if ns.db and M.cfg() == ns.db[k] then return k end
@@ -228,6 +237,26 @@ if FOREVER then
     check("target change", ok, err)
     ok, err = pcall(ns.UC.PrintProbe)
     check("/gct probe", ok, err)
+
+    -- A kill, end to end: the killing swing is never reported, the meter settles it
+    -- after the fight, and clicking the corpse again shows the whole total.
+    advance(20)
+    target = "Creature-Z"; fire("PLAYER_TARGET_CHANGED")
+    fire("PLAYER_REGEN_DISABLED")
+    fire("PLAYER_SWING", 2.4, 0)
+    advance(20.5); fire("UNIT_COMBAT", "target", "WOUND", "", 44, 1)
+    advance(23); fire("PLAYER_SWING", 2.4, 0)
+    target = nil; fire("PLAYER_TARGET_CHANGED")             -- dies at the swing
+    advance(23.3); fire("PLAYER_REGEN_ENABLED")
+    ns.DM.TYPES = ns.DM.TYPES or {}
+    ns.DM.Capture = function() return { ["spell:6603"] = { id = 6603, amount = 91 } } end
+    ok, err = pcall(advance, 30)
+    check("settling runs", ok, err)
+    target = "Creature-Z"; fire("PLAYER_TARGET_CHANGED")    -- click the corpse
+    local em = meterOf("enemyText")
+    local tr = em and em:Trackers(ns.frames.target)
+    check("the corpse shows the killing blow in its Melee total", tr and tr.swing and tr.swing.total == 91,
+          tr and tr.swing and tostring(tr.swing.total) or "no Melee row")
 
     -- What reached each feed's meter.
     local b = fed("enemyText", "spell:686", 300)

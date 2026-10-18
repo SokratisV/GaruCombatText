@@ -249,6 +249,9 @@ stats = newStats()
 --   S <arg1> <arg2> <hand>               PLAYER_SWING, its payload as it came
 --   U <unit> <event> <flag> <amount> <school>                a UNIT_COMBAT report
 --   > <decision> [key]                   what became of the report above it
+--   K <guid> <key>                       your target cleared at your blow: a kill by it
+--   M <key> <meter> <shown>              after the fight: the meter's total for a
+--                                        kill's attack, and what the feed had shown
 local TRACE_MAX = 600
 local traceT0 = GetTime()
 local function w(v)
@@ -437,6 +440,10 @@ local function onSwing(swingType)
     swings[#swings + 1] = { hand = hand, at = t }
 end
 
+local function swingKey(hand)
+    return hand == "ranged" and ("spell:" .. rangedSpell()) or "swing"
+end
+
 --------------------------------------------------------------------------
 -- Hits on your target: whose, and with what
 --------------------------------------------------------------------------
@@ -475,14 +482,47 @@ local function spellRecord(spell, rec, unit)
     return rec
 end
 
+--------------------------------------------------------------------------
+-- Killing blows
+--------------------------------------------------------------------------
+-- The blow that kills your target is never reported. The mob dies, your target
+-- clears in that same frame, and the UNIT_COMBAT that would have followed (a melee
+-- hit is reported about half a second after its PLAYER_SWING) has no "target"
+-- left to arrive on (/gct trace, 18 Oct 2026: three kills, the two by melee left
+-- no report at all; the one by a DoT tick was reported, in the same frame).
+--
+-- The amount is not lost, only late: C_DamageMeter, hidden during combat, gives
+-- the fight's totals once it ends. So a target that clears at the moment of
+-- something of yours is noted as a kill by that attack, and once the meter speaks,
+-- whatever it counted for that attack beyond what the feed showed is credited to
+-- the dead unit. Only the killing attack is topped up, only by what is missing,
+-- and not at all when the gap is larger than such a hit could be -- that much
+-- means damage on other mobs is mixed in, and splitting it would be a guess.
+local KILL_MOMENT  = 0.1    -- a target clearing this close to your blow: that blow killed it
+local SETTLE_AT    = { 0.5, 1.5, 3, 5 }   -- the meter is not final the instant combat drops
+local SETTLE_LIMIT = 3      -- a top-up may be at most this many of the attack's largest hits
+
+local tally, biggest, kills = {}, {}, {}   -- this fight: shown per key, largest hit per key, kills
+local lastBlow                             -- { at, key }: the last thing of yours that landed or swung
+local fightNo, inCombat, prevTarget = 0, false, nil
+
+local function blow(key, t)
+    lastBlow = { at = t or now(), key = key }
+end
+
 local function out(rec)
     -- A miss names what missed: "miss:DODGE/swing", "miss:RESIST/spell:686".
     local placed = rec.missType and ("miss:" .. rec.missType .. (rec.key and ("/" .. rec.key) or "")) or rec.key
     if rec.hidden then note(">", UC.lastRule, placed, "hidden") else note(">", UC.lastRule, placed) end
+    if rec.key and not rec.pet then blow(rec.key) end
     if rec.missType then
         stats.missesPlaced = stats.missesPlaced + 1
         emit("avoided", { missType = rec.missType, pet = rec.pet })
     elseif rec.amount then
+        if not rec.pet then
+            tally[rec.key] = (tally[rec.key] or 0) + rec.amount
+            if rec.amount > (biggest[rec.key] or 0) then biggest[rec.key] = rec.amount end
+        end
         emit("dealt", rec)
     end
 end
@@ -636,7 +676,18 @@ local FEEDBACK = { MISS = true, DODGE = true, PARRY = true, BLOCK = true, RESIST
 
 local function onUnitCombat(unit, event, flag, amount, school)
     if not str(unit) or not str(event) then return end
-    if unit ~= "target" and unit ~= "player" then return end
+    if unit ~= "target" and unit ~= "player" then
+        -- Whether a killing blow turns up on the dead unit's nameplate instead is
+        -- not known: the recorder notes any that do, since that would let the blow
+        -- be shown live rather than settled after the fight.
+        if tracing() and #kills > 0 and unit:find("^nameplate") then
+            local k, guid = kills[#kills], UnitGUID(unit)
+            if str(guid) and guid == k.guid and now() - k.at <= 1.5 then
+                note("U", unit, event, flag, amount, school, "dead")
+            end
+        end
+        return
+    end
     if unit == "target" and yes(UnitIsUnit("target", "player")) then return end
     note("U", unit, event, flag, amount, school)
 
@@ -697,13 +748,95 @@ ns.On("UNIT_SPELLCAST_SUCCEEDED", function(_, unit, _, spell) onCast(unit, spell
 -- The swing's payload is recorded as it came, both arguments: which one carries
 -- the swing type was taken from FCT rather than seen here.
 ns.On("PLAYER_SWING", function(_, a, swingType)
-    note("S", a, swingType, num(swingType) and hands()[swingType] or nil)
+    local hand = num(swingType) and hands()[swingType] or nil
+    note("S", a, swingType, hand)
     onSwing(swingType)
+    if hand then blow(swingKey(hand)) end
 end)
-ns.On("PLAYER_TARGET_CHANGED", function() note("T", UnitGUID("target")) end)
-ns.On("PLAYER_REGEN_ENABLED", function() note("R-") end)
+
+-- A target that clears, in combat, at the moment of a blow of yours: a kill.
+ns.On("PLAYER_TARGET_CHANGED", function()
+    local guid = UnitGUID("target")
+    note("T", guid)
+    local t = now()
+    if not str(guid) then
+        if inCombat and prevTarget and lastBlow and t - lastBlow.at <= KILL_MOMENT then
+            kills[#kills + 1] = { guid = prevTarget, key = lastBlow.key, at = t }
+            note("K", prevTarget, lastBlow.key)
+        end
+        prevTarget = nil
+    else
+        prevTarget = guid
+    end
+end)
+
+local function keyLabel(key)
+    if key == "swing" then return "Melee", MELEE_ICON, PHYSICAL end
+    local spell = tonumber(key:match("^spell:(%d+)$"))
+    if not spell then return key, nil, nil end
+    local f = factCache[spell]
+    return ns.SpellName(spell) or ("Spell " .. spell), ns.SpellTexture(spell),
+           (f and f.school) or learnedSchool[spell]
+end
+
+-- Once the meter gives the fight's totals: credit each kill's missing blow.
+local function settle(fight)
+    if fight ~= fightNo or inCombat or #kills == 0 then return end
+    local DM = ns.DM
+    local rows = DM and DM.Capture and DM.TYPES and DM.Capture(DM.TYPES.damage)
+    if not rows then return end   -- not released yet; a later attempt will see it
+    local meter = {}
+    for key, r in pairs(rows) do
+        -- the meter's melee is spell 6603 (Auto Attack), or 0
+        if key == "spell:6603" or key == "spell:0" then key = "swing" end
+        meter[key] = (meter[key] or 0) + r.amount
+    end
+    local byKey = {}
+    for _, k in ipairs(kills) do
+        byKey[k.key] = byKey[k.key] or {}
+        table.insert(byKey[k.key], k)
+    end
+    for key, list in pairs(byKey) do
+        note("M", key, meter[key], tally[key] or 0)
+        local missing = math.floor((meter[key] or 0) - (tally[key] or 0) + 0.5)
+        local share = math.floor(missing / #list)
+        if missing >= 1 then
+            if biggest[key] and share > SETTLE_LIMIT * biggest[key] then
+                if not list.refused then
+                    list.refused = true
+                    stats.refused = (stats.refused or 0) + 1
+                    note(">", "settle refused", key, missing)
+                end
+            else
+                local label, icon, school = keyLabel(key)
+                for i, k in ipairs(list) do
+                    local amount = (i == #list) and (missing - share * (#list - 1)) or share
+                    if amount > 0 then
+                        emit("settled", { guid = k.guid, key = key, label = label, icon = icon,
+                                          school = school, amount = amount })
+                        stats.settled = (stats.settled or 0) + 1
+                        note(">", "settled", key, amount, k.guid)
+                    end
+                end
+                tally[key] = (tally[key] or 0) + missing
+            end
+        end
+    end
+end
+
+ns.On("PLAYER_REGEN_ENABLED", function()
+    note("R-")
+    inCombat = false
+    local fight = fightNo
+    for _, delay in ipairs(SETTLE_AT) do
+        C_Timer.After(delay, function() settle(fight) end)
+    end
+end)
 ns.On("PLAYER_REGEN_DISABLED", function()
     note("R+")
+    inCombat = true
+    fightNo = fightNo + 1
+    wipe(tally); wipe(biggest); wipe(kills)
     lastStats = (stats.target + stats.player > 0) and stats or lastStats
     -- The cast or swing that opened the fight came just before combat began (a
     -- bolt puts you in combat when it lands, not when it leaves your hands), and
@@ -751,6 +884,10 @@ function UC.PrintProbe()
     end
     if #hp > 0 then print("   heals on you: " .. table.concat(hp, ", ")) end
     print(("   your casts seen: %d, swings seen: %d"):format(s.casts, s.swings))
+    if (s.settled or 0) + (s.refused or 0) > 0 then
+        print(("   killing blows settled from the meter after the fight: %d%s"):format(s.settled or 0,
+            (s.refused or 0) > 0 and ("  (refused, too large to be one blow: " .. s.refused .. ")") or ""))
+    end
     if s.targetHidden > 0 or s.playerHidden > 0 then
         print("   |cffff4040Hidden amounts can be shown but not added up, so they are left out of")
         print("   the totals.|r If most are hidden, the post-fight summary is the better fit here.")

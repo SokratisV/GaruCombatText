@@ -11,6 +11,10 @@
 --
 -- A recording may say "# expect-unplaced: N" when N hits really were someone else's.
 
+-- WoW's own table helpers, which the addon uses as globals.
+function wipe(t) for k in pairs(t) do t[k] = nil end return t end
+tinsert, tremove = table.insert, table.remove
+
 local clock = 0
 function GetTime() return clock end
 local timers = {}

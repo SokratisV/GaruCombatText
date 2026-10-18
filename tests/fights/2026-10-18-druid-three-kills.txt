@@ -1,0 +1,91 @@
+# Recorded with /gct trace on WoW Forever, 18 Oct 2026: level 11 druid, three kills,
+# Moonfire, Bear Form and melee. Melee hits landed 0.48-0.80 s after PLAYER_SWING.
+# Two kills were by melee: the swing and the target clearing came in the same frame
+# and no hit was ever reported. The kill by a Moonfire tick was reported.
+0.00 P 2.1.0 DRUID 11
+55.53 T -
+89.75 T Creature-0-6783-0-2-822-9FA9EA3751
+90.99 C player 8924 64 true true true 12 - -
+90.99 U target WOUND "" 16 64
+90.99 > cast spell:8924
+90.99 R+
+94.02 U target WOUND "" 6 64
+94.02 > tick on beat spell:8924
+96.13 S 3.1070001125336 0 main
+96.65 U target WOUND "" 48 1
+96.65 > swing swing
+96.91 U player WOUND "" 12 1
+97.00 U target WOUND "" 6 64
+97.00 > tick on beat spell:8924
+99.17 S 3.1070001125336 0 main
+99.38 U player WOUND "" 13 1
+99.69 U target WOUND "" 43 1
+99.69 > swing swing
+99.94 U target WOUND "" 6 64
+99.94 > tick on beat spell:8924
+101.82 U player WOUND "" 12 1
+102.29 S 3.1070001125336 0 main
+102.81 U target WOUND "" 47 1
+102.81 > swing swing
+103.03 U target WOUND "" 6 64
+103.03 > tick on beat spell:8924
+103.53 C player 5487 - - - false - - -
+104.32 U player WOUND "" 8 1
+105.47 S 2.4270000457764 0 main
+105.95 U target WOUND "" 40 1
+105.95 > swing swing
+106.84 U player WOUND "" 8 1
+107.89 S 2.4270000457764 0 main
+107.89 T -
+108.65 T Creature-0-6783-0-2-822-9FA9EA3751
+108.90 R-
+109.13 T -
+109.75 T Creature-0-6783-0-2-822-9FA9EA3751
+111.77 T Creature-0-6783-0-2-1933-C865353819
+111.97 S 2.4270000457764 0 main
+111.97 R+
+112.07 T -
+115.63 T Creature-0-6783-0-2-113-8160553A17
+117.00 R-
+117.60 C player 8924 64 true true true 12 - -
+117.60 U target WOUND "" 17 64
+117.60 > cast spell:8924
+117.60 R+
+119.48 C player 5487 - - - false - - -
+120.56 U target WOUND CRITICAL 9 64
+120.56 > tick on beat spell:8924
+120.67 S 2.4270000457764 0 main
+120.68 U player WOUND "" 3 1
+121.28 U target WOUND "" 44 1
+121.28 > swing swing
+122.53 U player WOUND "" 3 1
+123.15 S 2.4270000457764 0 main
+123.15 T -
+123.42 R-
+124.36 T Creature-0-6783-0-2-113-8160553A17
+124.88 T -
+126.24 T Creature-0-6783-0-2-113-875B41AB45
+127.30 C player 8924 64 true true true 12 - -
+127.30 R+
+127.30 U target WOUND "" 15 64
+127.30 > cast spell:8924
+129.90 U player WOUND "" 23 1
+130.35 U target WOUND "" 6 64
+130.35 > tick on beat spell:8924
+130.46 S 3.1070001125336 0 main
+130.98 U target WOUND "" 46 1
+130.98 > swing swing
+131.78 U player WOUND "" 6 1
+133.38 U target WOUND "" 6 64
+133.38 > tick on beat spell:8924
+133.56 S 3.1070001125336 0 main
+133.93 U player WOUND "" 6 1
+134.36 U target WOUND "" 43 1
+134.36 > swing swing
+135.76 U player MISS "" 0 1
+136.35 U target WOUND "" 6 64
+136.35 > tick on beat spell:8924
+136.35 T -
+136.78 R-
+137.14 T Creature-0-6783-0-2-113-875B41AB45
+137.63 T -
