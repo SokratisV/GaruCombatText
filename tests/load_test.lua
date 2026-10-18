@@ -21,15 +21,21 @@ C_Timer = {
 local frames = {}
 local Stub
 local function method(name)
+    -- GetHighlightTexture and the like hand back a widget, not a number
+    if name:find("^Get.*Texture$") then return function() return Stub() end end
     if name:find("^Get") then return function() return 0 end end
     if name:find("^Is") or name:find("^Has") then return function() return false end end
     return function(self, ...) return self end
 end
+-- Children a template puts on a frame. They exist only where a template made them
+-- (TEMPLATES, below), exactly as on a real frame: asking a plain one gives nil.
+local CHILDREN = { Instructions = true, Dropdown = true, IncrementButton = true, DecrementButton = true,
+                   Label = true, MinText = true, MaxText = true, RightText = true, Slider = true }
 local StubMT = {}
 StubMT.__index = function(self, k)
     -- Widget methods are capitalised; anything else is a field the addon keeps on
     -- the frame itself, which starts out nil just as on a real frame.
-    if type(k) ~= "string" or not k:match("^[A-Z]") then return nil end
+    if type(k) ~= "string" or not k:match("^[A-Z]") or CHILDREN[k] then return nil end
     local m = method(k)
     rawset(self, k, m)
     return m
@@ -39,29 +45,141 @@ function Stub() return setmetatable({}, StubMT) end
 
 local onEvent = {}   -- every frame's OnEvent script, with what it registered
 local onUpdate = {}
+local function newText()
+    local fs = Stub()
+    fs.SetText = function(self, t) self.text = t end
+    fs.GetText = function(self) return self.text end
+    fs.GetStringWidth = function() return 40 end
+    fs.GetStringHeight = function() return 12 end
+    return fs
+end
+-- Frames keep what a player could see or set: shown, checked, typed text, scripts.
 local function newFrame()
     local f = Stub()
-    f.events = {}
+    f.events, f.scripts, f.shown = {}, {}, true
     f.RegisterEvent = function(self, ev) self.events[ev] = true end
     f.RegisterUnitEvent = function(self, ev) self.events[ev] = true end
     f.UnregisterEvent = function(self, ev) self.events[ev] = nil end
     f.SetScript = function(self, what, fn)
+        self.scripts[what] = fn
         if what == "OnEvent" then onEvent[self] = fn end
         if what == "OnUpdate" then onUpdate[self] = fn end
         return self
     end
-    f.GetScript = function() return nil end
-    f.CreateFontString = function() return Stub() end
+    f.HookScript = function(self, what, fn)
+        local old = self.scripts[what]
+        self.scripts[what] = old and function(...) old(...); fn(...) end or fn
+    end
+    f.GetScript = function(self, what) return self.scripts[what] end
+    f.Show = function(self)
+        if not self.shown then self.shown = true; if self.scripts.OnShow then self.scripts.OnShow(self) end end
+    end
+    f.Hide = function(self)
+        if self.shown then self.shown = false; if self.scripts.OnHide then self.scripts.OnHide(self) end end
+    end
+    f.SetShown = function(self, v) if v then self:Show() else self:Hide() end end
+    f.IsShown = function(self) return self.shown ~= false end
+    f.SetChecked = function(self, v) self.checked = v and true or false end
+    f.GetChecked = function(self) return self.checked end
+    f.SetText = function(self, t) self.text = t end
+    f.GetText = function(self) return self.text end
+    f.CreateFontString = function() return newText() end
     f.CreateTexture = function() return Stub() end
-    f.IsShown = function() return true end
+    f.GetFontString = function(self) self.fs = self.fs or newText(); return self.fs end
     f.GetWidth = function() return 100 end
+    f.GetHeight = function(self) return self.height or 26 end
+    f.SetHeight = function(self, h) self.height = h end
     f.GetStringWidth = function() return 40 end
     frames[#frames + 1] = f
     return f
 end
-function CreateFrame() return newFrame() end
+
+-- Working fakes of the Blizzard templates the settings window is built from, so its
+-- main path runs here rather than only its fallbacks.
+local function fakeDropdown(dd)
+    function dd:SetupMenu(gen) self.gen = gen; self:GenerateMenu() end
+    function dd:GenerateMenu()
+        local radios = {}
+        local root = {
+            CreateRadio = function(_, text, isSel, setSel, data)
+                radios[#radios + 1] = { text = text, isSel = isSel, setSel = setSel, data = data }
+            end,
+            CreateDivider = function() end,
+        }
+        if self.gen then self.gen(self, root) end
+        self.radios, self.text = radios, nil
+        for _, r in ipairs(radios) do if r.isSel(r.data) then self.text = r.text end end
+    end
+end
+MinimalSliderWithSteppersMixin = { Event = { OnValueChanged = "OnValueChanged" }, Label = { Right = 1 } }
+local TEMPLATES = {
+    SettingsDropdownWithButtonsTemplate = function(f)
+        f.Label = newText()
+        f.Dropdown, f.IncrementButton, f.DecrementButton = newFrame(), newFrame(), newFrame()
+        fakeDropdown(f.Dropdown)
+    end,
+    WowStyle1DropdownTemplate = function(f) fakeDropdown(f) end,
+    MinimalSliderWithSteppersTemplate = function(f)
+        f.Slider, f.MinText, f.MaxText, f.RightText = newFrame(), newText(), newText(), newText()
+        f.callbacks = {}
+        function f:RegisterCallback(ev, fn, owner) self.callbacks[#self.callbacks + 1] = { fn = fn, owner = owner } end
+        function f:Init(value, lo, hi, steps) self.lo, self.hi, self.steps = lo, hi, steps; self:SetValue(value) end
+        function f:SetValue(v)
+            v = math.min(self.hi or v, math.max(self.lo or v, v))
+            self.value = v
+            for _, c in ipairs(self.callbacks) do c.fn(c.owner, v) end
+        end
+        function f:GetValue() return self.value end
+    end,
+    SearchBoxTemplate = function(f) f.Instructions = newText() end,
+}
+-- BARE: a client without Blizzard's newer templates or menus, so the window takes
+-- its fallbacks (a bare slider, the old dropdown, a plain box for search).
+local MODERN = { SettingsDropdownWithButtonsTemplate = true, WowStyle1DropdownTemplate = true,
+                 MinimalSliderWithSteppersTemplate = true, SearchBoxTemplate = true }
+function CreateFrame(kind, name, parent, template)
+    for t in tostring(template or ""):gmatch("[^,%s]+") do
+        if BARE and MODERN[t] then error("no such template: " .. t) end
+    end
+    local f = newFrame()
+    f.frameKind, f.parent = kind, parent
+    for t in tostring(template or ""):gmatch("[^,%s]+") do
+        if TEMPLATES[t] then TEMPLATES[t](f) end
+    end
+    if kind == "Slider" then
+        -- a real slider reports a new value through its OnValueChanged script
+        function f:SetMinMaxValues(lo, hi) self.lo, self.hi = lo, hi end
+        function f:SetValue(v)
+            v = math.min(self.hi or v, math.max(self.lo or v, v))
+            self.value = v
+            if self.scripts.OnValueChanged then self.scripts.OnValueChanged(self, v) end
+        end
+        function f:GetValue() return self.value end
+    end
+    if name then rawset(_G, name, f) end
+    return f
+end
+-- the old dropdown, for the bare client
+local menuButtons
+function UIDropDownMenu_Initialize(dd, fn) dd.init = fn end
+function UIDropDownMenu_CreateInfo() return {} end
+function UIDropDownMenu_AddButton(info) if menuButtons then menuButtons[#menuButtons + 1] = info end end
+function UIDropDownMenu_SetWidth() end
+function UIDropDownMenu_SetText(dd, t) dd.text = t end
+function CloseDropDownMenus() end
+function legacyMenu(dd)
+    menuButtons = {}
+    dd.init(dd, 1)
+    local out = menuButtons
+    menuButtons = nil
+    return out
+end
 UIParent = newFrame()
 WorldFrame = newFrame()
+UISpecialFrames = {}
+StaticPopupDialogs = {}
+function StaticPopup_Show(which) lastPopup = which end
+function strtrim(s) return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", "")) end
 
 local function fire(ev, ...)
     for f, fn in pairs(onEvent) do
@@ -120,6 +238,7 @@ GetCVar = C_CVar.GetCVar
 -- Globals this client genuinely lacks: feature detection must see nil.
 local ABSENT = {}
 if not FOREVER then ABSENT.C_DamageMeter = true end
+if BARE then ABSENT.MenuUtil = true; ABSENT.MinimalSliderWithSteppersMixin = true; MinimalSliderWithSteppersMixin = nil end
 setmetatable(_G, { __index = function(_, k)
     -- Constants (COMBATLOG_OBJECT_TYPE_PET, ...) stay undefined: the addon has
     -- numeric fallbacks for them, and a stub table would break the arithmetic.
@@ -302,6 +421,145 @@ if FOREVER then
     check("/gct status", ok, err)
 end
 
+-- The settings window, driven the way a player would: open it, visit every page,
+-- work every control, search, switch a feed off and on again, reset.
+do
+    local function shownRows()
+        local out = {}
+        for _, f in ipairs(frames) do
+            if rawget(f, "row") and f:IsShown() then out[#out + 1] = f end
+        end
+        return out
+    end
+    local function frameFor(row)
+        for _, f in ipairs(frames) do if rawget(f, "row") == row and f:IsShown() then return f end end
+    end
+    local function labelled(label)
+        for _, f in ipairs(shownRows()) do if f.row.label == label then return f end end
+    end
+    local function settle() advance(clock + 0.01) end   -- a change redraws a frame later
+    local slash = SlashCmdList.GARUCOMBATTEXT
+    local ok, err = pcall(slash, "")
+    local win = rawget(_G, "GaruCombatTextOptions")
+    check("/gct opens the settings window", ok and win and win:IsShown(), err)
+    if win then
+        local nav, byName = {}, {}
+        for _, f in ipairs(frames) do
+            if rawget(f, "dot") and rawget(f, "selected") and f.scripts.OnClick then
+                nav[#nav + 1] = f
+                byName[f.text.text] = f
+            end
+        end
+        check("six pages in the list", #nav == 6, tostring(#nav))
+        local function open(name)
+            local b = byName[name]
+            if b then b.scripts.OnClick(b); settle() end
+            return b ~= nil
+        end
+
+        local problems, worked = {}, 0
+        for _, b in ipairs(nav) do
+            local name = b.text.text
+            local okc, errc = pcall(b.scripts.OnClick, b); settle()
+            if not okc then problems[#problems + 1] = name .. ": " .. tostring(errc) end
+            local rows = {}
+            for _, f in ipairs(shownRows()) do rows[#rows + 1] = f.row end
+            if #rows == 0 and name ~= "Actions" then problems[#problems + 1] = name .. ": no rows" end
+            for _, row in ipairs(rows) do
+                local f = frameFor(row)
+                if f then
+                    local okr, errr = pcall(function()
+                        if row.kind == "toggle" then
+                            local before = row.get()
+                            f.check:SetChecked(not before); f.check.scripts.OnClick(f.check); settle()
+                            assert(row.get() == not before, "a click did not change it")
+                            local g = frameFor(row)
+                            g.check:SetChecked(before); g.check.scripts.OnClick(g.check); settle()
+                            assert(row.get() == before, "a second click did not change it back")
+                        elseif row.kind == "choice" and f.legacy then
+                            local before = row.get()
+                            local buttons = legacyMenu(f.legacy)
+                            assert(#buttons == #row.choices, "the old menu does not list every choice")
+                            for i, info in ipairs(buttons) do
+                                info.func(); settle()
+                                assert(row.get() == row.choices[i].value, "picking " .. tostring(info.text) .. " did not set it")
+                            end
+                            row.set(before); settle()
+                        elseif row.kind == "choice" then
+                            local before = row.get()
+                            local radios = f.dropdown and f.dropdown.radios
+                            assert(radios and #radios == #row.choices, "its menu does not list every choice")
+                            for _, r in ipairs(radios) do
+                                r.setSel(r.data); settle()
+                                assert(row.get() == r.data, "picking " .. tostring(r.text) .. " did not set it")
+                            end
+                            row.set(before); settle()
+                        elseif row.kind == "slider" then
+                            local before = row.get()
+                            f.slider:SetValue(row.min); assert(row.get() == row.min, "dragging to the left end")
+                            f.slider:SetValue(row.max); assert(row.get() == row.max, "dragging to the right end")
+                            f.edit:SetText(tostring(row.min)); f.edit.scripts.OnEnterPressed(f.edit)
+                            assert(row.get() == row.min, "typing a value in")
+                            f.slider:SetValue(before); row.set(before)
+                        elseif row.kind == "button" and row.buttonText ~= "Reset" then
+                            f.button.scripts.OnClick(f.button); settle()
+                        end
+                    end)
+                    if okr then worked = worked + 1
+                    else problems[#problems + 1] = name .. " / " .. tostring(row.label) .. ": " .. tostring(errr) end
+                end
+            end
+        end
+        check("every control on every page works (" .. worked .. " worked)", #problems == 0 and worked > 40,
+              table.concat(problems, "; "))
+        print(("window: %d controls worked across %d pages"):format(worked, #nav))
+
+        -- A row that stops applying goes, and comes back.
+        open("Damage Dealt")
+        ns.db.enemyText.attach = "player"; ns.RefreshOptions()
+        check("pinned to a frame: no Free position", labelled("Free position X") == nil)
+        ns.db.enemyText.attach = "free"; ns.RefreshOptions()
+        check("free again: Free position is back", labelled("Free position X") ~= nil)
+
+        -- Search finds a setting on every page that has it, with its page above it.
+        local search = win.search
+        search:SetText("font"); search.scripts.OnTextChanged(search)
+        local found, crumbed = 0, 0
+        for _, f in ipairs(shownRows()) do
+            if f.row.label == "Font size" then
+                found = found + 1
+                if f.crumb.text and f.crumb.text:find(">") then crumbed = crumbed + 1 end
+            end
+        end
+        check("search: Font size from all five pages, each with its page named", found == 5 and crumbed == 5,
+              found .. " found, " .. crumbed .. " with a page")
+        check("search: and nothing that does not match", #shownRows() == found,
+              #shownRows() .. " rows shown for " .. found .. " matches")
+        search:SetText(""); search.scripts.OnTextChanged(search)
+
+        -- A feed switched off shows one card; Turn on brings its settings back.
+        ns.db.enemyText.enabled = false
+        open("Damage Dealt")
+        check("a feed that is off has no settings shown", #shownRows() == 0, tostring(#shownRows()))
+        local turnOn
+        for _, f in ipairs(frames) do if rawget(f, "text") == "Turn on" then turnOn = f end end
+        if turnOn then turnOn.scripts.OnClick(turnOn); settle() end
+        check("Turn on turns it on and brings its settings back", ns.db.enemyText.enabled == true and #shownRows() > 10)
+
+        -- Reset asks first, then puts everything back.
+        open("General")
+        local resetRow = labelled("Reset all settings")
+        if resetRow then resetRow.button.scripts.OnClick(resetRow.button); settle() end
+        check("Reset asks before it resets", lastPopup == "GARUCOMBATTEXT_RESET", tostring(lastPopup))
+        ns.db.enemyText.fontSize = 33
+        local okReset, errReset = pcall(StaticPopupDialogs.GARUCOMBATTEXT_RESET.OnAccept)
+        check("...and resets when told to", okReset and ns.db.enemyText.fontSize ~= 33, errReset)
+        open("Healing Received"); open("Healing Cast")
+        check("the window still works after a reset", #shownRows() > 10, tostring(#shownRows()))
+        win:Hide()
+    end
+end
+
 if not FOREVER then
     -- Classic: the combat-log path is the live one, UnitCombat stays out of it.
     check("no UNIT_COMBAT listener on Classic", (function()
@@ -314,5 +572,5 @@ if not FOREVER then
     end)())
 end
 
-print(("%s: %d passed, %d failed"):format(FOREVER and "Forever" or "Classic", pass, fail))
+print(("%s: %d passed, %d failed"):format(FOREVER and "Forever" or (BARE and "Classic, bare" or "Classic"), pass, fail))
 if fail > 0 then error("failures") end

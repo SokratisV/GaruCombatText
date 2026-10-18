@@ -15,7 +15,9 @@ What runs:
             (unless the file says "# expect-unplaced: N")
   load      load_test.lua loads the whole addon in TOC order against a stubbed
             WoW API, drives a fight through the real event handlers and checks
-            what reaches each feed's meter; once as WoW Forever, once as Classic
+            what reaches each feed's meter, and works every control in the
+            settings window; as WoW Forever, as Classic, and as a bare client
+            without Blizzard's newer templates, so the window's fallbacks run too
   mutants   each entry in MUTANTS breaks the addon on purpose, and the suites must
             then fail. A mutant that survives means a test can no longer catch the
             thing it was written for, so the run fails.
@@ -53,6 +55,14 @@ MUTANTS = [
      "other mobs' damage is credited to the one that died"),
     ("EnemyText.lua", "meter:BumpGUID(frame, r.guid, r.key, r.label, r.amount, r.school, false, r.icon)",
      "local _ = r", "a settled killing blow never reaches Damage Dealt"),
+    ("Options.lua", "set = function(v) ns.db[db][field] = v; if apply then apply() end end }, extra)",
+     "set = function(v) end }, extra)", "a checkbox in the settings stops saving"),
+    ("Options.lua", "if not row.vis or row.vis() then out[#out + 1] = row end", "out[#out + 1] = row",
+     "settings that do not apply are shown anyway"),
+    ("Options.lua", "if label:lower():find(needle, 1, true) then hits[#hits + 1] = row end",
+     "hits[#hits + 1] = row", "search shows every setting, whatever is typed"),
+    ("Options.lua", 'cardText = val(p.title) .. " is off."', "cardText = nil",
+     "a feed that is off still shows all its settings"),
     ("UnitCombat.lua", "ns.CombatLogLive = (C_DamageMeter == nil)", "ns.CombatLogLive = true",
      "Forever is taken for a client with a combat log"),
     ("EnemyText.lua", "meter:Bump(frame, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)",
@@ -138,9 +148,9 @@ def suites(files):
             ok, out = run_lua(test_source("replay_test.lua"), UC_SRC=files["UnitCombat.lua"], FIGHT=fight)
             results.append(("replay " + name[:-4], ok, out))
     order = toc_files()
-    for client in ("forever", "classic"):
+    for client in ("forever", "classic", "bare"):
         ok, out = run_lua(test_source("load_test.lua"), ORDER=order, FILES=files,
-                          FOREVER=(client == "forever"))
+                          FOREVER=(client == "forever"), BARE=(client == "bare"))
         results.append(("load " + client, ok, out))
     return results
 

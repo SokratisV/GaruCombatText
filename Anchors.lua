@@ -93,6 +93,7 @@ function ns.SetLocked(v)
     ns.db.locked = v and true or false
     ns.RefreshAnchors()
     if ns.RefreshTimer then ns.RefreshTimer() end
+    if ns.RefreshOptions then ns.RefreshOptions() end
     print("|cff66ccffGaru Combat Text|r: anchors " .. (ns.db.locked and "LOCKED" or "UNLOCKED -- drag the markers"))
 end
 

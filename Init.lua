@@ -10,19 +10,26 @@ ns.On("PLAYER_LOGIN", function()
     end)
 end)
 
+-- The preview: made-up numbers in every feed, to place and style them out of combat.
+-- Turning it off clears what it drew. Shared by /gct test and the settings window.
+function ns.SetPreview(on)
+    ns.test.combat = on and true or false
+    if not ns.test.combat then
+        if ns.ClearEnemyText then ns.ClearEnemyText() end
+        if ns.ClearHealText then ns.ClearHealText() end
+        if ns.ClearTakenText then ns.ClearTakenText() end
+        if ns.ClearActionsText then ns.ClearActionsText() end
+    end
+    if ns.RefreshOptions then ns.RefreshOptions() end
+end
+
 -- Slash: open the config panel; /gct test toggles the preview, /gct reset restores.
 SLASH_GARUCOMBATTEXT1 = "/gct"
 SLASH_GARUCOMBATTEXT2 = "/garucombattext"
 SlashCmdList.GARUCOMBATTEXT = function(msg)
     msg = (msg or ""):lower():gsub("%s+", "")
     if msg == "test" then
-        ns.test.combat = not ns.test.combat
-        if not ns.test.combat then
-            if ns.ClearEnemyText then ns.ClearEnemyText() end
-            if ns.ClearHealText then ns.ClearHealText() end
-            if ns.ClearTakenText then ns.ClearTakenText() end
-            if ns.ClearActionsText then ns.ClearActionsText() end
-        end
+        ns.SetPreview(not ns.test.combat)
         print("|cff66ccffGaru Combat Text|r: preview " .. (ns.test.combat and "ON" or "OFF"))
     elseif msg == "unlock" then
         if ns.SetLocked then ns.SetLocked(false) end

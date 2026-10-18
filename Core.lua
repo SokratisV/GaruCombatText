@@ -321,9 +321,14 @@ ns.groupFrames = {}
 function ns.ResetSettings()
     GaruCombatTextDB = copyDefaults(ns.defaults, {})
     ns.db = GaruCombatTextDB
+    -- every feed, not just two of them: Damage Taken and Actions used to keep their
+    -- old look until the next reload
     if ns.RefreshAnchors then ns.RefreshAnchors() end
     if ns.RefreshEnemyText then ns.RefreshEnemyText() end
     if ns.RefreshHealText then ns.RefreshHealText() end
+    if ns.RefreshTakenText then ns.RefreshTakenText() end
+    if ns.RefreshActionsText then ns.RefreshActionsText() end
     if ns.RefreshTimer then ns.RefreshTimer() end
+    if ns.RefreshOptions then ns.RefreshOptions() end
     print("|cff66ccffGaru Combat Text|r: settings reset to defaults.")
 end
