@@ -1,0 +1,665 @@
+local ADDON, ns = ...
+
+-- Live combat text on WoW Forever.
+--
+-- Forever has no addon combat log (COMBAT_LOG_EVENT_UNFILTERED registers and never
+-- fires), and C_DamageMeter hides every figure until a fight ends. What it still
+-- sends, live and unhidden, is UNIT_COMBAT -- the event Blizzard's own portrait
+-- hit-numbers run on. It reports a hit on a unit (amount, school, crit, or which
+-- kind of miss) but never who made it or with what.
+--
+-- What IS readable about your own side of a fight closes that gap:
+--   * UNIT_SPELLCAST_SUCCEEDED for player and pet: each cast, with its spell ID;
+--   * PLAYER_SWING: each weapon swing, melee or ranged;
+--   * the spell's own description (C_Spell.GetSpellDescription): its school, and
+--     whether it hits at once, ticks, or heals.
+-- So a hit on your target is matched to them by time and school. That is WORKED
+-- OUT, NOT READ. Solo it is close to exact, since nearly everything that hits your
+-- target is you; in a group, a teammate's hit of the same school landing inside
+-- your window can be taken for yours.
+--
+-- The approach, the timing windows and the description parsing are adapted from
+-- Forever Combat Text by Tarolg (MIT License, Copyright (c) 2026 Tarolg), whose
+-- windows were measured in real fights. This is a smaller engine than FCT's: it
+-- leaves out FCT's combat-log colour channel, which buys accuracy in groups at the
+-- cost of reconfiguring Blizzard's own combat log.
+--
+-- The feeds subscribe to what this works out (UC.Subscribe) and Bump their meters
+-- just as their combat-log handlers do on Classic, so rolling windows, fades,
+-- per-target memory and every layout behave as they always have.
+
+-- If UNIT_COMBAT amounts ever turn out hidden during combat on this client (the
+-- /gct probe check), set this to true to fall back to DamageMeter.lua's post-fight
+-- summary. It has to be a constant: the flags below are read while files load,
+-- before saved settings exist.
+local FORCE_SUMMARY = false
+
+-- C_DamageMeter's presence is the signal that the combat log is gone (Midnight
+-- replaced the one with the other).
+ns.CombatLogLive = (C_DamageMeter == nil)
+ns.UseUnitCombat = (not ns.CombatLogLive) and not FORCE_SUMMARY
+
+ns.UC = {}
+local UC = ns.UC
+if not ns.UseUnitCombat then return end
+
+--------------------------------------------------------------------------
+-- Plain values only
+--------------------------------------------------------------------------
+-- A secret may be stored and drawn but never compared or added, so everything the
+-- game hands over is tested first.
+local function plain(v) return not ns.IsSecret(v) end
+local function num(v) return plain(v) and type(v) == "number" and v == v end
+local function str(v) return plain(v) and type(v) == "string" and v ~= "" end
+local function yes(v) return plain(v) and v == true end
+
+local band = (bit and bit.band) or function(a, b) return a == b and a or 0 end
+local function sameSchool(a, b)
+    if not a or not b then return true end     -- unknown on either side: no veto
+    return band(a, b) ~= 0
+end
+
+--------------------------------------------------------------------------
+-- Windows (measured by FCT in recorded fights; see its Mine.lua)
+--------------------------------------------------------------------------
+local DIRECT_WINDOW   = 3.0   -- a bolt's hit lands within this of its cast
+local PHYSICAL_WINDOW = 1.5   -- a strike or shot: no long flight to wait out
+local SWING_WINDOW    = 0.5   -- a melee swing's hit comes within this
+local RANGED_WINDOW   = 2.0   -- a wand bolt or arrow flies
+local LATE_SWING      = 0.35  -- a swing may be reported this long after its hit
+local FIRST_TICK_WAIT = 3.6   -- a DoT with no tick by then never landed
+local TICK_GAP        = 0.9   -- no DoT ticks faster than this
+local RHYTHM_SLACK    = 0.35  -- a tick on its beat lands this close to it
+local DOT_FALLBACK    = 18    -- a DoT whose description gives no duration
+local DOT_SLACK       = 1.0   -- its last tick may land this long after
+local HEAL_WINDOW     = 0.5   -- a direct heal lands as its cast completes
+local PET_GAP         = 1.0   -- a pet swings at most this often
+local MAX             = 24    -- of each list
+
+local PHYSICAL = 1
+local SCHOOLS = { physical = 1, holy = 2, fire = 4, nature = 8, frost = 16, shadow = 32, arcane = 64 }
+UC.SCHOOL_NAMES = { [1] = "Physical", [2] = "Holy", [4] = "Fire", [8] = "Nature",
+                    [16] = "Frost", [32] = "Shadow", [64] = "Arcane" }
+UC.SCHOOL_ICONS = {
+    [1]  = "Interface\\ICONS\\INV_Sword_04",
+    [2]  = "Interface\\ICONS\\Spell_Holy_HolyBolt",
+    [4]  = "Interface\\ICONS\\Spell_Fire_FireBolt02",
+    [8]  = "Interface\\ICONS\\Spell_Nature_Lightning",
+    [16] = "Interface\\ICONS\\Spell_Frost_FrostBolt02",
+    [32] = "Interface\\ICONS\\Spell_Shadow_ShadowBolt",
+    [64] = "Interface\\ICONS\\Spell_Nature_StarFall",
+}
+local MELEE_ICON = "Interface\\ICONS\\INV_Sword_04"
+
+-- Auto Shot and wand Shoot fire a cast event for every shot as well as a ranged
+-- swing; the swing is the one that is matched, so the cast is not counted twice.
+local AUTO_RANGED = { [75] = true, [5019] = true }
+
+--------------------------------------------------------------------------
+-- What a spell does, from its own description
+--------------------------------------------------------------------------
+-- "causing 120 Shadow damage over 18 sec": damages, Shadow, ticks;
+-- "causing 60 Shadow damage.": damages, Shadow, hits at once;
+-- "Burns the enemy for 25 Fire damage and then an additional 40 Fire damage over
+-- 15 sec.": both; "Heals a friendly target for 47 to 58.": heals, at once.
+-- English clients only. Elsewhere, or until the text has loaded, a spell is
+-- matched as "may hit, school unknown" and its school is learned from its hits.
+local function parse(text)
+    local lower = text:lower()
+    local f = {}
+
+    -- "Heal your target for 47 to 58." (Lesser Heal), "Heals a friendly target
+    -- for", "Heals the target of 45 damage over 15 sec." (Renew), "Heals 66
+    -- damage over 8 sec." (a bandage). Checked before damage: Renew's text has
+    -- "45 damage over" in it too.
+    if lower:find("^heals?[%s,]") or lower:find("heals? [%a%s]-for %d") or lower:find("heals? [%a%s]-of %d")
+        or lower:find("restores %d+ health") then
+        f.heals = true
+        f.hot = (lower:find("over %d+ sec") or lower:find("every %d")) and true or false
+        -- Regrowth heals at once "and another 98 over 21 sec"; Renew only ticks.
+        f.direct = (not f.hot) or lower:find("and another", 1, true) ~= nil
+            or lower:find("additional", 1, true) ~= nil
+        f.duration = tonumber(lower:match("over (%d+) sec"))
+        return f
+    end
+
+    -- Damage needs a school or an amount before "damage"; "damage" alone does
+    -- not count (Fear's "damage caused may interrupt the effect").
+    local damages = false
+    for word in lower:gmatch("(%a+) damage") do
+        if SCHOOLS[word] then damages = true break end
+    end
+    if not damages and (lower:find("%d damage") or lower:find("weapon damage", 1, true)
+        or lower:find("melee damage", 1, true) or lower:find("health every", 1, true)
+        or lower:find("drains", 1, true)) then
+        damages = true
+    end
+    if not damages then f.damages = false return f end
+    f.damages = true
+
+    -- Each "<school> damage" is over time when " over" or "every" follows it
+    -- before the next "damage" or the end of its sentence.
+    local at = 1
+    while true do
+        local first, last, word = lower:find("(%a+) damage", at)
+        if not first then break end
+        if SCHOOLS[word] then
+            f.school = f.school or SCHOOLS[word]
+            local rest = lower:sub(last + 1)
+            local stop = math.min(rest:find("damage", 1, true) or #rest + 1, rest:find("%.") or #rest + 1)
+            local after = rest:sub(1, stop - 1)
+            if after:find("^ over") or after:find("every", 1, true) then f.ticks = true
+            else f.direct = true end
+        end
+        at = last + 1
+    end
+    if lower:find("every %d") or lower:find("%d+ damage over %d") then f.ticks = true end
+    if not f.school and (lower:find("weapon damage", 1, true) or lower:find("melee damage", 1, true)) then
+        f.school, f.direct = PHYSICAL, true
+    end
+    f.duration = tonumber(lower:match("over (%d+) sec")) or tonumber(lower:match("for (%d+) sec"))
+    -- Only ticks: it never hits at once, so its cast must not wait for a hit (it
+    -- would take the next bolt's, cast after it).
+    if f.ticks and not f.direct then f.direct = false end
+    -- Harm without "<school> damage" (Drain Life's "health every"): it harms,
+    -- and nothing more can be said.
+    if not f.direct and not f.ticks then f.direct, f.ticks = nil, nil end
+    return f
+end
+
+local factCache, learnedSchool, periods = {}, {}, {}
+local function English()
+    local l = GetLocale and GetLocale()
+    return l == "enUS" or l == "enGB"
+end
+
+function UC.Facts(spell)
+    if not num(spell) then return nil end
+    local cached = factCache[spell]
+    if cached ~= nil then return cached or nil end
+    if not English() or not (C_Spell and C_Spell.GetSpellDescription) then
+        factCache[spell] = false
+        return nil
+    end
+    local ok, text = pcall(C_Spell.GetSpellDescription, spell)
+    if not ok or not str(text) then
+        -- Not loaded yet: ask for it and try again on the next cast.
+        if C_Spell.RequestLoadSpellData then pcall(C_Spell.RequestLoadSpellData, spell) end
+        return nil
+    end
+    local f = parse(text)
+    if C_Spell.IsSpellHelpful then
+        local ok2, helpful = pcall(C_Spell.IsSpellHelpful, spell)
+        if ok2 and plain(helpful) and type(helpful) == "boolean" then f.helpful = helpful end
+    end
+    factCache[spell] = f
+    return f
+end
+ns.On("SPELL_TEXT_UPDATE", function(_, spell) if num(spell) then factCache[spell] = nil end end)
+
+--------------------------------------------------------------------------
+-- Subscribers
+--------------------------------------------------------------------------
+-- dealt    { key, label, amount, school, crit, icon, pet }   a hit of yours on your target
+-- avoided  { missType, pet }                                 your target avoided you
+-- taken    { amount, school, crit }                          a hit on you
+-- dodged   { missType }                                      you avoided a hit
+-- healed   { key, label, amount, school, crit, icon, spell, first }   a heal on you
+-- energized{ amount }                                        power gained
+-- cast     { unit, spell, label, school, offensive }         a cast of yours
+local subs = {}
+function UC.Subscribe(kind, fn)
+    subs[kind] = subs[kind] or {}
+    subs[kind][#subs[kind] + 1] = fn
+end
+local function emit(kind, r)
+    local list = subs[kind]
+    if not list then return end
+    for i = 1, #list do list[i](r) end
+end
+
+--------------------------------------------------------------------------
+-- Probe statistics, per fight
+--------------------------------------------------------------------------
+local stats, lastStats
+local function newStats()
+    return { at = GetTime(), target = 0, targetHidden = 0, player = 0, playerHidden = 0,
+             casts = 0, swings = 0, unplaced = 0, missesPlaced = 0, rules = {} }
+end
+stats = newStats()
+local function rule(name) stats.rules[name] = (stats.rules[name] or 0) + 1 end
+
+--------------------------------------------------------------------------
+-- What you have done, recently
+--------------------------------------------------------------------------
+local casts, dots, swings, heals, hots, held = {}, {}, {}, {}, {}, {}
+local petLast = 0
+local epoch = 0
+
+local function now() return GetTime() end
+
+-- Your target, by GUID while that is readable, else by how often it has changed.
+-- Keyed so a bolt cast at one mob is never matched to a hit on the next.
+local function targetKey()
+    local guid = UnitGUID("target")
+    if str(guid) then return guid end
+    return "epoch:" .. epoch
+end
+ns.On("PLAYER_TARGET_CHANGED", function() epoch = epoch + 1 end)
+
+local function trim(list, keep)
+    for i = #list, 1, -1 do
+        if not keep(list[i]) then table.remove(list, i) end
+    end
+    while #list > MAX do table.remove(list, 1) end
+end
+
+local function tidy(t)
+    trim(casts, function(c)
+        return not c.used and t - c.at <= (c.school == PHYSICAL and PHYSICAL_WINDOW or DIRECT_WINDOW)
+    end)
+    trim(swings, function(s)
+        return not s.used and t - s.at <= (s.hand == "ranged" and RANGED_WINDOW or SWING_WINDOW)
+    end)
+    trim(dots, function(d)
+        if t > d.to then return false end
+        if not d.last and t - d.from > FIRST_TICK_WAIT then return false end   -- never landed
+        return true
+    end)
+    trim(heals, function(h) return not h.used and t - h.at <= HEAL_WINDOW end)
+    trim(hots, function(h) return t <= h.to end)
+end
+
+local playerClass
+local function rangedSpell()
+    playerClass = playerClass or select(2, UnitClass("player"))
+    return playerClass == "HUNTER" and 75 or 5019
+end
+
+--------------------------------------------------------------------------
+-- Inputs: casts and swings
+--------------------------------------------------------------------------
+local function helpfulSpell(spell)
+    if not (C_Spell and C_Spell.IsSpellHelpful) then return nil end
+    local ok, h = pcall(C_Spell.IsSpellHelpful, spell)
+    if ok and plain(h) and type(h) == "boolean" then return h end
+    return nil
+end
+
+local function onCast(unit, spell)
+    if not (str(unit) and (unit == "player" or unit == "pet")) or not num(spell) then return end
+    if AUTO_RANGED[spell] then return end
+    local t = now()
+    tidy(t)
+    stats.casts = stats.casts + 1
+
+    local f = UC.Facts(spell)
+    local helpful = (f and f.helpful)
+    if helpful == nil then helpful = helpfulSpell(spell) end
+    local school = (f and f.school) or learnedSchool[spell]
+    local key = targetKey()
+
+    -- A heal of yours. Only your own count as "yours" on a heal that lands on
+    -- you; anyone else's still shows, just not under a spell of theirs.
+    if unit == "player" and f and f.heals then
+        -- One cast, one mana cost: Regrowth's direct heal and its ticks share this,
+        -- so whichever lands first carries the cost and the other does not.
+        local cast = { mana = false }
+        if f.direct then heals[#heals + 1] = { spell = spell, at = t, cast = cast } end
+        if f.hot then
+            for i = #hots, 1, -1 do if hots[i].spell == spell then table.remove(hots, i) end end
+            hots[#hots + 1] = { spell = spell, from = t, to = t + (f.duration or 15) + DOT_SLACK, cast = cast }
+        end
+    end
+
+    -- Something that might hurt your target: anything not known to be harmless.
+    local offensive = not helpful and not (f and (f.heals or f.damages == false))
+    if offensive then
+        if not f or f.direct ~= false then
+            casts[#casts + 1] = { spell = spell, unit = unit, at = t, school = school, key = key,
+                                  unknown = (f == nil or f.school == nil) }
+        end
+        if f and f.ticks then
+            -- A recast refreshes the DoT rather than stacking a second one.
+            for i = #dots, 1, -1 do
+                if dots[i].spell == spell and dots[i].key == key then table.remove(dots, i) end
+            end
+            -- Its beat: measured in an earlier fight, else Classic's usual 3 s as a
+            -- guess until two ticks have been seen. A wrong guess (Agony's 2 s)
+            -- only costs the DoT its priority; it never makes a hit its tick.
+            local known = periods[spell]
+            dots[#dots + 1] = { spell = spell, unit = unit, school = school, key = key, from = t,
+                                to = t + (f.duration or DOT_FALLBACK) + DOT_SLACK,
+                                period = known or 3, guessed = (known == nil) }
+        end
+    end
+
+    emit("cast", { unit = unit, spell = spell, label = ns.SpellName(spell), school = school,
+                   offensive = offensive and true or false })
+end
+
+local HANDS
+local function hands()
+    if HANDS then return HANDS end
+    HANDS = {}
+    local kinds = Enum and Enum.PlayerSwingType
+    if kinds then
+        if kinds.MainHand then HANDS[kinds.MainHand] = "main" end
+        if kinds.OffHand  then HANDS[kinds.OffHand]  = "off"  end
+        if kinds.Ranged   then HANDS[kinds.Ranged]   = "ranged" end
+    end
+    return HANDS
+end
+
+local placeSwing   -- defined with the hit matching, below
+
+local function onSwing(swingType)
+    if not num(swingType) then return end
+    local hand = hands()[swingType]
+    if not hand then return end
+    local t = now()
+    tidy(t)
+    stats.swings = stats.swings + 1
+    -- The order of a hit and its swing is not fixed: a hit already waiting for one
+    -- takes this swing.
+    for _, h in ipairs(held) do
+        if not h.done and t - h.at <= LATE_SWING and (hand == "ranged" or h.physical) then
+            h.done = true
+            rule("late swing")
+            placeSwing(h.rec, hand)
+            return
+        end
+    end
+    swings[#swings + 1] = { hand = hand, at = t }
+end
+
+--------------------------------------------------------------------------
+-- Hits on your target: whose, and with what
+--------------------------------------------------------------------------
+local function petAttacking()
+    if not yes(UnitExists("pet")) then return false end
+    return yes(UnitIsUnit("pettarget", "target"))
+end
+
+-- A DoT whose tick lands on its learned beat.
+local function onBeat(d, t)
+    local p = d.period
+    if not p then return false end
+    local base = d.last or d.from
+    local n = math.floor((t - base) / p + 0.5)
+    if n < 1 then return false end
+    return math.abs((t - base) - n * p) <= RHYTHM_SLACK
+end
+
+local function tick(d, t)
+    if d.last then
+        local gap = t - d.last
+        if (d.guessed or not d.period) and gap >= TICK_GAP and gap <= 3.3 then
+            d.period = math.floor(gap * 2 + 0.5) / 2     -- to the half second
+            d.guessed = false
+            periods[d.spell] = d.period
+        end
+    end
+    d.last = t
+end
+
+local function spellRecord(spell, rec, unit)
+    rec.key   = "spell:" .. spell
+    rec.label = ns.SpellName(spell) or ("Spell " .. spell)
+    rec.icon  = ns.SpellTexture(spell)
+    rec.pet   = (unit == "pet")
+    return rec
+end
+
+local function out(rec)
+    if rec.missType then
+        stats.missesPlaced = stats.missesPlaced + 1
+        emit("avoided", { missType = rec.missType, pet = rec.pet })
+    elseif rec.amount then
+        emit("dealt", rec)
+    end
+end
+
+placeSwing = function(rec, hand)
+    if hand == "ranged" then
+        local spell = rangedSpell()
+        spellRecord(spell, rec, "player")
+    else
+        rec.key, rec.label, rec.icon, rec.pet = "swing", "Melee", MELEE_ICON, false
+    end
+    out(rec)
+end
+
+-- Physical-looking misses come off swings; spell-looking ones off casts.
+local SWING_MISSES = { MISS = true, DODGE = true, PARRY = true, BLOCK = true, DEFLECT = true, EVADE = true }
+
+local function placeOnTarget(rec, t)
+    local key = targetKey()
+    local school = rec.school
+    local physical = (school == nil or school == PHYSICAL)
+    local isMiss = rec.missType ~= nil
+
+    -- 1. A DoT of yours, on its beat.
+    if not isMiss then
+        for _, d in ipairs(dots) do
+            if d.key == key and t >= d.from and sameSchool(d.school, school) and onBeat(d, t) then
+                tick(d, t); rule("tick on beat")
+                return out(spellRecord(d.spell, rec, d.unit))
+            end
+        end
+    end
+
+    -- 2. The oldest cast of yours of this school still in flight. A swing-type
+    --    miss looks for a swing first.
+    local swingFirst = isMiss and SWING_MISSES[rec.missType]
+    local function tryCast()
+        for _, c in ipairs(casts) do
+            local window = (c.school == PHYSICAL) and PHYSICAL_WINDOW or DIRECT_WINDOW
+            if not c.used and c.key == key and t >= c.at and t - c.at <= window
+                and sameSchool(c.school, school) then
+                c.used = true
+                if c.unknown and school and not learnedSchool[c.spell] then
+                    learnedSchool[c.spell] = school
+                end
+                rule(c.unknown and "cast (school learned)" or "cast")
+                out(spellRecord(c.spell, rec, c.unit))
+                return true
+            end
+        end
+    end
+    local function trySwing()
+        for _, s in ipairs(swings) do
+            local window = (s.hand == "ranged") and RANGED_WINDOW or SWING_WINDOW
+            if not s.used and t - s.at <= window and (physical or s.hand == "ranged") then
+                s.used = true
+                rule("swing")
+                placeSwing(rec, s.hand)
+                return true
+            end
+        end
+    end
+    if swingFirst then
+        if trySwing() or tryCast() then return end
+    else
+        if tryCast() then return end
+    end
+
+    -- 3. A DoT of yours whose beat is not known yet.
+    if not isMiss then
+        for _, d in ipairs(dots) do
+            if d.key == key and t >= d.from and sameSchool(d.school, school)
+                and ((d.last and t - d.last >= TICK_GAP) or (not d.last and t - d.from >= 0.8)) then
+                tick(d, t); rule("tick")
+                return out(spellRecord(d.spell, rec, d.unit))
+            end
+        end
+    end
+
+    -- 4. A weapon swing.
+    if not swingFirst and trySwing() then return end
+
+    -- 5. Your pet, if it is on this unit (its swings are not reported, so at most
+    --    one hit a second).
+    if physical and not isMiss and t - petLast >= PET_GAP and petAttacking() then
+        petLast = t
+        rule("pet")
+        rec.key, rec.label, rec.icon, rec.pet = "pet:swing", UnitName("pet") or "Pet", MELEE_ICON, true
+        if not str(rec.label) then rec.label = "Pet" end
+        return out(rec)
+    end
+
+    -- 6. Physical, unexplained: wait a moment in case its swing is reported late.
+    if physical or isMiss then
+        local h = { at = t, rec = rec, physical = physical }
+        held[#held + 1] = h
+        C_Timer.After(LATE_SWING + 0.02, function()
+            if not h.done then h.done = true; stats.unplaced = stats.unplaced + 1 end
+            for i = #held, 1, -1 do if held[i].done then table.remove(held, i) end end
+        end)
+        return
+    end
+
+    -- 7. Someone else's.
+    stats.unplaced = stats.unplaced + 1
+end
+
+--------------------------------------------------------------------------
+-- Hits and heals on you
+--------------------------------------------------------------------------
+local function placeHealOnMe(amount, school, crit, t)
+    local rec = { amount = amount, school = school, crit = crit }
+    local function mine(spell, cast, name)
+        rule(name)
+        spellRecord(spell, rec, "player")
+        rec.spell, rec.first = spell, not cast.mana
+        cast.mana = true
+        return emit("healed", rec)
+    end
+    for _, h in ipairs(heals) do
+        if not h.used and t - h.at <= HEAL_WINDOW then
+            h.used = true
+            return mine(h.spell, h.cast, "your heal")
+        end
+    end
+    -- A HoT's first tick is never in its cast's own moment: a heal landing then is
+    -- somebody else's.
+    for _, h in ipairs(hots) do
+        if (h.last and t - h.last >= TICK_GAP) or (not h.last and t - h.from >= 0.8) then
+            h.last = t
+            return mine(h.spell, h.cast, "your heal over time")
+        end
+    end
+    rule("someone else's heal")
+    rec.key, rec.label, rec.icon = "heal:other", "Healing", "Interface\\ICONS\\Spell_Holy_Heal"
+    emit("healed", rec)
+end
+
+--------------------------------------------------------------------------
+-- UNIT_COMBAT
+--------------------------------------------------------------------------
+local FEEDBACK = { MISS = true, DODGE = true, PARRY = true, BLOCK = true, RESIST = true, EVADE = true,
+                   IMMUNE = true, DEFLECT = true, ABSORB = true, REFLECT = true }
+
+local function onUnitCombat(unit, event, flag, amount, school)
+    if not str(unit) or not str(event) then return end
+    if unit ~= "target" and unit ~= "player" then return end
+    if unit == "target" and yes(UnitIsUnit("target", "player")) then return end
+
+    local t = now()
+    tidy(t)
+    flag = str(flag) and flag or ""
+    school = (num(school) and school >= 1 and school <= 255) and school or nil
+    local hidden = not num(amount)
+
+    if unit == "player" then
+        stats.player = stats.player + 1
+        if hidden and (event == "WOUND" or event == "HEAL" or event == "ENERGIZE") then
+            stats.playerHidden = stats.playerHidden + 1
+            return
+        end
+        if event == "WOUND" then
+            if amount > 0 then
+                emit("taken", { amount = amount, school = school, crit = (flag == "CRITICAL") })
+            else
+                emit("dodged", { missType = (flag == "ABSORB" or flag == "BLOCK" or flag == "RESIST") and flag or "MISS" })
+            end
+        elseif event == "HEAL" then
+            if amount > 0 then placeHealOnMe(amount, school, flag == "CRITICAL", t) end
+        elseif event == "ENERGIZE" then
+            if amount > 0 then emit("energized", { amount = amount }) end
+        elseif FEEDBACK[event] then
+            emit("dodged", { missType = event })
+        end
+        return
+    end
+
+    -- On your target: only harm counts.
+    local rec
+    if event == "WOUND" then
+        stats.target = stats.target + 1
+        if hidden then
+            -- Still matched, so the cast it belongs to is used up and cannot claim
+            -- the next hit; it just adds nothing to the totals.
+            stats.targetHidden = stats.targetHidden + 1
+            rec = { school = school, hidden = true }
+        elseif amount > 0 then
+            rec = { amount = amount, school = school, crit = (flag == "CRITICAL") }
+        else
+            rec = { missType = (flag == "ABSORB" or flag == "BLOCK" or flag == "RESIST") and flag or "MISS",
+                    school = school }
+        end
+    elseif FEEDBACK[event] then
+        stats.target = stats.target + 1
+        rec = { missType = event, school = school }
+    else
+        return
+    end
+    placeOnTarget(rec, t)
+end
+
+ns.On("UNIT_COMBAT", function(_, ...) onUnitCombat(...) end)
+ns.On("UNIT_SPELLCAST_SUCCEEDED", function(_, unit, _, spell) onCast(unit, spell) end)
+ns.On("PLAYER_SWING", function(_, _, swingType) onSwing(swingType) end)
+ns.On("PLAYER_REGEN_DISABLED", function()
+    lastStats = (stats.target + stats.player > 0) and stats or lastStats
+    stats = newStats()
+end)
+
+--------------------------------------------------------------------------
+-- /gct probe
+--------------------------------------------------------------------------
+-- The check this port stands on: are UNIT_COMBAT amounts readable during combat
+-- on this client, and how much of what hits your target is placed as yours.
+-- Fight something, then run it.
+function UC.PrintProbe()
+    local s = (stats.target + stats.player > 0) and stats or lastStats
+    local P = "|cff66ccffGCT probe|r"
+    if not s then
+        print(P .. ": nothing recorded yet. Fight something, then run /gct probe again.")
+        return
+    end
+    print(P .. (s == stats and " (this fight" or " (last fight") .. ", UNIT_COMBAT):")
+    local function hiddenWord(n, of)
+        if of == 0 then return "none" end
+        return n == 0 and "|cff40ff40none hidden|r" or ("|cffff4040" .. n .. " of " .. of .. " hidden|r")
+    end
+    print(("   on your target: %d reports, amounts %s"):format(s.target, hiddenWord(s.targetHidden, s.target)))
+    local placed, parts = 0, {}
+    for name, n in pairs(s.rules) do
+        if not name:find("heal") then placed = placed + n; parts[#parts + 1] = name .. " " .. n end
+    end
+    table.sort(parts)
+    print(("   placed as yours: %d  (%s)"):format(placed, #parts > 0 and table.concat(parts, ", ") or "-"))
+    print(("   not placed (someone else's, or unexplained): %d"):format(s.unplaced))
+    print(("   on you: %d reports, amounts %s"):format(s.player, hiddenWord(s.playerHidden, s.player)))
+    local hp = {}
+    for _, name in ipairs({ "your heal", "your heal over time", "someone else's heal" }) do
+        if s.rules[name] then hp[#hp + 1] = name .. " " .. s.rules[name] end
+    end
+    if #hp > 0 then print("   heals on you: " .. table.concat(hp, ", ")) end
+    print(("   your casts seen: %d, swings seen: %d"):format(s.casts, s.swings))
+    if s.targetHidden > 0 or s.playerHidden > 0 then
+        print("   |cffff4040Hidden amounts can be shown but not added up, so they are left out of")
+        print("   the totals.|r If most are hidden, the post-fight summary is the better fit here.")
+    end
+end

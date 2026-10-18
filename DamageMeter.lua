@@ -25,9 +25,11 @@ DM.available = (C_DamageMeter ~= nil)
     and SessionType ~= nil and SessionType.Current ~= nil
     and MeterType ~= nil
 
--- C_DamageMeter existing is also the signal that the combat log is gone, so the
--- feeds use it to decide which way to get their data.
-ns.UseDamageMeter = DM.available and true or false
+-- C_DamageMeter existing is also the signal that the combat log is gone. The live
+-- replacement for it is UnitCombat.lua; this post-fight summary is only the
+-- fallback, switched on there (FORCE_SUMMARY) if UNIT_COMBAT amounts turn out to
+-- be hidden in combat on this client.
+ns.UseDamageMeter = (DM.available and not ns.UseUnitCombat) and true or false
 
 -- ...and, because this client withholds the meter's numbers for the duration of a
 -- fight and only releases them once it ends, the same flag means the feeds can only
@@ -90,7 +92,11 @@ end
 
 function ns.PrintStatus()
     print("|cff66ccffGaru Combat Text|r: reading from "
-        .. (ns.UseDamageMeter and "C_DamageMeter (post-fight summaries)" or "the combat log (live)"))
+        .. (ns.UseUnitCombat and "UNIT_COMBAT (live; your hits worked out from your casts and swings)"
+            or ns.UseDamageMeter and "C_DamageMeter (post-fight summaries)" or "the combat log (live)"))
+    if ns.UseUnitCombat then
+        print("   /gct probe after a fight shows how much was readable and placed as yours.")
+    end
     if ns.UseDamageMeter then
         print("   meter available: " .. tostring(DM.IsUsable())
             .. "  |  last fight: " .. (DM.SessionSeconds() and (math.floor(DM.SessionSeconds()) .. "s") or "none"))
@@ -299,7 +305,7 @@ end
 --------------------------------------------------------------------------
 -- Update driver
 --------------------------------------------------------------------------
-if DM.available then
+if ns.UseDamageMeter then
     local settleUntil = 0
 
     local function captureAll()

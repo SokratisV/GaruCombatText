@@ -199,6 +199,7 @@ local function fillDamage(c, reflow)
     local et = ns.db.enemyText
     local syncs = {}; SYNC = syncs
     Header(c, ns.SummaryMode and "Damage Dealt (this fight)" or "Damage Dealt (per target)")
+    Note(c, "|cffffd100Worked out, not read, on this client.|r The combat log is gone here, so each hit on your target is matched to your casts and swings by timing and school. Solo that is close to exact; in a group, a teammate's hit of the same school landing just after your cast can be counted as yours. /gct probe shows how a fight was placed.", function() return ns.UseUnitCombat end, 72)
     Note(c, "|cffffd100Post-fight summary on this client.|r Numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays for the hold window set on the Damage Dealt tab. Kill several things in one pull and each corpse shows the whole pull: this client reports no per-enemy breakdown.", function() return ns.SummaryMode end, 86)
 
     local summaryVis = function() return ns.SummaryMode end
@@ -241,7 +242,8 @@ end
 local function fillTaken(c, reflow)
     local tk = ns.db.takenText
     local syncs = {}; SYNC = syncs
-    Header(c, "Damage Taken (by type)")
+    Header(c, ns.UseUnitCombat and "Damage Taken (by school)" or "Damage Taken (by type)")
+    Note(c, "|cffffd100Per school on this client.|r The game reports how hard and in which school you were hit, but not by which spell, so the rows are Physical, Fire, Shadow and so on.", function() return ns.UseUnitCombat end, 44)
     Note(c, "|cffffd100Post-fight summary on this client.|r Numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays for the hold window set on the Damage Dealt tab. Kill several things in one pull and each corpse shows the whole pull: this client reports no per-enemy breakdown.", function() return ns.SummaryMode end, 86)
     Button(c, "Copy & mirror from Damage Dealt", function()
         copyMirror(tk, ns.db.enemyText); RA(); RK(); RT()
@@ -269,6 +271,7 @@ local function fillActions(c, reflow)
     local a = ns.db.actionsText
     local syncs = {}; SYNC = syncs
     Header(c, "Actions (avoided by target)")
+    Note(c, "|cffffd100Worked out on this client.|r Your target's dodges, parries and resists are matched to your swings and casts by timing, as Damage Dealt is.", function() return ns.UseUnitCombat end, 44)
     if not ns.ActionsAvailable then
         Note(c, "|cffff5555Unavailable on this client.|r Dodges, parries and misses are "
             .. "combat-log facts, and C_DamageMeter -- what replaced the addon combat log "
@@ -298,6 +301,7 @@ local function fillHealing(c, reflow)
     local h = ns.db.healText
     local syncs = {}; SYNC = syncs
     Header(c, ns.SummaryMode and "Healing Cast (per spell)" or "Healing Received (per spell)")
+    Note(c, "|cffffd100On this client|r every heal that lands on you is counted, but the game does not say whose: your own are placed on their spell by matching your casts, and everyone else's share one Healing line.", function() return ns.UseUnitCombat end, 58)
     Note(c, "|cffffd100Post-fight summary on this client.|r Numbers are hidden while a fight is in progress and released when it ends. The summary then appears when you select something that died, and stays for the hold window set on the Damage Dealt tab. Kill several things in one pull and each corpse shows the whole pull: this client reports no per-enemy breakdown.", function() return ns.SummaryMode end, 86)
     Note(c, "|cffff8080Healing received is not available on this client.|r Its only healing meter is keyed by the caster and never says who a heal landed on, so what this feed reports here is the healing |cffffd100you cast|r. Heal yourself and it is the same number; heal someone else and it is not.", function() return ns.SummaryMode end, 72)
     Button(c, "Copy & mirror from Damage Dealt", function()

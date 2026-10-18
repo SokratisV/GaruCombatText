@@ -23,8 +23,8 @@ local function playerFrame() return ns.healHostFrame end   -- healing-received a
 --------------------------------------------------------------------------
 -- Routing: healing landing on me, from anyone
 --------------------------------------------------------------------------
--- Wherever C_DamageMeter exists the combat log is gone; DamageMeter.lua feeds this.
-if not ns.UseDamageMeter then
+-- Wherever the combat log is gone, UnitCombat.lua (or the summary) feeds this.
+if ns.CombatLogLive then
 ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local cfg = ns.db.healText
     if not cfg.enabled then return end       -- count in and out of combat
@@ -86,6 +86,40 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
                    spellName or "Mana", gain, spellSchool, false, icon(spellId))
     end
 end)
+end
+
+-- WoW Forever, live. UNIT_COMBAT reports every heal landing on you, from anyone,
+-- but not whose it was: your own are placed on their spell by matching your casts;
+-- everyone else's arrive on one "Healing" line. Whether its amount is the heal as
+-- cast or only the effective part (overheal removed) is not documented -- the
+-- Classic path above uses the effective part.
+if ns.UseUnitCombat then
+    ns.UC.Subscribe("healed", function(r)
+        local cfg = ns.db.healText
+        if not cfg.enabled or ns.test.combat then return end
+        if r.amount < (cfg.threshold or 0) then return end
+        local pf = playerFrame()
+        if not pf then return end
+        meter:Bump(pf, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
+        -- Mana spent on a heal of yours that landed on you, once per cast, on that
+        -- spell's line (as the Classic path does for self-cast heals).
+        local wantMana = cfg.showMana or cfg.valueMode == "both" or cfg.valueMode == "mana"
+        if wantMana and r.first and r.spell and not (ns.AbsorbSpellIds and ns.AbsorbSpellIds[r.spell]) then
+            local cost = ns.Meter.SpellManaCost(r.spell)
+            if cost > 0 then meter:BumpMana(pf, r.key, r.label, cost, r.school, r.icon) end
+        end
+    end)
+    ns.UC.Subscribe("energized", function(r)
+        local cfg = ns.db.healText
+        if not cfg.enabled or not cfg.includeMana or ns.test.combat then return end
+        -- UNIT_COMBAT does not say which power; count it only for a mana user.
+        local pt = UnitPowerType("player")
+        if ns.IsSecret(pt) or pt ~= 0 then return end
+        if r.amount < (cfg.threshold or 0) then return end
+        local pf = playerFrame()
+        if not pf then return end
+        meter:Bump(pf, "mana:gain", "Mana", r.amount, nil, false, "Interface\\ICONS\\INV_Potion_76")
+    end)
 end
 
 -- Damage-meter path, and the one place this port cannot keep its promise. Healing

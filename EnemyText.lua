@@ -48,9 +48,9 @@ local function destFrame(destGUID, destFlags)
     return nil
 end
 
--- Wherever C_DamageMeter exists the combat log is gone, so don't even register for
--- an event that will never arrive; DamageMeter.lua feeds this meter instead.
-if not ns.UseDamageMeter then
+-- Wherever the combat log is gone, don't even register for an event that will
+-- never arrive; UnitCombat.lua (or the DamageMeter summary) feeds this instead.
+if ns.CombatLogLive then
 ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local cfg = ns.db.enemyText
     if not cfg.enabled then return end
@@ -102,6 +102,31 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
 
     meter:Bump(frame, key, label, amount, school, crit and true or false, iconTex)
 end)
+end
+
+-- WoW Forever, live: hits on your target worked out as yours (UnitCombat.lua),
+-- routed exactly as the combat-log handler above routes them. Crits and schools
+-- come with every hit; mana spent goes on the spell's line as each cast lands.
+if ns.UseUnitCombat then
+    ns.UC.Subscribe("dealt", function(r)
+        local cfg = ns.db.enemyText
+        if not cfg.enabled or ns.test.combat then return end
+        if r.pet and not cfg.includePet then return end
+        if r.amount < (cfg.threshold or 0) then return end
+        local frame = ns.frames and ns.frames.target
+        if not frame then return end
+        meter:Bump(frame, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
+    end)
+    ns.UC.Subscribe("cast", function(c)
+        local cfg = ns.db.enemyText
+        if not cfg.enabled or not cfg.showMana or ns.test.combat then return end
+        if c.unit ~= "player" or not c.offensive then return end
+        local cost = spellManaCost(c.spell)
+        if cost <= 0 then return end
+        local frame = ns.frames and ns.frames.target
+        if not frame or not UnitExists("target") then return end
+        meter:BumpMana(frame, "spell:" .. c.spell, c.label or "Spell", cost, c.school, ns.SpellTexture(c.spell))
+    end)
 end
 
 -- Damage-meter path: read the player's own DamageDone rows out of the finished

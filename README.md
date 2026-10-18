@@ -7,42 +7,37 @@
 ![WoW](https://img.shields.io/badge/WoW-Forever%20%2F%20TBC%20Classic-f8b700)
 ![Interface](https://img.shields.io/badge/interface-16001%20%7C%2020505-555)
 
-## On WoW Forever: a post-fight summary
+## On WoW Forever: live, worked out from your own actions
 
-Midnight removed the addon combat log and replaced it with `C_DamageMeter`, which reports
-per-fight aggregates rather than individual hits -- and this client withholds even those
-while a fight is in progress, releasing them only once it ends. Measured: out of combat
-the totals read normally; from the first moment of combat every one is unreadable until
-combat drops.
+Midnight removed the addon combat log (`COMBAT_LOG_EVENT_UNFILTERED` registers and never
+fires), and `C_DamageMeter` hides every figure until a fight is over. What the client still
+sends live is `UNIT_COMBAT`, the event Blizzard's own portrait hit-numbers use: each hit on
+a unit with its amount, school, crit flag or kind of miss, but never who made it or with
+which spell.
 
-Live combat text is therefore not possible on Forever. What you get instead is a report,
-and it is shown like one rather than like a stream:
+So on Forever the feeds are live again, with one difference that matters: **your hits are
+worked out, not read.** Your casts (with their spell) and your weapon swings are readable,
+and each hit on your target is matched to them by timing and school, helped by what each
+spell's own description says it does.
 
-- Nothing appears while you are fighting, and nothing appears the moment combat drops.
-- Select what you killed and the summary appears, holding for **15 seconds** by default.
-- Go back to it before its window closes and it is still there.
-- Each target keeps its own window, started when you first look at it, so a corpse you
-  get to late is still readable.
+- **Damage Dealt** is per spell again, with crits, schools and mana spent.
+- **Actions** is back: your target's dodges, parries and resists, matched to your swings
+  and casts.
+- **Damage Taken** is grouped **by school** (Physical, Fire, ...): the game says how you
+  were hit, not by what.
+- **Healing Received** counts every heal on you. Your own are on their spell; everyone
+  else's share one *Healing* line.
 
-The hold window, the fade at the end of it, and whether a target has to be dead at all
-are on the **Damage Dealt** tab. The per-row rolling-window and fade-timing settings are
-hidden on this client, because a summary has no rows ageing out one at a time.
+Solo the matching is close to exact, because almost everything hitting your target is you.
+In a group, a teammate's hit of the same school landing inside your window can be counted as
+yours. `/gct probe` after a fight shows how many hits came through readable and how each was
+placed.
 
-Kill several things in one pull and every corpse shows the whole pull. There is no
-per-enemy breakdown to be had: `EnemyDamageTaken` does list the enemies, but it collapses
-each one's spell rows into a single total, and these feeds are per-spell.
+The approach and its timing windows come from **Forever Combat Text** by Tarolg
+(MIT License, Copyright (c) 2026 Tarolg), which measured them in real fights.
 
-**Healing received is not available on Forever at all.** The only healing meter is keyed
-by the caster and never records who a heal landed on, so on this client that feed reports
-the healing **you cast** — identical for a self-heal, and not the same thing in a group.
-The tab is titled *Healing Cast* there to say so.
-
-Also unavailable on Forever, for want of any field carrying them: per-hit crits, spell
-schools, mana spent, and the whole **Actions** feed (dodge/parry/miss counts are
-combat-log facts, and this API reports damage, not misses).
-
-On the Classic clients nothing changes: the combat log is still there and every feed
-works live, exactly as before.
+On the Classic clients nothing changes: the combat log is still there and every feed reads
+it directly, exactly as before.
 
 > **Client support.** Runs on **WoW Forever** (interface `16001`) and on the
 > **TBC Classic / Anniversary** client (interface `20505`) from the same files.

@@ -18,12 +18,25 @@ local function destFrame(destGUID, destFlags)
 end
 
 -- This feed counts what your target avoided -- dodge, parry, block, miss, resist.
--- Those are combat-log facts, and C_DamageMeter reports damage, not misses: there
--- is no meter type that counts them. So where the combat log is gone, this feed
--- has no data source at all and is switched off rather than left silently empty.
+-- C_DamageMeter reports damage, not misses, so the post-fight summary has nothing
+-- to give it and it is switched off there. UNIT_COMBAT does report a target's
+-- misses, and UnitCombat.lua matches them to your swings and casts.
 ns.ActionsAvailable = not ns.UseDamageMeter
 
+if ns.UseUnitCombat then
+    ns.UC.Subscribe("avoided", function(r)
+        local cfg = ns.db.actionsText
+        if not cfg.enabled or ns.test.combat then return end
+        if r.pet and not cfg.includePet then return end
+        local frame = ns.actionsHostFrame
+        if not frame then return end
+        local m = r.missType
+        meter:Bump(frame, "miss:" .. m, m:sub(1, 1) .. m:sub(2):lower(), 1, 1, false, ns.AVOID_ICON[m])
+    end)
+end
+
 if ns.ActionsAvailable then
+if ns.CombatLogLive then
 ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local cfg = ns.db.actionsText
     if not cfg.enabled then return end
@@ -48,6 +61,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local pretty = missType:sub(1, 1) .. missType:sub(2):lower()
     meter:Bump(frame, "miss:" .. missType, pretty, 1, 1, false, ns.AVOID_ICON[missType])
 end)
+end
 
 ns.On("PLAYER_TARGET_CHANGED", function()
     meter:Retarget(ns.actionsHostFrame)

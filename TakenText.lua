@@ -15,8 +15,8 @@ local meter = ns.Meter.New({ cfg = function() return ns.db.takenText end })
 
 local function host() return ns.takenHostFrame end
 
--- Wherever C_DamageMeter exists the combat log is gone; DamageMeter.lua feeds this.
-if not ns.UseDamageMeter then
+-- Wherever the combat log is gone, UnitCombat.lua (or the summary) feeds this.
+if ns.CombatLogLive then
 ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local cfg = ns.db.takenText
     if not cfg.enabled then return end
@@ -66,6 +66,32 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
 
     meter:Bump(frame, key, label, amount, school, crit and true or false, iconTex)
 end)
+end
+
+-- WoW Forever, live. UNIT_COMBAT says how hard and in which school you were hit,
+-- never by what, so the rows here are per school ("Fire", "Physical") rather than
+-- per attacking spell. Avoids keep their own count rows as on Classic.
+if ns.UseUnitCombat then
+    ns.UC.Subscribe("taken", function(r)
+        local cfg = ns.db.takenText
+        if not cfg.enabled or ns.test.combat then return end
+        if r.amount < (cfg.threshold or 0) then return end
+        local frame = host()
+        if not frame then return end
+        local name = r.school and ns.UC.SCHOOL_NAMES[r.school]
+        local key = "school:" .. tostring(r.school or 0)
+        local icon = r.school and ns.UC.SCHOOL_ICONS[r.school] or MELEE_ICON
+        meter:Bump(frame, key, name or (r.school and "Mixed" or "Damage"), r.amount, r.school,
+                   r.crit and true or false, icon)
+    end)
+    ns.UC.Subscribe("dodged", function(r)
+        local cfg = ns.db.takenText
+        if not cfg.enabled or not cfg.showAvoid or ns.test.combat then return end
+        local frame = host()
+        if not frame then return end
+        local m = r.missType
+        meter:Bump(frame, "miss:" .. m, m:sub(1, 1) .. m:sub(2):lower(), 1, 1, false, AVOID_ICON[m])
+    end)
 end
 
 -- Damage-meter path: poll my own DamageTaken rows and feed the growth. The avoid
