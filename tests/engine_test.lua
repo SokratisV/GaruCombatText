@@ -72,8 +72,17 @@ local DESC = {
 }
 local HELPFUL = { [2050] = true, [139] = true, [8936] = true }
 -- Your buffs, as C_UnitAuras hands them over: { spellId, sourceUnit }
-local auras = {}
-C_UnitAuras = { GetAuraDataByIndex = function(_, index) return auras[index] end }
+local auras, hiddenIndex, lookupHidden, locked = {}, {}, false, false
+C_UnitAuras = {
+    GetAuraDataByIndex = function(_, index) return auras[index] end,
+    -- by spell: nil when you do not have it, or when the game will not say
+    GetPlayerAuraBySpellID = function(id)
+        if lookupHidden then return nil end
+        for _, a in ipairs(auras) do if a.spellId == id then return a end end
+    end,
+}
+C_Secrets = { ShouldUnitAuraIndexBeSecret = function(_, index) return hiddenIndex[index] == true end }
+function InCombatLockdown() return locked end
 C_Spell = {
     GetSpellDescription = function(id) return DESC[id] end,
     IsSpellHelpful = function(id) return HELPFUL[id] or false end,
@@ -404,6 +413,35 @@ onMe(516, "WOUND", 12, 1); hit(516.01, 5, 4)
 expect("a damage shield known by what its text says", 516.02, "dealt", key("spell:99001", 5))
 auras = {}
 ns.UC.RebuildShields()
+
+-- 17. As recorded with Thorns up (/gct trace, 18 Oct 2026): the shield's hit came
+--     0.30-0.36 s before its blow was reported, and in combat the buffs went hidden.
+auras = { { spellId = 782, sourceUnit = "player" } }; ns.UC.RebuildShields()
+hit(520, 6, 8); onMe(520.33, "WOUND", 9, 1)
+expect("Thorns: the blow on you reported 0.33 s after it (measured)", 520.4, "dealt", key("spell:782", 6))
+hit(522, 6, 8); hit(522.1, 6, 8); onMe(522.3, "WOUND", 6, 1); onMe(522.4, "WOUND", 6, 1)
+expect("two mobs: one Thorns hit for each blow", 522.5, "dealt", key("spell:782", 6))
+expect("...and the second", 522.5, "dealt", key("spell:782", 6))
+-- a hidden buff ahead of a shield is stepped over, not taken for the end of the list
+auras = { { spellId = 1 }, { spellId = 99001, sourceUnit = "player" } }; hiddenIndex = { [1] = true }
+ns.UC.RebuildShields()
+onMe(524, "WOUND", 12, 1); hit(524.01, 5, 4)
+expect("a shield behind a hidden buff is still found", 524.02, "dealt", key("spell:99001", 5))
+-- Thorns, asked for by spell, when the whole list is hidden
+auras = { { spellId = 782, sourceUnit = "player" } }; hiddenIndex = { [1] = true }
+ns.UC.RebuildShields()
+onMe(526, "WOUND", 12, 1); hit(526.01, 6, 8)
+expect("Thorns found by spell when the buff list is hidden", 526.02, "dealt", key("spell:782", 6))
+-- in combat the buffs can go unreadable altogether: the shield is kept...
+locked, lookupHidden, hiddenIndex = true, true, { [1] = true }
+ns.UC.RebuildShields()
+onMe(528, "WOUND", 12, 1); hit(528.01, 6, 8)
+expect("in combat, with the buffs unreadable, Thorns is kept", 528.02, "dealt", key("spell:782", 6))
+-- ...and let go once combat is over and it can be seen to be gone
+locked, lookupHidden, hiddenIndex, auras = false, false, {}, {}
+ns.UC.RebuildShields()
+onMe(530, "WOUND", 12, 1); hit(530.01, 6, 8)
+noDealt("out of combat, gone is gone", 531)
 
 -- 13. What descriptions say.
 local function facts(name, id, want)

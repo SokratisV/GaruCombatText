@@ -1,0 +1,123 @@
+# Recorded with /gct trace on WoW Forever, 18 Oct 2026: druid with Thorns (782) up, Count: Every enemy,
+# two mobs. Each Thorns hit on a mob came 0.30-0.36 s BEFORE the report of that mob's melee hit on you.
+# The A line below was added by hand: this trace predates the recorder noting shields, and Thorns
+# was up throughout (the meter credited 782 after the fight). The first R+ was added by hand
+# too: the recording begins with a /reload in the middle of a fight, ended by the R- at 11.66.
+0.00 R+
+0.00 P 2.1.0 DRUID 11
+0.00 A 8:782
+1.50 U nameplate3 WOUND "" 6 8
+1.50 > unplaced
+1.62 U target WOUND "" 6 8
+1.62 > unplaced
+1.80 U player WOUND "" 6 1
+1.92 U player WOUND "" 6 1
+3.49 U nameplate3 WOUND "" 6 8
+3.49 > unplaced
+3.79 U player WOUND "" 5 1
+3.88 U player DODGE "" 0 1
+5.26 C player 8925 64 true true true 12 - -
+5.26 U target WOUND "" 25 64
+5.26 > cast spell:8925
+5.26 T -
+5.26 K Creature-0-6783-0-2-40-EF5C68EA97 spell:8925
+5.52 U nameplate3 WOUND "" 6 8
+5.52 > unplaced
+5.74 T Creature-0-6783-0-2-475-EF5C68EA97
+5.88 U player WOUND "" 6 1
+6.72 C player 8925 64 true true true 12 - -
+6.72 U target WOUND "" 25 64
+6.72 > cast spell:8925
+7.53 U target WOUND "" 6 8
+7.53 > unplaced
+7.89 U player WOUND "" 7 1
+8.37 C player 1430 - false - false 12 true true
+9.48 U target WOUND "" 6 8
+9.48 > unplaced
+9.63 U target WOUND "" 9 64
+9.63 > tick on beat spell:8925
+9.84 U player WOUND "" 6 1
+11.44 U player HEAL "" 23 1
+11.44 > your heal over time spell:1430
+11.54 S 3.1070001125336 0 main
+11.54 U target WOUND "" 6 8
+11.54 > unplaced
+11.54 T -
+11.54 K Creature-0-6783-0-2-475-EF5C68EA97 swing
+11.66 R-
+12.16 > settled all swing 82 38
+12.16 > settled all spell:782 120 0
+12.53 U player WOUND "" 6 1
+12.72 T Creature-0-6783-0-2-475-EF5C68EA97
+13.28 T -
+13.76 T Creature-0-6783-0-2-40-EF5C68EA97
+14.34 T -
+14.43 U player HEAL "" 23 1
+14.43 > your heal over time spell:1430
+17.37 U player HEAL "" 23 1
+17.37 > your heal over time spell:1430
+18.44 T Creature-0-6783-0-2-40-654CB5D95F
+19.66 T -
+0.32 P
+0.32 A 8:782
+1.96 U player HEAL "" 23 1
+1.96 > someone else's heal
+2.84 T Creature-0-6783-0-2-40-654CB5D95F
+4.08 S 3.1070001125336 0 main
+4.08 R+
+4.08 U target WOUND "" 6 8
+4.08 > held for a hit on you
+4.25 > no hit on you came: unplaced 6
+4.44 U player WOUND "" 7 1
+4.59 U target WOUND "" 41 1
+4.59 > swing swing
+5.92 T -
+6.16 T Creature-0-6783-0-2-40-654CB5D95F
+6.16 U target WOUND "" 6 8
+6.16 > held for a hit on you
+6.33 > no hit on you came: unplaced 6
+6.52 U player WOUND "" 7 1
+8.50 U player DODGE "" 0 1
+10.47 U player DODGE "" 0 1
+12.14 U target WOUND "" 6 8
+12.14 > held for a hit on you
+12.34 > no hit on you came: unplaced 6
+12.47 U player WOUND "" 7 1
+14.47 U player MISS "" 0 1
+16.17 U target WOUND "" 6 8
+16.17 > held for a hit on you
+16.37 > no hit on you came: unplaced 6
+16.47 U player WOUND "" 7 1
+18.20 U target WOUND "" 6 8
+18.20 > held for a hit on you
+18.40 > no hit on you came: unplaced 6
+18.47 U player WOUND "" 6 1
+20.24 U target WOUND "" 6 8
+20.24 > held for a hit on you
+20.44 > no hit on you came: unplaced 6
+20.44 U player WOUND "" 6 1
+22.14 U target WOUND "" 6 8
+22.14 > held for a hit on you
+22.34 > no hit on you came: unplaced 6
+22.44 U player WOUND "" 6 1
+24.47 U player MISS "" 0 1
+26.14 U player WOUND "" 6 1
+26.20 U target WOUND "" 6 8
+26.20 > damage shield spell:782
+28.24 U target WOUND "" 6 8
+28.24 > unplaced
+28.50 U player WOUND "" 9 1
+30.47 U player DODGE "" 0 1
+31.90 C player 8925 64 true true true 12 - -
+31.90 U target WOUND CRITICAL 37 64
+31.90 > cast spell:8925
+32.24 U target WOUND "" 6 8
+32.24 > unplaced
+32.24 T -
+32.89 T Creature-0-6783-0-2-40-654CB5D95F
+33.13 U player WOUND "" 8 1
+33.17 R-
+33.45 T -
+33.68 > settled all spell:782 60 6
+34.57 T Creature-0-6783-0-2-40-654CB5D95F
+35.85 T -

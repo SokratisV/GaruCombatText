@@ -9,7 +9,8 @@
 -- current matcher decides afresh. What a spell's description said is rebuilt from
 -- the facts the cast line recorded.
 --
--- A recording may say "# expect-unplaced: N" when N hits really were someone else's.
+-- A recording may say "# expect-unplaced: N" when N hits really were someone else's,
+-- or could not be placed live (a shield hit whose blow was never reported).
 
 -- WoW's own table helpers, which the addon uses as globals.
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
@@ -45,6 +46,8 @@ function UnitIsUnit(a, b) if a == "target" and b == "player" then return false e
 function UnitExists(u) if u == "target" then return target ~= nil end return u ~= "pet" end
 function UnitName() return "Tester" end
 function UnitClass() return "X", class end
+inFight = false
+function UnitAffectingCombat() return inFight end
 
 -- Descriptions rebuilt from what each cast line recorded about its spell.
 local SCHOOL_WORD = { [1] = "Physical", [2] = "Holy", [4] = "Fire", [8] = "Nature",
@@ -72,6 +75,12 @@ local function learn(spell, school, direct, ticks, offensive, duration, heals, h
     -- Offensive with no school recorded: left without a description, as an
     -- unloaded or non-English one would be.
 end
+-- Your damage shields, as the recorder's A lines say: school:spell pairs, or none.
+local shieldAuras = {}
+C_UnitAuras = {
+    GetPlayerAuraBySpellID = function(id) return shieldAuras[id] end,
+    GetAuraDataByIndex = function() return nil end,
+}
 C_Spell = {
     GetSpellDescription = function(id) return DESC[id] end,
     IsSpellHelpful = function(id) return HELPFUL[id] or false end,
@@ -100,6 +109,7 @@ local function value(word)
 end
 
 local allowed, hits, misses = 0, {}, 0
+local offset = 0
 for line in FIGHT:gmatch("[^\n]+") do
     local n = line:match("^#%s*expect%-unplaced:%s*(%d+)")
     if n then allowed = tonumber(n) end
@@ -108,15 +118,22 @@ for line in FIGHT:gmatch("[^\n]+") do
         for w in line:gmatch("%S+") do words[#words + 1] = w end
         local t, kind = tonumber(words[1]), words[2]
         if t and kind then
+            -- A /reload starts the recorder's clock again from zero: carry on from
+            -- where the replay is, after a gap that lets everything in flight lapse.
+            if t + offset < clock then offset = clock + 30 - t end
+            t = t + offset
             advance(t)
             if kind == "P" then
                 if words[4] then class = words[4] end
+                fire("PLAYER_ENTERING_WORLD")   -- a login or /reload
             elseif kind == "T" then
                 target = value(words[3])
                 fire("PLAYER_TARGET_CHANGED")
             elseif kind == "R+" then
+                inFight = true
                 fire("PLAYER_REGEN_DISABLED")
             elseif kind == "R-" then
+                inFight = false
                 fire("PLAYER_REGEN_ENABLED")
             elseif kind == "C" then
                 local unit, spell = words[3], tonumber(words[4])
@@ -125,6 +142,13 @@ for line in FIGHT:gmatch("[^\n]+") do
                           value(words[9]), value(words[10]), value(words[11]))
                 end
                 fire("UNIT_SPELLCAST_SUCCEEDED", unit, "guid", spell)
+            elseif kind == "A" then
+                shieldAuras = {}
+                for i = 3, #words do
+                    local spell = tonumber((words[i]:match(":(%d+)$")))
+                    if spell then shieldAuras[spell] = { spellId = spell, sourceUnit = "player" } end
+                end
+                ns.UC.RebuildShields()
             elseif kind == "S" then
                 fire("PLAYER_SWING", value(words[3]), value(words[4]))
             elseif kind == "U" then

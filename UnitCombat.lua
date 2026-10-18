@@ -269,6 +269,7 @@ stats = newStats()
 --   U <unit> <event> <flag> <amount> <school>                a UNIT_COMBAT report
 --   > <decision> [key]                   what became of the report above it
 --   K <guid> <key>                       your target cleared at your blow: a kill by it
+--   A <school:spell ...> | none          your damage shields that are up, when that changes
 --   M <key> <meter> <shown>              after the fight: the meter's total for a
 --                                        kill's attack, and what the feed had shown
 local TRACE_MAX = 600
@@ -488,26 +489,69 @@ local function auraSecret(index)
     return not ok or not plain(secret) or secret == true
 end
 
+local function readable(aura)
+    if type(aura) ~= "table" or not plain(aura) then return false end
+    if canaccesstable and not canaccesstable(aura) then return false end
+    return true
+end
+
+-- yours, or the game will not say whose (solo, that is you)
+local function castByYou(aura)
+    local src = aura.sourceUnit
+    return not str(src) or src == "player"
+end
+
+local lastShields = ""
 function UC.RebuildShields()
+    -- In combat the game hides your buffs from addons, so a read then can come back
+    -- with nothing (/gct trace, 18 Oct 2026: Thorns placed at 26.20, then not at all
+    -- at 28.24, with Thorns still up). A shield is only let go once the buffs can
+    -- be read again and it is really gone: out of combat.
+    local fighting = InCombatLockdown and InCombatLockdown()
+    local kept = {}
+    if fighting then for school, spell in pairs(shields) do kept[school] = spell end end
     wipe(shields)
-    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return end
-    for index = 1, 40 do
-        if auraSecret(index) then break end
-        local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", index, "HELPFUL")
-        if not ok or type(aura) ~= "table" or not plain(aura) then break end
-        if canaccesstable and not canaccesstable(aura) then break end
-        local spell = aura.spellId
-        if num(spell) then
-            local school = SHIELD_IDS[spell]
-            if not school then
-                local f = UC.Facts(spell)
-                if f and f.reactive and f.school then school = f.school end
-            end
-            local src = aura.sourceUnit
-            -- yours, or the game will not say whose (solo, that is you)
-            local mine = not str(src) or src == "player"
-            if school and mine then shields[school] = spell end
+    for school, spell in pairs(kept) do shields[school] = spell end
+    if not C_UnitAuras then return end
+    -- The known shields, asked for by spell: a hidden buff earlier in the list
+    -- cannot hide them (the first trace with Thorns up never saw it).
+    if C_UnitAuras.GetPlayerAuraBySpellID then
+        for spell, school in pairs(SHIELD_IDS) do
+            local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spell)
+            if ok and readable(aura) and castByYou(aura) then shields[school] = spell end
         end
+    end
+    -- Then every buff -- a known shield where that lookup is missing, any other by
+    -- what its text says -- stepping over the ones the game keeps hidden rather
+    -- than stopping at them.
+    if C_UnitAuras.GetAuraDataByIndex then
+        for index = 1, 40 do
+            if not auraSecret(index) then
+                local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", index, "HELPFUL")
+                if not ok then break end
+                if aura == nil then break end                   -- the end of the list
+                if readable(aura) then
+                    local spell = aura.spellId
+                    if num(spell) and castByYou(aura) then
+                        local school = SHIELD_IDS[spell]
+                        if not school then
+                            local f = UC.Facts(spell)
+                            school = f and f.reactive and f.school or nil
+                        end
+                        if school and not shields[school] then shields[school] = spell end
+                    end
+                end
+            end
+        end
+    end
+    -- What was read goes to the recorder, when it changes.
+    local parts = {}
+    for school, spell in pairs(shields) do parts[#parts + 1] = school .. ":" .. spell end
+    table.sort(parts)
+    local now = table.concat(parts, " ")
+    if now ~= lastShields then
+        lastShields = now
+        note("A", now ~= "" and now or "none")
     end
 end
 if CreateFrame then
@@ -517,8 +561,14 @@ if CreateFrame then
 end
 ns.On("PLAYER_ENTERING_WORLD", function() UC.RebuildShields() end)
 
-local hitOnMeAt = -10      -- the last melee hit that landed on you
-local SHIELD_MOMENT = 0.15 -- a damage shield's hit and the blow that set it off
+-- The shield's hit on the attacker is reported at once; the melee blow on you that
+-- set it off comes 0.30-0.36 s later (/gct trace, 18 Oct 2026: five Thorns hits,
+-- every one first), as melee always is here. So a shield hit waits for its blow,
+-- and is taken the other way round only within a moment.
+local hitOnMeAt = -10      -- the last melee blow on you that claimed no shield hit
+local lostTargetAt = -10   -- your target last cleared in combat: it died, most likely
+local SHIELD_WAIT  = 0.6   -- a shield hit waits this long for its blow
+local SHIELD_AFTER = 0.15  -- a blow reported first: a shield hit this close after
 
 --------------------------------------------------------------------------
 -- Hits on your target: whose, and with what
@@ -713,17 +763,28 @@ local function placeOnTarget(rec, t, key, unit)
     --     wait for that hit (claimShield, below).
     local shield = not isMiss and school and school ~= PHYSICAL and shields[school]
     if shield then
-        if t - hitOnMeAt <= SHIELD_MOMENT then
+        if t - hitOnMeAt <= SHIELD_AFTER then
+            hitOnMeAt = -10                     -- that blow has its shield hit now
             rule("damage shield")
             return out(spellRecord(shield, rec, "player"))
         end
-        local h = { at = t, rec = rec, shield = shield }
+        local h = { at = t, rec = rec, shield = shield, target = (unit == "target") }
         held[#held + 1] = h
         note(">", "held for a hit on you")
-        C_Timer.After(SHIELD_MOMENT + 0.02, function()
+        C_Timer.After(SHIELD_WAIT + 0.02, function()
             if not h.done then
-                h.done = true; stats.unplaced = stats.unplaced + 1
-                note(">", "no hit on you came: unplaced", rec.amount)
+                h.done = true
+                -- The blow that killed it: a mob that dies in the shield's moment
+                -- never has its blow on you reported (as with your own killing
+                -- swing), so the shield hit cannot wait for it.
+                if h.target and math.abs(lostTargetAt - h.at) <= 0.1 then
+                    rule("damage shield")
+                    note(">", "damage shield, the blow that killed it")
+                    out(spellRecord(h.shield, h.rec, "player"))
+                else
+                    stats.unplaced = stats.unplaced + 1
+                    note(">", "no hit on you came: unplaced", rec.amount)
+                end
             end
             for i = #held, 1, -1 do if held[i].done then table.remove(held, i) end end
         end)
@@ -847,17 +908,22 @@ local function onUnitCombat(unit, event, flag, amount, school)
             return
         end
         if event == "WOUND" then
-            if amount > 0 then
-                if school == nil or school == PHYSICAL then
-                    hitOnMeAt = t
-                    for _, h in ipairs(held) do
-                        if h.shield and not h.done and t - h.at <= SHIELD_MOMENT then
-                            h.done = true
-                            rule("damage shield")
-                            out(spellRecord(h.shield, h.rec, "player"))
-                        end
+            -- a melee blow that landed, even one absorbed or blocked whole, sets off a
+            -- damage shield: it claims the oldest shield hit waiting for one
+            local landed = amount > 0 or flag == "ABSORB" or flag == "BLOCK"
+            if landed and (school == nil or school == PHYSICAL) then
+                local claimed = false
+                for _, h in ipairs(held) do
+                    if h.shield and not h.done and t - h.at <= SHIELD_WAIT then
+                        h.done, claimed = true, true
+                        rule("damage shield")
+                        out(spellRecord(h.shield, h.rec, "player"))
+                        break
                     end
                 end
+                hitOnMeAt = claimed and -10 or t
+            end
+            if amount > 0 then
                 emit("taken", { amount = amount, school = school, crit = (flag == "CRITICAL") })
             else
                 emit("dodged", { missType = (flag == "ABSORB" or flag == "BLOCK" or flag == "RESIST") and flag or "MISS" })
@@ -914,6 +980,7 @@ ns.On("PLAYER_TARGET_CHANGED", function()
     note("T", guid)
     local t = now()
     if not str(guid) then
+        if inCombat then lostTargetAt = t end
         if inCombat and prevTarget and lastBlow and t - lastBlow.at <= KILL_MOMENT then
             kills[#kills + 1] = { guid = prevTarget, key = lastBlow.key, at = t }
             note("K", prevTarget, lastBlow.key)
@@ -1000,6 +1067,13 @@ local function settle(fight)
         end
     end
 end
+
+-- A /reload in the middle of a fight brings no PLAYER_REGEN_DISABLED: the fight is
+-- already on. Ask the game instead, or a kill in it goes unseen (/gct trace, 18 Oct
+-- 2026: a Thorns hit that killed, after a reload mid-fight, was left out).
+ns.On("PLAYER_ENTERING_WORLD", function()
+    inCombat = yes(UnitAffectingCombat("player")) or (InCombatLockdown and InCombatLockdown()) or false
+end)
 
 ns.On("PLAYER_REGEN_ENABLED", function()
     note("R-")
