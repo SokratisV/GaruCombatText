@@ -95,21 +95,31 @@ end
 --------------------------------------------------------------------------
 -- 2. PAGES
 --------------------------------------------------------------------------
--- Copy & mirror: one feed takes another's look, flipped left to right, so the two
--- sit as a pair either side of the centre.
+-- Copying one feed's settings to others (the Copy to... menu in a feed's header):
+-- how its rows are laid out and how they read, and where it sits if asked. What a
+-- feed counts (its thresholds, pets, mana) is left alone; that means something
+-- different on each. Mirrored, left and right swap, so two feeds sit as a pair
+-- either side of the centre.
+local LOOK = { "growth", "fontSize", "lineSpacing", "maxLines", "sortMode", "showLabel", "showIcon",
+               "schoolColors", "layout", "radius", "arc", "arcFixed", "align", "arcAngle" }
 local FLIP = { LEFT = "RIGHT", RIGHT = "LEFT" }
 local ARCFLIP = { [0] = 180, [180] = 0 }
-local function copyMirror(dst, src)
-    for _, k in ipairs({ "growth", "fontSize", "lineSpacing", "maxLines", "sortMode", "showLabel", "showIcon",
-                         "schoolColors", "layout", "radius", "arc", "arcFixed" }) do
-        dst[k] = src[k]
+local function copyLook(dst, src, mirror, position)
+    for _, k in ipairs(LOOK) do dst[k] = src[k] end
+    if mirror then
+        dst.align    = FLIP[src.align] or src.align
+        dst.arcAngle = ARCFLIP[src.arcAngle] or src.arcAngle
     end
-    dst.align    = FLIP[src.align] or src.align
-    dst.arcAngle = ARCFLIP[src.arcAngle] or src.arcAngle
-    dst.xOffset  = -(src.xOffset or 0)
-    dst.yOffset  = src.yOffset or 0
-    local p = src.point
-    if p and type(p[2]) == "number" then dst.point = { p[1] or "CENTER", -p[2], p[3] or 0 } end
+    if position then
+        local x = (src.xOffset or 0)
+        dst.attach  = src.attach
+        dst.xOffset = mirror and -x or x
+        dst.yOffset = src.yOffset or 0
+        local p = src.point
+        if p and type(p[2]) == "number" then
+            dst.point = { p[1] or "CENTER", mirror and -p[2] or p[2], p[3] or 0 }
+        end
+    end
 end
 
 -- What every feed has: where it sits, how its rows are laid out, how they read.
@@ -150,16 +160,8 @@ local function FeedPage(o)
         { title = "Text", rows = text },
     }
     if o.counting then sections[#sections + 1] = { title = "Counting", rows = o.counting } end
-    if o.mirror then
-        sections[#sections + 1] = { title = "Copy", rows = {
-            Button("Copy from " .. o.mirror.title,
-                "Takes " .. o.mirror.title .. "'s layout, text and spacing, mirrored left to right, so the two feeds sit as a pair either side of the centre. Whether each is on, and what it counts, is left alone.",
-                "Copy & mirror",
-                function() copyMirror(ns.db[db], ns.db[o.mirror.db]); RA(); refresh(); RT() end),
-        } }
-    end
     return { key = o.key, title = o.title, desc = o.desc, enabledDb = db, onToggle = refresh,
-             banner = o.banner, unavailable = o.unavailable, sections = sections }
+             banner = o.banner, unavailable = o.unavailable, sections = sections, copy = true }
 end
 
 local SUMMARY_SHORT = "Post-fight summary on this client"
@@ -199,7 +201,6 @@ local function definePages()
                 Slider("healText", "windowSecs", "Rolling window", "Out of combat, how far back the feed looks.", 1, 30, 1, nil, { vis = notSummary, fmt = seconds }),
                 Slider("healText", "holdSecs", "Hold after combat", "How long the whole fight's healing stays up once combat ends, before the rolling window takes over again.", 0, 60, 1, nil, { vis = notSummary, fmt = seconds }),
             },
-            mirror = { db = "enemyText", title = "Damage Dealt" },
         }),
         FeedPage({
             key = "taken", db = "takenText", refresh = RK,
@@ -224,7 +225,6 @@ local function definePages()
                 Slider("takenText", "threshold", "Ignore hits below", "Hits smaller than this are left out.", 0, 3000, 25),
                 Slider("takenText", "holdSecs", "Hold after combat", "How long the feed stays up once combat ends.", 0, 60, 1, nil, { vis = notSummary, fmt = seconds }),
             },
-            mirror = { db = "enemyText", title = "Damage Dealt" },
         }),
         FeedPage({
             key = "dealt", db = "enemyText", refresh = RE,
@@ -248,7 +248,6 @@ local function definePages()
                 Toggle("enemyText", "persist", "Remember each target", "Each target keeps its totals while you look at another, and they come back when you select it again.", RE, { vis = notSummary }),
                 Slider("enemyText", "threshold", "Ignore hits below", "Hits smaller than this are left out.", 0, 3000, 25),
             },
-            mirror = { db = "healText", title = "Healing" },
         }),
         FeedPage({
             key = "actions", db = "actionsText", refresh = RAc,
@@ -274,7 +273,6 @@ local function definePages()
                 half(Toggle("actionsText", "includePet", "Pet and totems", "Counts what your target avoided of your pet's and totems' attacks too.")),
                 half(Toggle("actionsText", "persist", "Remember each target", "Each target keeps its count while you look at another.", RAc)),
             },
-            mirror = { db = "enemyText", title = "Damage Dealt" },
         }),
         {
             key = "timer", title = "Combat Timer", enabledDb = "combatTimer", onToggle = RT,
@@ -790,14 +788,14 @@ function Panel.Refresh()
     local searching = searchText ~= ""
     local p = pageByKey[current]
 
-    -- header: switch and title, description, the client's note
+    -- header: switch and title, Copy to..., the client's note
     local banner, bannerLong
+    page.copy:SetShown(not searching and p.copy == true and pageEnabled(p))
     if searching then
         page.switch:Hide()
         page.title:SetText("Search")
         page.title:ClearAllPoints()
         page.title:SetPoint("LEFT", page.switch, "LEFT", 4, 0)
-        page.desc:SetText("")
     else
         page.switch:SetShown(p.enabledDb ~= nil)
         page.switch:SetChecked(pageEnabled(p))
@@ -808,13 +806,12 @@ function Panel.Refresh()
         else
             page.title:SetPoint("LEFT", page.switch, "LEFT", 4, 0)
         end
-        page.desc:SetText(val(p.desc) or "")
         if p.banner then banner, bannerLong = p.banner() end
     end
     page.banner:SetShown(banner ~= nil)
     page.banner.text:SetText(banner or "")
     page.banner.long = bannerLong
-    local headerH = 34 + (page.desc:GetText() ~= "" and (page.desc:GetStringHeight() + 6) or 0)
+    local headerH = 34
     if banner then
         page.banner:ClearAllPoints()
         page.banner:SetPoint("TOPLEFT", page.header, "TOPLEFT", 0, -headerH)
@@ -892,7 +889,85 @@ function Panel.Select(key)
 end
 
 --------------------------------------------------------------------------
--- 7. THE WINDOW
+-- 7. COPY TO...
+--------------------------------------------------------------------------
+-- From the page you are on to any other feed, or to all of them at once. Two
+-- choices ride along, kept between uses: whether the position goes too, and
+-- whether left and right swap on the way.
+local function CopyTo(src, targets)
+    local opts = ns.db.general
+    local from = ns.db[src.enabledDb]
+    local names = {}
+    for _, t in ipairs(targets) do
+        copyLook(ns.db[t.enabledDb], from, opts.copyMirror, opts.copyPosition)
+        if t.onToggle then t.onToggle() end
+        names[#names + 1] = val(t.title)
+    end
+    RA(); RT()
+    print(("|cff66ccffGaru Combat Text|r: %s's settings copied to %s%s%s."):format(val(src.title),
+        table.concat(names, ", "), opts.copyPosition and ", with its position" or "",
+        opts.copyMirror and ", mirrored" or ""))
+    Changed()
+end
+
+local function OpenCopyMenu(button)
+    local src = pageByKey[current]
+    if not (src and src.copy) then return end
+    local others = {}
+    for _, p in ipairs(pages) do if p.copy and p ~= src then others[#others + 1] = p end end
+    local opts = ns.db.general
+    local title = "Copy " .. val(src.title) .. " to"
+    local function toggle(key)
+        opts[key] = not opts[key]
+        return MenuResponse and MenuResponse.Refresh   -- keep the menu open
+    end
+
+    if MenuUtil and MenuUtil.CreateContextMenu then
+        MenuUtil.CreateContextMenu(button, function(_, root)
+            root:CreateTitle(title)
+            for _, p in ipairs(others) do
+                root:CreateButton(val(p.title), function() CopyTo(src, { p }) end)
+            end
+            root:CreateButton("All other feeds", function() CopyTo(src, others) end)
+            root:CreateDivider()
+            root:CreateCheckbox("Position too", function() return opts.copyPosition == true end,
+                function() return toggle("copyPosition") end)
+            root:CreateCheckbox("Mirror left to right", function() return opts.copyMirror == true end,
+                function() return toggle("copyMirror") end)
+        end)
+        return
+    end
+
+    -- no menus on this client: the old dropdown, as a menu
+    frame.copyMenu = frame.copyMenu or CreateFrame("Frame", "GaruCombatTextCopyMenu", frame, "UIDropDownMenuTemplate")
+    UIDropDownMenu_Initialize(frame.copyMenu, function(_, level)
+        local function add(info) UIDropDownMenu_AddButton(info, level) end
+        local t = UIDropDownMenu_CreateInfo()
+        t.text, t.isTitle, t.notCheckable = title, true, true
+        add(t)
+        for _, p in ipairs(others) do
+            local b = UIDropDownMenu_CreateInfo()
+            b.text, b.notCheckable = val(p.title), true
+            b.func = function() CloseDropDownMenus(); CopyTo(src, { p }) end
+            add(b)
+        end
+        local all = UIDropDownMenu_CreateInfo()
+        all.text, all.notCheckable = "All other feeds", true
+        all.func = function() CloseDropDownMenus(); CopyTo(src, others) end
+        add(all)
+        for _, c in ipairs({ { "Position too", "copyPosition" }, { "Mirror left to right", "copyMirror" } }) do
+            local box = UIDropDownMenu_CreateInfo()
+            box.text, box.isNotRadio, box.keepShownOnClick = c[1], true, true
+            box.checked = opts[c[2]] == true
+            box.func = function() opts[c[2]] = not opts[c[2]] end
+            add(box)
+        end
+    end, "MENU")
+    ToggleDropDownMenu(1, nil, frame.copyMenu, button, 0, 0)
+end
+
+--------------------------------------------------------------------------
+-- 8. THE WINDOW
 --------------------------------------------------------------------------
 -- A thin scroll line beside the page, like FlareUI's: a faint track and a bronze
 -- thumb, shown only when there is something to scroll; the wheel scrolls the page.
@@ -1104,11 +1179,22 @@ local function BuildWindow()
     end)
     page.title = Text(header, "GameFontNormalHuge")
     page.title:SetPoint("LEFT", page.switch, "RIGHT", 4, 0)
-    page.desc = Text(header, "GameFontHighlightSmall")
-    page.desc:SetPoint("TOPLEFT", 4, -34)
-    page.desc:SetWidth(CONTENT_W - 8)
-    page.desc:SetTextColor(0.62, 0.62, 0.62)
-    page.desc:SetSpacing(2)
+    -- (the page's own description lives in the right column, shown whenever no
+    -- setting is hovered, rather than taking room at the top of the page)
+
+    -- Copy to...: this feed's settings onto any other, or all of them
+    local copy = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
+    copy:SetSize(100, 22)
+    copy:SetPoint("TOPRIGHT", 0, -2)
+    copy:SetText("Copy to\226\128\166")
+    copy:SetScript("OnClick", function(self) Sound("IG_MAINMENU_OPTION_CHECKBOX_ON"); OpenCopyMenu(self) end)
+    copy:SetScript("OnEnter", function()
+        ShowInfo("Copy to\226\128\166", "Puts this feed's layout and text settings onto another feed, or onto all of them. What each feed counts (thresholds, pets, mana) is left alone.",
+            "Position too moves the other feed to this one's spot; with Mirror left to right it goes to the opposite side instead, so the two sit as a pair.")
+    end)
+    copy:SetScript("OnLeave", ShowPageInfo)
+    page.copy = copy
+    frame.copyButton = copy
 
     -- the client's note: a bronze strip; hover it for the whole story
     local banner = CreateFrame("Frame", nil, header, "BackdropTemplate")

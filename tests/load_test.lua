@@ -159,6 +159,23 @@ function CreateFrame(kind, name, parent, template)
     if name then rawset(_G, name, f) end
     return f
 end
+-- Blizzard's context menus: what was offered, as items the test can pick from
+MenuUtil = {
+    CreateContextMenu = function(owner, gen)
+        local items = {}
+        local root = {
+            CreateTitle = function(_, t) items[#items + 1] = { kind = "title", text = t } end,
+            CreateButton = function(_, t, fn) items[#items + 1] = { kind = "button", text = t, fn = fn } end,
+            CreateCheckbox = function(_, t, isSel, setSel)
+                items[#items + 1] = { kind = "check", text = t, isSel = isSel, setSel = setSel }
+            end,
+            CreateDivider = function() end,
+        }
+        gen(owner, root)
+        lastMenu = items
+    end,
+}
+function ToggleDropDownMenu(_, _, dd) lastLegacyMenu = dd end
 -- the old dropdown, for the bare client
 local menuButtons
 function UIDropDownMenu_Initialize(dd, fn) dd.init = fn end
@@ -238,11 +255,13 @@ GetCVar = C_CVar.GetCVar
 -- Globals this client genuinely lacks: feature detection must see nil.
 local ABSENT = {}
 if not FOREVER then ABSENT.C_DamageMeter = true end
-if BARE then ABSENT.MenuUtil = true; ABSENT.MinimalSliderWithSteppersMixin = true; MinimalSliderWithSteppersMixin = nil end
+if BARE then ABSENT.MenuUtil = true; ABSENT.MinimalSliderWithSteppersMixin = true; MinimalSliderWithSteppersMixin = nil; MenuUtil = nil end
 setmetatable(_G, { __index = function(_, k)
     -- Constants (COMBATLOG_OBJECT_TYPE_PET, ...) stay undefined: the addon has
     -- numeric fallbacks for them, and a stub table would break the arithmetic.
-    if type(k) ~= "string" or k:match("^[A-Z0-9_]+$") or ABSENT[k] then return nil end
+    -- Lowercase names are Lua's or the test's own (lastMenu): an unknown one is nil,
+    -- as in game, never a stub that would read as something being there.
+    if type(k) ~= "string" or k:match("^[A-Z0-9_]+$") or k:match("^%l") or ABSENT[k] then return nil end
     return Stub()
 end })
 -- ...but feature checks must see the truth for these.
@@ -536,6 +555,53 @@ do
         check("search: and nothing that does not match", #shownRows() == found,
               #shownRows() .. " rows shown for " .. found .. " matches")
         search:SetText(""); search.scripts.OnTextChanged(search)
+
+        -- Copy to...: from the page you are on to any other feed, or all of them.
+        local function copyMenu()
+            lastMenu, lastLegacyMenu = nil, nil
+            win.copyButton.scripts.OnClick(win.copyButton); settle()
+            if lastMenu then return lastMenu end
+            local items = {}
+            for _, info in ipairs(lastLegacyMenu and legacyMenu(lastLegacyMenu) or {}) do
+                items[#items + 1] = { kind = info.isTitle and "title" or (info.isNotRadio and "check" or "button"),
+                    text = info.text, fn = info.func, setSel = info.func }
+            end
+            return items
+        end
+        local function item(items, text)
+            for _, it in ipairs(items) do if it.text == text then return it end end
+        end
+        local function pick(text) local it = item(copyMenu(), text); assert(it, "no " .. text .. " in the menu"); (it.fn or it.setSel)(); settle() end
+        local okCopy, errCopy = pcall(function()
+            open("Damage Dealt")
+            assert(win.copyButton:IsShown(), "no Copy to on a feed page")
+            ns.db.general.copyPosition, ns.db.general.copyMirror = false, false
+            ns.db.enemyText.fontSize, ns.db.enemyText.align = 31, "LEFT"
+            ns.db.enemyText.point = { "CENTER", 123, 45 }
+            ns.db.enemyText.threshold = 777
+            ns.db.healText.point = { "CENTER", -50, -30 }
+            local items = copyMenu()
+            assert(item(items, "Damage Taken") and item(items, "Actions") and item(items, "Healing Received")
+                and item(items, "All other feeds"), "the menu does not offer every other feed and all")
+            assert(not item(items, "Damage Dealt"), "the menu offers the page itself")
+            pick("Damage Taken")
+            assert(ns.db.takenText.fontSize == 31, "copying to one feed")
+            assert(ns.db.healText.fontSize ~= 31, "copying to one feed touched another")
+            pick("All other feeds")
+            assert(ns.db.healText.fontSize == 31 and ns.db.actionsText.fontSize == 31, "copying to all")
+            assert(ns.db.healText.point[2] == -50, "the position went along without being asked")
+            assert(ns.db.healText.threshold ~= 777, "what a feed counts went along")
+            pick("Position too")
+            assert(ns.db.general.copyPosition == true, "Position too did not stick")
+            pick("Healing Received")
+            assert(ns.db.healText.point[2] == 123 and ns.db.healText.align == "LEFT", "Position too")
+            pick("Mirror left to right")
+            pick("Healing Received")
+            assert(ns.db.healText.point[2] == -123 and ns.db.healText.align == "RIGHT", "mirrored to the other side")
+            open("Combat Timer")
+            assert(not win.copyButton:IsShown(), "Copy to on the timer page")
+        end)
+        check("Copy to: one feed, all feeds, position, mirrored", okCopy, errCopy)
 
         -- A feed switched off shows one card; Turn on brings its settings back.
         ns.db.enemyText.enabled = false
