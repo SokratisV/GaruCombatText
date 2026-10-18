@@ -10,6 +10,9 @@ First time only, install the Lua runtime next to this file (it is gitignored):
 What runs:
   syntax    every .lua file compiles under Lua 5.1 rules, as WoW's do
   engine    engine_test.lua replays scripted fights through UnitCombat.lua
+  replay    each fight in fights/, recorded in game with /gct trace, goes through
+            the current UnitCombat.lua; every hit on the target must be placed
+            (unless the file says "# expect-unplaced: N")
   load      load_test.lua loads the whole addon in TOC order against a stubbed
             WoW API, drives a fight through the real event handlers and checks
             what reaches each feed's meter; once as WoW Forever, once as Classic
@@ -42,6 +45,8 @@ MUTANTS = [
      "a DoT cast takes the hit of the bolt cast after it"),
     ("UnitCombat.lua", "rec.spell, rec.first = spell, not cast.mana", "rec.spell, rec.first = spell, true",
      "a heal's mana is counted on every tick"),
+    ("UnitCombat.lua", "local SWING_WINDOW    = 1.0", "local SWING_WINDOW    = 0.5",
+     "melee hits half a second after their swing go unplaced (as measured in game)"),
     ("UnitCombat.lua", "ns.CombatLogLive = (C_DamageMeter == nil)", "ns.CombatLogLive = true",
      "Forever is taken for a client with a combat log"),
     ("EnemyText.lua", "meter:Bump(frame, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)",
@@ -119,6 +124,13 @@ def suites(files):
         return results
     ok, out = run_lua(test_source("engine_test.lua"), UC_SRC=files["UnitCombat.lua"])
     results.append(("engine", ok, out))
+    fights = os.path.join(HERE, "fights")
+    for name in sorted(os.listdir(fights)) if os.path.isdir(fights) else []:
+        if name.endswith(".txt"):
+            with open(os.path.join(fights, name), encoding="utf-8") as f:
+                fight = f.read()
+            ok, out = run_lua(test_source("replay_test.lua"), UC_SRC=files["UnitCombat.lua"], FIGHT=fight)
+            results.append(("replay " + name[:-4], ok, out))
     order = toc_files()
     for client in ("forever", "classic"):
         ok, out = run_lua(test_source("load_test.lua"), ORDER=order, FILES=files,

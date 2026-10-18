@@ -148,6 +148,12 @@ swing(62); miss(62.05, "DODGE", 1)
 expect("a dodged swing", 62.06, "avoided", function(r) return r.missType == "DODGE", tostring(r.missType) end)
 cast(63, 78); swing(63); hit(63.05, 120, 1)
 expect("Heroic Strike takes its hit, not the swing", 63.06, "dealt", key("spell:78", 120))
+-- The two gaps measured in a real fight on Forever (/gct trace, 18 Oct 2026): a
+-- melee hit lands about half a second after its swing is reported.
+swing(64.5); hit(65.02, 47, 1)
+expect("a hit 0.52 s after its swing (measured)", 65.03, "dealt", key("swing", 47))
+swing(67.6); hit(68.08, 43, 1)
+expect("a hit 0.48 s after its swing (measured)", 68.09, "dealt", key("swing", 43))
 
 -- 6. Ranged.
 class = "HUNTER"

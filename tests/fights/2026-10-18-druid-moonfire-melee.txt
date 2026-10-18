@@ -1,0 +1,47 @@
+# Recorded with /gct trace on WoW Forever, 18 Oct 2026: level 11 druid, two mobs,
+# Moonfire and melee (3.1 s weapon). Found the melee window too tight: hits land
+# 0.48-0.52 s after PLAYER_SWING here. Lines starting with > are what the matcher
+# decided at the time; the replay ignores them and decides again.
+0.00 P 2.1.0 DRUID 11
+0.43 T Creature-0-6783-0-2-113-420E1969A0
+1.18 C player 8925 64 true true true
+1.18 U target WOUND "" 25 64
+1.18 > cast spell:8925
+1.29 R+
+2.66 U player WOUND "" 5 1
+4.28 U target WOUND "" 9 64
+4.28 > tick on beat spell:8925
+4.69 U player WOUND "" 5 1
+4.84 S 3.1070001125336 0 main
+5.36 U target WOUND "" 47 1
+5.36 > held for a late swing
+5.73 > no late swing came: unplaced 47
+6.74 U player DODGE "" 0 1
+7.26 U target WOUND "" 9 64
+7.26 > tick on beat spell:8925
+7.99 S 3.1070001125336 0 main
+7.99 T -
+8.47 R-
+9.17 T Creature-0-6783-0-2-113-420E1969A0
+9.59 T -
+10.06 T Creature-0-6783-0-2-475-19E993DAE6
+10.50 C player 8925 64 true true true
+10.50 U target WOUND "" 24 64
+10.50 > cast spell:8925
+10.59 R+
+12.86 U player WOUND "" 5 1
+13.50 U target WOUND "" 9 64
+13.50 > tick on beat spell:8925
+13.61 S 3.1070001125336 0 main
+13.73 C player 5487 - - - false
+14.09 U target WOUND "" 43 1
+14.09 > swing swing
+14.97 U player DODGE "" 0 1
+16.53 U target WOUND "" 9 64
+16.53 > tick on beat spell:8925
+16.74 S 2.4270000457764 0 main
+16.74 T -
+16.99 R-
+17.61 T Creature-0-6783-0-2-475-19E993DAE6
+17.63 U player WOUND "" 3 1
+18.15 T -

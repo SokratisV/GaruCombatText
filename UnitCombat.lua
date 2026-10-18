@@ -64,7 +64,11 @@ end
 --------------------------------------------------------------------------
 local DIRECT_WINDOW   = 3.0   -- a bolt's hit lands within this of its cast
 local PHYSICAL_WINDOW = 1.5   -- a strike or shot: no long flight to wait out
-local SWING_WINDOW    = 0.5   -- a melee swing's hit comes within this
+-- A melee swing's hit comes within this. FCT used 0.5; on the user's client the
+-- hit landed 0.48 s and 0.52 s after its PLAYER_SWING (/gct trace, 18 Oct 2026,
+-- druid, 3.1 s weapon), so at 0.5 half of all melee went unplaced. One second is
+-- still shorter than any weapon's swing, and a swing is only ever claimed once.
+local SWING_WINDOW    = 1.0
 local RANGED_WINDOW   = 2.0   -- a wand bolt or arrow flies
 local LATE_SWING      = 0.35  -- a swing may be reported this long after its hit
 local FIRST_TICK_WAIT = 3.6   -- a DoT with no tick by then never landed
@@ -239,7 +243,8 @@ stats = newStats()
 --   P                                    the addon loaded (a /reload or login)
 --   R+ / R-                              combat started / ended
 --   T <target>                           target changed
---   C <unit> <spell> <school> <direct> <ticks> <offensive>   a cast of yours
+--   C <unit> <spell> <school> <direct> <ticks> <offensive> <duration> <heals> <hot>
+--                                        a cast of yours, and what its text says
 --   C <unit> <spell> auto                Auto Shot / Shoot: left to its swing
 --   S <arg1> <arg2> <hand>               PLAYER_SWING, its payload as it came
 --   U <unit> <event> <flag> <amount> <school>                a UNIT_COMBAT report
@@ -391,7 +396,8 @@ local function onCast(unit, spell)
         end
     end
 
-    note("C", unit, spell, school, f and f.direct, f and f.ticks, offensive and true or false)
+    note("C", unit, spell, school, f and f.direct, f and f.ticks, offensive and true or false,
+         f and f.duration, f and f.heals, f and f.hot)
     emit("cast", { unit = unit, spell = spell, label = ns.SpellName(spell), school = school,
                    offensive = offensive and true or false })
 end
