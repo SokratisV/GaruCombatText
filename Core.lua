@@ -330,5 +330,4 @@ function ns.ResetSettings()
     if ns.RefreshActionsText then ns.RefreshActionsText() end
     if ns.RefreshTimer then ns.RefreshTimer() end
     if ns.RefreshOptions then ns.RefreshOptions() end
-    print("|cff66ccffGaru Combat Text|r: settings reset to defaults.")
 end

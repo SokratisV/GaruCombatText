@@ -603,6 +603,26 @@ do
         end)
         check("Copy to: one feed, all feeds, position, mirrored", okCopy, errCopy)
 
+        -- Nothing done in the window writes to chat: the window shows what changed.
+        do
+            local realPrint, said = print, {}
+            print = function(...) said[#said + 1] = table.concat({ tostringall and tostringall(...) or ... }, " ") end
+            local okQuiet, errQuiet = pcall(function()
+                win.lock.scripts.OnClick(win.lock); settle()
+                win.lock.scripts.OnClick(win.lock); settle()
+                win.preview.scripts.OnClick(win.preview); settle()
+                win.preview.scripts.OnClick(win.preview); settle()
+                open("Damage Dealt")
+                pick("All other feeds")
+                local f = labelled("Names")
+                f.check:SetChecked(not f.row.get()); f.check.scripts.OnClick(f.check); settle()
+                StaticPopupDialogs.GARUCOMBATTEXT_RESET.OnAccept(); settle()
+            end)
+            print = realPrint
+            check("the window writes nothing to chat", okQuiet and #said == 0,
+                  errQuiet or table.concat(said, " | "))
+        end
+
         -- A feed switched off shows one card; Turn on brings its settings back.
         ns.db.enemyText.enabled = false
         open("Damage Dealt")

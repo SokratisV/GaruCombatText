@@ -94,7 +94,6 @@ function ns.SetLocked(v)
     ns.RefreshAnchors()
     if ns.RefreshTimer then ns.RefreshTimer() end
     if ns.RefreshOptions then ns.RefreshOptions() end
-    print("|cff66ccffGaru Combat Text|r: anchors " .. (ns.db.locked and "LOCKED" or "UNLOCKED -- drag the markers"))
 end
 
 -- ns.db isn't ready until ADDON_LOADED, so position the anchors at login (and on

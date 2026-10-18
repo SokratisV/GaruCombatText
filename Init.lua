@@ -33,8 +33,10 @@ SlashCmdList.GARUCOMBATTEXT = function(msg)
         print("|cff66ccffGaru Combat Text|r: preview " .. (ns.test.combat and "ON" or "OFF"))
     elseif msg == "unlock" then
         if ns.SetLocked then ns.SetLocked(false) end
+        print("|cff66ccffGaru Combat Text|r: anchors unlocked -- drag the markers")
     elseif msg == "lock" then
         if ns.SetLocked then ns.SetLocked(true) end
+        print("|cff66ccffGaru Combat Text|r: anchors locked")
     elseif msg == "status" then
         ns.PrintStatus()
     elseif msg == "trace" then
@@ -56,6 +58,7 @@ SlashCmdList.GARUCOMBATTEXT = function(msg)
         else print("|cff66ccffGaru Combat Text|r: nothing to probe on this client.") end
     elseif msg == "reset" then
         if ns.ResetSettings then ns.ResetSettings() end
+        print("|cff66ccffGaru Combat Text|r: settings reset to defaults")
     else
         if ns.ToggleOptions then ns.ToggleOptions() end
     end

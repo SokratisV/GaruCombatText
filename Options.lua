@@ -904,7 +904,7 @@ local function CopyTo(src, targets)
         names[#names + 1] = val(t.title)
     end
     RA(); RT()
-    print(("|cff66ccffGaru Combat Text|r: %s's settings copied to %s%s%s."):format(val(src.title),
+    ShowInfo("Copied", ("%s's settings are now on %s%s%s."):format(val(src.title),
         table.concat(names, ", "), opts.copyPosition and ", with its position" or "",
         opts.copyMirror and ", mirrored" or ""))
     Changed()
