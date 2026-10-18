@@ -56,7 +56,8 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local sub, srcGUID, srcFlags, destGUID, destFlags =
         info[2], info[4], info[6], info[8], info[10]
     if sub ~= "SWING_MISSED" and sub ~= "SPELL_MISSED"
-        and sub ~= "RANGE_MISSED" and sub ~= "SPELL_PERIODIC_MISSED" then return end
+        and sub ~= "RANGE_MISSED" and sub ~= "SPELL_PERIODIC_MISSED"
+        and sub ~= "DAMAGE_SHIELD_MISSED" then return end   -- a resisted Thorns
 
     -- source must be me (or my pet/guardian, optionally)
     local mine = ns.SourceIsMine(srcFlags, cfg.includePet)

@@ -712,6 +712,13 @@ if not FOREVER then
     cleu("Creature-T", 0x10a48, 30)
     check("Classic, every enemy: hits on any enemy, one total", fireball() == 100, tostring(fireball()))
     ns.db.enemyText.scope = "target"; ns.EnemyScopeChanged()
+    -- Thorns comes through the combat log as DAMAGE_SHIELD
+    info = { 0, "DAMAGE_SHIELD", false, "Player-1", "Me", 0x511, 0, "Creature-T", "Mob", 0x10a48, 0,
+             782, "Thorns", 8, 6, 0, 8, 0, 0, 0, false }
+    fire("COMBAT_LOG_EVENT_UNFILTERED")
+    local tt = em:Trackers(ns.frames.target)
+    check("Classic: Thorns (DAMAGE_SHIELD) on your target is counted", tt and tt["spell:782"] and tt["spell:782"].total == 6,
+          tt and tt["spell:782"] and tostring(tt["spell:782"].total) or "no Thorns row")
     CombatLogGetCurrentEventInfo = nil
 
     -- Classic: the combat-log path is the live one, UnitCombat stays out of it.

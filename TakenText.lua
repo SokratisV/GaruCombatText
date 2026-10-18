@@ -32,7 +32,8 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
 
     -- Misses / avoids (no damage number): DODGE, PARRY, BLOCK, MISS, ABSORB, RESIST,
     -- IMMUNE, DEFLECT, EVADE. Shown as count rows ("Dodge x4") when enabled.
-    if sub == "SWING_MISSED" or sub == "SPELL_MISSED" or sub == "RANGE_MISSED" or sub == "SPELL_PERIODIC_MISSED" then
+    if sub == "SWING_MISSED" or sub == "SPELL_MISSED" or sub == "RANGE_MISSED" or sub == "SPELL_PERIODIC_MISSED"
+        or sub == "DAMAGE_SHIELD_MISSED" then
         if not cfg.showAvoid then return end
         local missType = (sub == "SWING_MISSED") and info[12] or info[15]
         if not missType then return end
@@ -46,7 +47,8 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
         amount, school, crit = info[12], info[14], info[18]
         key, label, iconTex = "swing", "Melee", MELEE_ICON
     elseif sub == "SPELL_DAMAGE" or sub == "RANGE_DAMAGE"
-        or sub == "SPELL_PERIODIC_DAMAGE" or sub == "SPELL_BUILDING_DAMAGE" then
+        or sub == "SPELL_PERIODIC_DAMAGE" or sub == "SPELL_BUILDING_DAMAGE"
+        or sub == "DAMAGE_SHIELD" then   -- an enemy's damage shield, when you strike it
         local spellId, spellName = info[12], info[13]
         amount, school, crit = info[15], info[17], info[21]
         key   = "spell:" .. tostring(spellId or spellName or "?")

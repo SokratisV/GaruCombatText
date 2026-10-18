@@ -67,8 +67,13 @@ local DESC = {
     [78]   = "A strong attack that increases melee damage by 11.",
     [689]  = "Transfers 2 health every 1 sec from the target to the caster.  Lasts 5 sec.",
     [1449] = "Sends out a blast of arcane energy, dealing 32 to 36 Arcane damage to all enemies within 10 yards.",
+    [5176] = "Causes 13 to 16 Nature damage to the target.",
+    [99001] = "Wreathes you in flame, causing 5 Fire damage to any enemy that strikes you. Lasts 10 min.",
 }
 local HELPFUL = { [2050] = true, [139] = true, [8936] = true }
+-- Your buffs, as C_UnitAuras hands them over: { spellId, sourceUnit }
+local auras = {}
+C_UnitAuras = { GetAuraDataByIndex = function(_, index) return auras[index] end }
 C_Spell = {
     GetSpellDescription = function(id) return DESC[id] end,
     IsSpellHelpful = function(id) return HELPFUL[id] or false end,
@@ -363,6 +368,42 @@ else fail = fail + 1; print("FAIL  every enemy: the meter's totals, per spell, o
     tostring(settledAll["spell:686"]) .. " / " .. tostring(settledAll["swing"])) end
 nothing("every enemy: and no per-target kill top-up as well", 470)
 ns.db.enemyText.scope = "target"
+
+-- 16. Damage shields: Thorns hits whatever melee-hits you, in that same moment, with
+--     no cast or swing of yours to go by.
+retarget(500, "Creature-S1"); class = "DRUID"
+nothing("(quiet before)", 500)
+-- each blow on you is also damage taken, rightly; here only damage dealt matters
+local function noDealt(name, t)
+    advance(t)
+    for i = #got, 1, -1 do if got[i].kind == "taken" then table.remove(got, i) end end
+    nothing(name, t)
+end
+hit(501, 6, 8)
+nothing("without Thorns up, a lone Nature hit is someone else's", 501.5)
+auras = { { spellId = 782, sourceUnit = "player" } }        -- Thorns, rank 2: no description needed
+ns.UC.RebuildShields()
+onMe(503, "WOUND", 12, 1); hit(503.01, 6, 8)
+expect("Thorns: the hit on whatever just struck you", 503.02, "dealt", key("spell:782", 6))
+hit(505, 6, 8); onMe(505.05, "WOUND", 11, 1)              -- reported the other way round
+expect("Thorns: reported before the blow that set it off", 505.1, "dealt", key("spell:782", 6))
+hit(507, 6, 8)
+noDealt("Thorns: no blow on you, not Thorns", 507.5)
+onMe(509, "WOUND", 20, 32); hit(509.01, 6, 8)
+noDealt("Thorns: a Shadow Bolt on you is no melee blow", 509.5)
+cast(511, 5176); onMe(511.9, "WOUND", 12, 1); hit(511.9, 15, 8); hit(511.91, 6, 8)
+expect("a Wrath landing that moment keeps its hit", 512, "dealt", key("spell:5176", 15))
+expect("...and Thorns takes the other", 512, "dealt", key("spell:782", 6))
+auras = { { spellId = 782, sourceUnit = "party1" } }        -- another druid's Thorns on you
+ns.UC.RebuildShields()
+onMe(514, "WOUND", 12, 1); hit(514.01, 6, 8)
+noDealt("someone else's Thorns on you is theirs", 514.5)
+auras = { { spellId = 99001, sourceUnit = "player" } }      -- a shield known only by its text
+ns.UC.RebuildShields()
+onMe(516, "WOUND", 12, 1); hit(516.01, 5, 4)
+expect("a damage shield known by what its text says", 516.02, "dealt", key("spell:99001", 5))
+auras = {}
+ns.UC.RebuildShields()
 
 -- 13. What descriptions say.
 local function facts(name, id, want)

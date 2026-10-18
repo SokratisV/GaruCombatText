@@ -112,6 +112,10 @@ local AREA_WORDS = { "enemies within", "nearby enemies", "all enemies", "enemies
                      "selected area", "area of effect", "targets within", "additional targets",
                      "nearest ally", "nearby targets", "enemy targets" }
 
+-- Damage shields: harm the unit that strikes you ("Nature damage to attackers when
+-- hit", "Holy damage to any enemy that strikes a party member").
+local REACTIVE_WORDS = { "attacker", "that strikes", "who strikes", "strikes you", "when struck" }
+
 local function parse(text)
     local lower = text:lower()
     local f = {}
@@ -174,6 +178,9 @@ local function parse(text)
         if lower:find(w, 1, true) then f.area = true break end
     end
     if lower:find("up to %d+ targets") then f.area = true end
+    for _, w in ipairs(REACTIVE_WORDS) do
+        if lower:find(w, 1, true) then f.reactive = true break end
+    end
     -- Only ticks: it never hits at once, so its cast must not wait for a hit (it
     -- would take the next bolt's, cast after it).
     if f.ticks and not f.direct then f.direct = false end
@@ -460,6 +467,60 @@ local function swingKey(hand)
 end
 
 --------------------------------------------------------------------------
+-- Damage shields of yours that are up
+--------------------------------------------------------------------------
+-- Thorns, Lightning Shield, Retribution Aura: no cast or swing of yours goes with
+-- their damage -- it lands on whatever melee-hits you, in that same moment. So the
+-- matcher needs to know which are up, and in which school, read from your buffs
+-- (C_UnitAuras, checked for secrecy first as FCT does). Known by spell (the ranks,
+-- as PrettyTooltip's SpellRanks lists them), or by what a buff's text says.
+-- Only one you cast yourself counts: a party paladin's aura on you is theirs.
+local SHIELD_IDS = {}
+for _, id in ipairs({ 467, 782, 1075, 8914, 9756, 9910 }) do SHIELD_IDS[id] = 8 end            -- Thorns
+for _, id in ipairs({ 324, 325, 905, 945, 8134, 10431, 10432 }) do SHIELD_IDS[id] = 8 end      -- Lightning Shield
+for _, id in ipairs({ 7294, 10298, 10299, 10300, 10301 }) do SHIELD_IDS[id] = 2 end            -- Retribution Aura
+
+local shields = {}   -- school -> the spell of yours that is up
+
+local function auraSecret(index)
+    if not (C_Secrets and C_Secrets.ShouldUnitAuraIndexBeSecret) then return false end
+    local ok, secret = pcall(C_Secrets.ShouldUnitAuraIndexBeSecret, "player", index, "HELPFUL")
+    return not ok or not plain(secret) or secret == true
+end
+
+function UC.RebuildShields()
+    wipe(shields)
+    if not (C_UnitAuras and C_UnitAuras.GetAuraDataByIndex) then return end
+    for index = 1, 40 do
+        if auraSecret(index) then break end
+        local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", index, "HELPFUL")
+        if not ok or type(aura) ~= "table" or not plain(aura) then break end
+        if canaccesstable and not canaccesstable(aura) then break end
+        local spell = aura.spellId
+        if num(spell) then
+            local school = SHIELD_IDS[spell]
+            if not school then
+                local f = UC.Facts(spell)
+                if f and f.reactive and f.school then school = f.school end
+            end
+            local src = aura.sourceUnit
+            -- yours, or the game will not say whose (solo, that is you)
+            local mine = not str(src) or src == "player"
+            if school and mine then shields[school] = spell end
+        end
+    end
+end
+if CreateFrame then
+    local watcher = CreateFrame("Frame")
+    if watcher.RegisterUnitEvent then watcher:RegisterUnitEvent("UNIT_AURA", "player") end
+    watcher:SetScript("OnEvent", function() UC.RebuildShields() end)
+end
+ns.On("PLAYER_ENTERING_WORLD", function() UC.RebuildShields() end)
+
+local hitOnMeAt = -10      -- the last melee hit that landed on you
+local SHIELD_MOMENT = 0.15 -- a damage shield's hit and the blow that set it off
+
+--------------------------------------------------------------------------
 -- Hits on your target: whose, and with what
 --------------------------------------------------------------------------
 local function petAttacking(unit)
@@ -647,6 +708,28 @@ local function placeOnTarget(rec, t, key, unit)
         end
     end
 
+    -- 3b. Your damage shield, on the unit that struck you: in the moment a melee hit
+    --     landed on you, or -- the order of the two is not fixed -- in a moment's
+    --     wait for that hit (claimShield, below).
+    local shield = not isMiss and school and school ~= PHYSICAL and shields[school]
+    if shield then
+        if t - hitOnMeAt <= SHIELD_MOMENT then
+            rule("damage shield")
+            return out(spellRecord(shield, rec, "player"))
+        end
+        local h = { at = t, rec = rec, shield = shield }
+        held[#held + 1] = h
+        note(">", "held for a hit on you")
+        C_Timer.After(SHIELD_MOMENT + 0.02, function()
+            if not h.done then
+                h.done = true; stats.unplaced = stats.unplaced + 1
+                note(">", "no hit on you came: unplaced", rec.amount)
+            end
+            for i = #held, 1, -1 do if held[i].done then table.remove(held, i) end end
+        end)
+        return
+    end
+
     -- 4. A weapon swing.
     if not swingFirst and trySwing() then return end
 
@@ -765,6 +848,16 @@ local function onUnitCombat(unit, event, flag, amount, school)
         end
         if event == "WOUND" then
             if amount > 0 then
+                if school == nil or school == PHYSICAL then
+                    hitOnMeAt = t
+                    for _, h in ipairs(held) do
+                        if h.shield and not h.done and t - h.at <= SHIELD_MOMENT then
+                            h.done = true
+                            rule("damage shield")
+                            out(spellRecord(h.shield, h.rec, "player"))
+                        end
+                    end
+                end
                 emit("taken", { amount = amount, school = school, crit = (flag == "CRITICAL") })
             else
                 emit("dodged", { missType = (flag == "ABSORB" or flag == "BLOCK" or flag == "RESIST") and flag or "MISS" })
