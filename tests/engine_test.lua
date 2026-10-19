@@ -251,6 +251,13 @@ retarget(199, "Creature-C")
 cast(200, 172); cast(200.5, 686); hit(201.5, 260, 32)
 expect("a bolt cast after Corruption keeps its hit", 201.51, "dealt", key("spell:686", 260))
 
+-- 12c. A swing's hit held back one more attack animation, an ability having gone
+--      off between the two (FCT 0.6.6: a rogue's, 0.98 to 1.31 s after the swing).
+swing(170); cast(170.3, 78); hit(170.4, 120, 1)
+expect("the ability takes the first hit", 170.41, "dealt", key("spell:78", 120))
+hit(171.25, 48, 1)
+expect("the swing's own hit, 1.25 s after it", 171.26, "dealt", key("swing", 48))
+
 -- 14. Killing blows: never reported, settled from the meter once the fight ends.
 --     The shape is the recorded one (/gct trace, 18 Oct 2026): the killing swing's
 --     PLAYER_SWING and the target clearing come in the same frame, and no hit follows.
@@ -296,6 +303,39 @@ swing(363); retarget(363, "Creature-K5")
 peace(364)
 meterRows = { ["spell:6603"] = { id = 6603, amount = 80 } }
 nothing("a target switch is not a kill", 370)
+
+-- A bolt that kills is reported a frame or two after your target clears, on the
+-- dying unit's nameplate (FCT 0.6.10): it is your target's hit, live, even with
+-- the feed counting only your target.
+class = "WARLOCK"
+retarget(375, "Creature-K6"); fight(375)
+plates.nameplate7, plates.nameplate8 = "Creature-K6", "Creature-K9"
+cast(376, 686); retarget(377, nil)              -- the bolt lands: the target clears first
+advance(377.03); fire("UNIT_COMBAT", "nameplate7", "WOUND", "CRITICAL", 290, 32)
+expect("the killing bolt, on the dying unit's plate", 377.04, "dealt", function(r)
+    if r.killed ~= "Creature-K6" then return false, "killed " .. tostring(r.killed) end
+    return r.key == "spell:686" and r.amount == 290 and r.crit == true, tostring(r.key) .. " " .. tostring(r.amount)
+end)
+advance(377.05); fire("UNIT_COMBAT", "nameplate8", "WOUND", "", 60, 32)
+nothing("another enemy's plate is still not your target's", 377.1)
+advance(377.6); fire("UNIT_COMBAT", "nameplate7", "WOUND", "", 40, 32)
+nothing("nor the dead unit's plate, once the moment has passed", 377.7)
+peace(377.8)
+meterRows = { ["spell:686"] = { id = 686, amount = 290 } }
+nothing("its hit came: nothing to settle", 384)
+
+-- With nameplates hidden it never comes, but the bolt in flight marks the kill.
+retarget(385, "Creature-K7"); fight(385)
+cast(386, 686); retarget(387, nil)
+peace(387.3)
+meterRows = { ["spell:686"] = { id = 686, amount = 270 } }
+expect("a killing bolt with no plate to land on, settled to the dead mob", 388, "settled", function(r)
+    if r.guid ~= "Creature-K7" then return false, "guid " .. tostring(r.guid) end
+    return r.key == "spell:686" and r.amount == 270, tostring(r.key) .. " " .. tostring(r.amount)
+end)
+nothing("settled once", 393)
+plates.nameplate7, plates.nameplate8 = nil, nil
+class = "DRUID"
 
 -- 15. Counting every enemy: hits on other enemies' nameplates count too, and the
 --     meter's totals for the fight replace the feed's once it is over.

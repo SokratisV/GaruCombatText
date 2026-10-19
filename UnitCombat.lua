@@ -66,9 +66,13 @@ local DIRECT_WINDOW   = 3.0   -- a bolt's hit lands within this of its cast
 local PHYSICAL_WINDOW = 1.5   -- a strike or shot: no long flight to wait out
 -- A melee swing's hit comes within this. FCT used 0.5; on the user's client the
 -- hit landed 0.48 s and 0.52 s after its PLAYER_SWING (/gct trace, 18 Oct 2026,
--- druid, 3.1 s weapon), so at 0.5 half of all melee went unplaced. One second is
--- still shorter than any weapon's swing, and a swing is only ever claimed once.
-local SWING_WINDOW    = 1.0
+-- druid, 3.1 s weapon), so at 0.5 half of all melee went unplaced. And a swing's
+-- hit is sometimes held back one more attack animation: FCT 0.6.6 measured a
+-- rogue's at 0.98 to 1.31 s after the swing instead of 0.49 s, 27 of 180 times,
+-- mostly with a Sinister Strike between the two; it waits up to 1.35 s for any
+-- swing whose animation it does not know. A swing is claimed once, oldest first,
+-- so a fast weapon's next swing never takes a hit an older one is still owed.
+local SWING_WINDOW    = 1.35
 local RANGED_WINDOW   = 2.0   -- a wand bolt or arrow flies
 local LATE_SWING      = 0.35  -- a swing may be reported this long after its hit
 local FIRST_TICK_WAIT = 3.6   -- a DoT with no tick by then never landed
@@ -224,6 +228,8 @@ ns.On("SPELL_TEXT_UPDATE", function(_, spell) if num(spell) then factCache[spell
 -- Subscribers
 --------------------------------------------------------------------------
 -- dealt    { key, label, amount, school, crit, icon, pet }   a hit of yours on your target
+--          (onTarget false: on another enemy's plate; killed = guid: the blow
+--          that killed the target that just cleared, on that unit's plate)
 -- avoided  { missType, pet }                                 your target avoided you
 -- taken    { amount, school, crit }                          a hit on you
 -- dodged   { missType }                                      you avoided a hit
@@ -266,9 +272,11 @@ stats = newStats()
 --                                        a cast of yours, and what its text says
 --   C <unit> <spell> auto                Auto Shot / Shoot: left to its swing
 --   S <arg1> <arg2> <hand>               PLAYER_SWING, its payload as it came
---   U <unit> <event> <flag> <amount> <school>                a UNIT_COMBAT report
+--   U <unit> <event> <flag> <amount> <school> [dying]       a UNIT_COMBAT report;
+--                                        "dying": on the plate of the target that just cleared
 --   > <decision> [key]                   what became of the report above it
---   K <guid> <key>                       your target cleared at your blow: a kill by it
+--   K <guid> <key>                       your target cleared at your blow, or with a
+--                                        bolt of yours in flight at it: a kill by that
 --   A <school:spell ...> | none          your damage shields that are up, when that changes
 --   M <key> <meter> <shown>              after the fight: the meter's total for a
 --                                        kill's attack, and what the feed had shown
@@ -567,6 +575,7 @@ ns.On("PLAYER_ENTERING_WORLD", function() UC.RebuildShields() end)
 -- and is taken the other way round only within a moment.
 local hitOnMeAt = -10      -- the last melee blow on you that claimed no shield hit
 local lostTargetAt = -10   -- your target last cleared in combat: it died, most likely
+local lostGuid             -- ...and which unit it was
 local SHIELD_WAIT  = 0.6   -- a shield hit waits this long for its blow
 local SHIELD_AFTER = 0.15  -- a blow reported first: a shield hit this close after
 
@@ -624,7 +633,15 @@ end
 -- the dead unit. Only the killing attack is topped up, only by what is missing,
 -- and not at all when the gap is larger than such a hit could be -- that much
 -- means damage on other mobs is mixed in, and splitting it would be a guess.
+--
+-- A bolt that kills is different: it is reported, a frame or two after your target
+-- has cleared, on the dying enemy's nameplate (FCT 0.6.10, a warlock's bolts). So a
+-- hit on the plate of the unit that was your target a moment ago is taken as your
+-- target's, live, and goes on that unit's own totals. The bolt's cast also marks the
+-- kill (it is in flight at that unit when the target clears), so with nameplates
+-- hidden it is still settled from the meter; when its hit did come, nothing is missing.
 local KILL_MOMENT  = 0.1    -- a target clearing this close to your blow: that blow killed it
+local KILL_PLATE   = 0.5    -- the killing bolt comes on the dying unit's plate within this
 local SETTLE_AT    = { 0.5, 1.5, 3, 5 }   -- the meter is not final the instant combat drops
 local SETTLE_LIMIT = 3      -- a top-up may be at most this many of the attack's largest hits
 
@@ -873,27 +890,26 @@ end
 
 local function onUnitCombat(unit, event, flag, amount, school)
     if not str(unit) or not str(event) then return end
-    local plateKey
+    local plateKey, dying
     if unit ~= "target" and unit ~= "player" then
-        -- Whether a killing blow turns up on the dead unit's nameplate instead is
-        -- not known: the recorder notes any that do, since that would let the blow
-        -- be shown live rather than settled after the fight.
-        if tracing() and #kills > 0 and unit:find("^nameplate") then
-            local k, guid = kills[#kills], UnitGUID(unit)
-            if str(guid) and guid == k.guid and now() - k.at <= 1.5 then
-                note("U", unit, event, flag, amount, school, "dead")
-            end
-        end
-        if not (wantAll() and unit:find("^nameplate%d+$")) then return end
+        if not unit:find("^nameplate%d+$") then return end
         -- your target's own plate reports the same hit as "target" does
         if yes(UnitIsUnit(unit, "target")) then return end
-        -- an enemy; a friend's plate, or one the game will not say, is left out
-        if not yes(UnitCanAttack("player", unit)) then return end
         plateKey = UnitGUID(unit)
         if not str(plateKey) then return end
+        if plateKey == lostGuid and now() - lostTargetAt <= KILL_PLATE then
+            -- the unit that was your target a moment ago: the blow that killed it
+            dying = plateKey
+        elseif not wantAll() then
+            return
+        -- an enemy; a friend's plate, or one the game will not say, is left out
+        elseif not yes(UnitCanAttack("player", unit)) then
+            return
+        end
     end
     if unit == "target" and yes(UnitIsUnit("target", "player")) then return end
-    note("U", unit, event, flag, amount, school)
+    if dying then note("U", unit, event, flag, amount, school, "dying")
+    else note("U", unit, event, flag, amount, school) end
 
     local t = now()
     tidy(t)
@@ -939,7 +955,7 @@ local function onUnitCombat(unit, event, flag, amount, school)
     end
 
     -- On your target (or another enemy): only harm counts.
-    local counted = plateKey and "plates" or "target"
+    local counted = (plateKey and not dying) and "plates" or "target"
     local rec
     if event == "WOUND" then
         stats[counted] = stats[counted] + 1
@@ -959,6 +975,10 @@ local function onUnitCombat(unit, event, flag, amount, school)
         rec = { missType = event, school = school }
     else
         return
+    end
+    if dying then
+        rec.killed = dying
+        stats.dying = (stats.dying or 0) + 1
     end
     placeOnTarget(rec, t, plateKey, plateKey and unit)
 end
@@ -980,10 +1000,23 @@ ns.On("PLAYER_TARGET_CHANGED", function()
     note("T", guid)
     local t = now()
     if not str(guid) then
-        if inCombat then lostTargetAt = t end
-        if inCombat and prevTarget and lastBlow and t - lastBlow.at <= KILL_MOMENT then
-            kills[#kills + 1] = { guid = prevTarget, key = lastBlow.key, at = t }
-            note("K", prevTarget, lastBlow.key)
+        if inCombat then lostTargetAt, lostGuid = t, prevTarget end
+        if inCombat and prevTarget then
+            local marked = {}
+            local function kill(key)
+                if marked[key] then return end
+                marked[key] = true
+                kills[#kills + 1] = { guid = prevTarget, key = key, at = t }
+                note("K", prevTarget, key)
+            end
+            if lastBlow and t - lastBlow.at <= KILL_MOMENT then kill(lastBlow.key) end
+            -- a bolt of yours still in flight at it, whose hit has not come
+            for _, c in ipairs(casts) do
+                local window = (c.school == PHYSICAL) and PHYSICAL_WINDOW or DIRECT_WINDOW
+                if not c.used and c.key == prevTarget and t - c.at <= window and c.unit == "player" then
+                    kill("spell:" .. c.spell)
+                end
+            end
         end
         prevTarget = nil
     else
@@ -1121,6 +1154,9 @@ function UC.PrintProbe()
         return n == 0 and "|cff40ff40none hidden|r" or ("|cffff4040" .. n .. " of " .. of .. " hidden|r")
     end
     print(("   on your target: %d reports, amounts %s"):format(s.target, hiddenWord(s.targetHidden, s.target)))
+    if (s.dying or 0) > 0 then
+        print(("   of them on a dying target's nameplate (a killing blow, shown live): %d"):format(s.dying))
+    end
     if (s.plates or 0) > 0 then
         print(("   on other enemies' nameplates (counting every enemy): %d reports"):format(s.plates))
     end

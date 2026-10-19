@@ -406,6 +406,25 @@ if FOREVER then
     check("the corpse shows the killing blow in its Melee total", tr and tr.swing and tr.swing.total == 91,
           tr and tr.swing and tostring(tr.swing.total) or "no Melee row")
 
+    -- A killing bolt, end to end: reported on the dying unit's nameplate just after
+    -- the target clears, it goes on that unit's totals, live.
+    advance(32)
+    target = "Creature-Y"; fire("PLAYER_TARGET_CHANGED")
+    fire("PLAYER_REGEN_DISABLED")
+    fire("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 686)
+    advance(33); target = nil; fire("PLAYER_TARGET_CHANGED")   -- the bolt kills it
+    plates.nameplate6 = "Creature-Y"
+    advance(33.03); fire("UNIT_COMBAT", "nameplate6", "WOUND", "", 280, 32)
+    advance(33.3); fire("PLAYER_REGEN_ENABLED")
+    ns.DM.Capture = function() return { ["spell:686"] = { id = 686, amount = 280 } } end
+    ok, err = pcall(advance, 39)
+    check("settling after a killing bolt runs", ok, err)
+    plates.nameplate6 = nil
+    target = "Creature-Y"; fire("PLAYER_TARGET_CHANGED")    -- click the corpse
+    tr = em and em:Trackers(ns.frames.target)
+    check("the corpse shows the killing bolt, once", tr and tr["spell:686"] and tr["spell:686"].total == 280,
+          tr and tr["spell:686"] and tostring(tr["spell:686"].total) or "no Shadow Bolt row")
+
     -- Every enemy, end to end: one set of totals across a target switch and another
     -- enemy's nameplate, the meter's figures once the fight is over, and a fresh
     -- start on the next fight's first hit.

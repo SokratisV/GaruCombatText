@@ -130,7 +130,16 @@ if ns.UseUnitCombat then
         local frame = ns.frames and ns.frames.target
         if not frame then return end
         -- hits on other enemies' nameplates come only for an every-enemy feed
-        if everyEnemy() then meter:Fresh() elseif r.onTarget == false then return end
+        if everyEnemy() then
+            meter:Fresh()
+        elseif r.killed then
+            -- the blow that killed your target, reported on its plate once the
+            -- target had cleared: it goes on the dead unit's own totals
+            meter:BumpGUID(frame, r.killed, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
+            return
+        elseif r.onTarget == false then
+            return
+        end
         meter:Bump(frame, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
     end)
     -- Every enemy: once the fight is over, the meter's totals for it, which are
