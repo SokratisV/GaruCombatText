@@ -535,6 +535,76 @@ cast(621, 6808); hit(621, 0, 1); swing(621); hit(621, 64, 1)
 expect("Maul's hit is Maul's", 621.01, "dealt", key("spell:6808", 64))
 nothing("and the hit of nothing is not a miss", 621.5)
 
+-- 14c. Weapon procs: a seal, poison, oil or enchant of yours, riding on your swings.
+--      The game never says which spell a proc was; a hit of the source's school in
+--      a swing's moment, one per swing, is taken as it.
+DESC[20154] = "Fills the Paladin with holy spirit for 30 sec. The Paladin's attacks deal additional 3 to 13 Holy damage. Only one Seal can be active on the Paladin at any one time. Unleashing this Seal's energy will judge an enemy, instantly causing 15 to 16 Holy damage."
+DESC[21082] = "Fills the Paladin with the spirit of a crusader for 30 sec, increasing melee attack power by 20 and attack speed by 10%. Only one Seal can be active on the Paladin at any one time. Unleashing this Seal's energy will cause the target to take additional Holy damage."
+DESC[8679]  = "Coats a weapon with poison that lasts for 30 min. Each strike has a 20% chance of poisoning the enemy which instantly inflicts 19 to 25 Nature damage. 40 charges."
+DESC[2823]  = "Coats a weapon with poison that lasts for 30 min. Each strike has a 30% chance of poisoning the enemy for 36 Nature damage over 12 sec."
+DESC[3595]  = "When applied to a melee weapon it gives a 10% chance of casting Frostbolt at the opponent when it hits. Lasts 30 minutes."
+DESC[13898] = "Permanently enchant a melee weapon to often strike for 40 additional fire damage."
+local coated = true
+function GetWeaponEnchantInfo() return coated, 1000, 0, 1, false, nil, nil, nil end
+retarget(630, "Creature-P1")
+cast(630, 20154)                                           -- Seal of Righteousness
+swing(631); hit(631.05, 9, 2)
+expect("the seal's hit, in its swing's moment", 631.06, "dealt", key("spell:20154", 9))
+hit(631.1, 7, 2)
+nothing("one proc per swing", 631.2)
+hit(631.5, 50, 1)
+expect("and the swing's own blow", 631.51, "dealt", key("swing", 50))
+swing(632); hit(632.05, 12, 16)
+nothing("a Frost hit is not the Holy seal's", 632.1)
+hit(633, 9, 2)
+nothing("a Holy hit away from any swing of yours is not the seal's", 633.1)
+cast(634, 21082)                                           -- Seal of the Crusader: deals nothing
+swing(635); hit(635.05, 9, 2)
+nothing("a seal that deals nothing ends the one before", 635.1)
+cast(636, 20154); swing(675); hit(675.05, 9, 2)
+nothing("a seal is gone after 30 s", 675.1)
+
+class = "ROGUE"
+cast(700, 8679)                                            -- Instant Poison
+cast(700.5, 2823)                                          -- Deadly Poison: only ticks, not a source
+swing(701); hit(701.02, 22, 8)
+expect("Instant Poison's hit", 701.03, "dealt", key("spell:8679", 22))
+local kept = ns.db.weaponProcs and ns.db.weaponProcs["Player-1"] and ns.db.weaponProcs["Player-1"].poison
+if kept and kept.spell == 8679 then pass = pass + 1
+else fail = fail + 1; print("FAIL  the poison is kept in saved settings, for after a /reload") end
+coated = false
+swing(703); hit(703.02, 22, 8)
+nothing("no poison left on the weapon, no poison hit", 703.1)
+coated = true
+cast(710, 3595)                                            -- Frost Oil
+swing(711); hit(711.08, 30, 16)
+expect("Frost Oil's Frostbolt, 0.08 s after the swing", 711.09, "dealt", key("spell:3595", 30))
+
+-- Counting every enemy, the meter has a poison's damage under its own spell, not
+-- the one that put it on the weapon: the two are paired by name, not shown twice.
+local NAMES = { [8679] = "Instant Poison", [8680] = "Instant Poison" }
+ns.SpellName = function(id) return NAMES[id] or ("S" .. id) end
+ns.db.enemyText.scope = "all"
+fight(730)
+swing(731); hit(731.02, 20, 8); expect("poison", 731.03, "dealt", key("spell:8679", 20))
+hit(731.5, 40, 1); expect("blow", 731.51, "dealt", key("swing", 40))
+peace(732)
+meterRows = { ["spell:8680"] = { id = 8680, amount = 20 }, ["spell:6603"] = { id = 6603, amount = 40 } }
+advance(738)
+local settledKeys = {}
+for i = #got, 1, -1 do
+    if got[i].kind == "settledAll" then settledKeys[got[i].r.key] = got[i].r.total; table.remove(got, i) end
+end
+if settledKeys["spell:8679"] == 20 and settledKeys["swing"] == 40 and settledKeys["spell:8680"] == nil and #got == 0 then
+    pass = pass + 1
+else
+    fail = fail + 1
+    local parts = {}
+    for k, v in pairs(settledKeys) do parts[#parts + 1] = k .. "=" .. v end
+    print("FAIL  the meter's poison row is the live one's: " .. table.concat(parts, ", "))
+end
+ns.db.enemyText.scope = "target"
+
 -- 13. What descriptions say.
 local function facts(name, id, want)
     local f = ns.UC.Facts(id) or {}
@@ -558,6 +628,12 @@ facts("Regrowth",    8936, { heals = true, hot = true, direct = true })
 facts("Heroic Strike", 78, { damages = true, school = 1, direct = true })
 facts("Arcane Explosion", 1449, { damages = true, school = 64, direct = true, area = true })
 facts("Shadow Bolt is not an area spell", 686, { area = nil })
+facts("Seal of Righteousness", 20154, { weaponProc = "seal", procSchool = 2, damages = false })
+facts("Seal of the Crusader: its Holy is the Judgement's", 21082, { weaponProc = "seal", procSchool = nil })
+facts("Instant Poison", 8679, { weaponProc = "poison", procSchool = 8 })
+facts("Deadly Poison only ticks", 2823, { weaponProc = "poison", procSchool = nil })
+facts("Frost Oil", 3595, { weaponProc = "oil", procSchool = 16 })
+facts("Fiery Weapon", 13898, { weaponProc = "enchant", procSchool = 4 })
 
 print(("%d passed, %d failed"):format(pass, fail))
 if fail > 0 then error("failures") end

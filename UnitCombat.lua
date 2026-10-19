@@ -120,9 +120,51 @@ local AREA_WORDS = { "enemies within", "nearby enemies", "all enemies", "enemies
 -- hit", "Holy damage to any enemy that strikes a party member").
 local REACTIVE_WORDS = { "attacker", "that strikes", "who strikes", "strikes you", "when struck" }
 
+-- Weapon procs: what rides on your swings, from what you put on your weapon (FCT
+-- 0.6.7 and 0.6.8). The school is what its hits are of; a source with none (Seal of
+-- the Crusader, Crippling Poison, Windfury) takes no hit. Only procs that hit at once:
+-- Deadly Poison's ticks are not in the swing's moment.
+--   seal     "Only one Seal can be active", with "<school> damage" before the text
+--            about unleashing it (that part is the Judgement, a cast of its own)
+--   poison   "Coats a weapon with poison ... 19 to 25 Nature damage."
+--   oil      "When applied to a melee weapon it gives a 10% chance of casting
+--            Frostbolt"
+--   enchant  "Permanently enchant a melee weapon to often strike for 40 additional
+--            fire damage."
+--   imbue    a shaman's: "Imbue the Shaman's weapon with fire ... additional Fire damage"
+local BOLT_SCHOOLS = { frostbolt = 16, ["shadow bolt"] = 32, shadowbolt = 32, fireball = 4, firebolt = 4 }
+local function schoolAtOnce(text)
+    -- the first "<school> damage" not followed by " over" (that would be ticks)
+    for word, rest in text:gmatch("(%a+) damage([^%.]*)") do
+        if SCHOOLS[word] and SCHOOLS[word] ~= 1 and not rest:find("^ over") then return SCHOOLS[word] end
+    end
+end
+local function weaponProc(lower)
+    if lower:find("only one seal", 1, true) then
+        return "seal", schoolAtOnce(lower:match("^(.-)unleash") or lower)
+    end
+    if lower:find("coats a weapon", 1, true) then return "poison", schoolAtOnce(lower) end
+    if lower:find("applied to a melee weapon", 1, true) and lower:find("chance of casting", 1, true) then
+        for word, school in pairs(BOLT_SCHOOLS) do
+            if lower:find(word, 1, true) then return "oil", school end
+        end
+        return "oil", nil
+    end
+    if lower:find("enchant a melee weapon", 1, true) then return "enchant", schoolAtOnce(lower) end
+    if lower:find("imbue", 1, true) and lower:find("weapon", 1, true) then return "imbue", schoolAtOnce(lower) end
+end
+
 local function parse(text)
     local lower = text:lower()
     local f = {}
+    -- What it puts on your weapon, it does through your swings: it never hits at
+    -- its own cast. Read before anything else (an oil's text says no "damage").
+    local proc, procSchool = weaponProc(lower)
+    if proc then
+        f.weaponProc, f.procSchool = proc, procSchool
+        f.damages, f.direct = false, false
+        return f
+    end
 
     -- "Heal your target for 47 to 58." (Lesser Heal), "Heals a friendly target
     -- for", "Heals the target of 45 damage over 15 sec." (Renew), "Heals 66
@@ -269,7 +311,9 @@ stats = newStats()
 --   R+ / R-                              combat started / ended
 --   T <target>                           target changed
 --   C <unit> <spell> <school> <direct> <ticks> <offensive> <duration> <heals> <hot>
---                                        a cast of yours, and what its text says
+--                                        a cast of yours, and what its text says;
+--                                        then proc:<kind> for a seal, poison, oil...
+--   W <kind> <spell> <school>            a weapon proc source of yours, applied
 --   C <unit> <spell> auto                Auto Shot / Shoot: left to its swing
 --   S <arg1> <arg2> <hand>               PLAYER_SWING, its payload as it came
 --   U <unit> <event> <flag> <amount> <school> [dying]       a UNIT_COMBAT report;
@@ -326,6 +370,7 @@ end
 -- What you have done, recently
 --------------------------------------------------------------------------
 local casts, dots, swings, heals, hots, held = {}, {}, {}, {}, {}, {}
+local swingMoments = {}   -- your melee swings, kept a while for the procs they carry
 local petLast = 0
 local epoch = 0
 
@@ -380,6 +425,47 @@ local function helpfulSpell(spell)
     return nil
 end
 
+-- What is on your weapon, as you last applied it. Kept in saved settings per
+-- character, as a poison lasts long past a /reload (GetTime carries on across one;
+-- a source stamped later than now is from before a restart of the computer and goes).
+-- A seal lasts 30 s on Forever (FCT, SpellDuration), an imbue 5 min, a poison 30 min
+-- or an hour, an oil 30 min, an enchant until replaced.
+local PROC_KEEP = { seal = 35, imbue = 310, poison = 3660, oil = 1860, enchant = math.huge }
+local spareSources = {}
+local function procSources()
+    local db = ns.db
+    local me = UnitGUID("player")
+    if not (db and str(me)) then return spareSources end
+    db.weaponProcs = db.weaponProcs or {}
+    db.weaponProcs[me] = db.weaponProcs[me] or {}
+    return db.weaponProcs[me]
+end
+
+-- Whether a weapon has a poison or oil on it, where the game says so; nil when it
+-- does not say.
+local function weaponCoated()
+    if not GetWeaponEnchantInfo then return nil end
+    local ok, main, _, _, _, off = pcall(GetWeaponEnchantInfo)
+    if not ok or not plain(main) or not plain(off) then return nil end
+    if main == nil and off == nil then return nil end
+    return main == true or off == true
+end
+
+-- The newest source of this school that can still be on, or nil.
+local function procFor(t, school)
+    local best
+    local coated
+    for kind, s in pairs(procSources()) do
+        local fresh = s.at <= t and t - s.at <= (PROC_KEEP[kind] or 0)
+        if fresh and (kind == "poison" or kind == "oil") then
+            if coated == nil then coated = weaponCoated() end
+            if coated == false then fresh = false end
+        end
+        if fresh and s.school == school and (not best or s.at > best.at) then best = s end
+    end
+    return best
+end
+
 local function onCast(unit, spell)
     if not (str(unit) and (unit == "player" or unit == "pet")) or not num(spell) then return end
     if AUTO_RANGED[spell] then note("C", unit, spell, "auto") return end
@@ -392,6 +478,18 @@ local function onCast(unit, spell)
     if helpful == nil then helpful = helpfulSpell(spell) end
     local school = (f and f.school) or learnedSchool[spell]
     local key = targetKey()
+
+    -- A seal, poison, oil, enchant or imbue of yours: its hits come on your swings.
+    if unit == "player" and f and f.weaponProc then
+        if f.procSchool then
+            procSources()[f.weaponProc] = { spell = spell, at = t, school = f.procSchool }
+            note("W", f.weaponProc, spell, f.procSchool)
+        elseif f.weaponProc == "seal" then
+            -- only one seal is up: one that deals nothing (the Crusader) ends the last
+            procSources().seal = nil
+            note("W", "seal", spell, "none")
+        end
+    end
 
     -- A heal of yours. Only your own count as "yours" on a heal that lands on
     -- you; anyone else's still shows, just not under a spell of theirs.
@@ -429,8 +527,13 @@ local function onCast(unit, spell)
         end
     end
 
-    note("C", unit, spell, school, f and f.direct, f and f.ticks, offensive and true or false,
-         f and f.duration, f and f.heals, f and f.hot)
+    if f and f.weaponProc then
+        note("C", unit, spell, f.procSchool, f.direct, f.ticks, offensive and true or false,
+             f.duration, f.heals, f.hot, "proc:" .. f.weaponProc)
+    else
+        note("C", unit, spell, school, f and f.direct, f and f.ticks, offensive and true or false,
+             f and f.duration, f and f.heals, f and f.hot)
+    end
     emit("cast", { unit = unit, spell = spell, label = ns.SpellName(spell), school = school,
                    offensive = offensive and true or false })
 end
@@ -457,9 +560,15 @@ local function onSwing(swingType)
     local t = now()
     tidy(t)
     stats.swings = stats.swings + 1
+    local key = targetKey()
+    if hand ~= "ranged" then
+        swingMoments[#swingMoments + 1] = { at = t, key = key, procs = {} }
+        while swingMoments[1] and (t - swingMoments[1].at > 2 or #swingMoments > 8) do
+            table.remove(swingMoments, 1)
+        end
+    end
     -- The order of a hit and its swing is not fixed: a hit already waiting for one
     -- takes this swing.
-    local key = targetKey()
     for _, h in ipairs(held) do
         if not h.done and h.key == key and t - h.at <= LATE_SWING and (hand == "ranged" or h.physical) then
             h.done = true
@@ -689,6 +798,11 @@ local SWING_MISSES = { MISS = true, DODGE = true, PARRY = true, BLOCK = true, DE
 -- so a hit on another enemy then is that cast's too -- once per enemy.
 local AREA_MOMENT = 0.3
 
+-- A spell's hit is reported without the delay a melee blow's has, so a proc lands in
+-- its swing's moment, not its blow's: Frost Oil's Frostbolt 0.06 to 0.1 s after the
+-- swing (FCT 0.6.8, a warlock's staff). Not yet seen here for a seal or a poison.
+local PROC_MOMENT = 0.25
+
 -- Whose hit this was, on your target or (for an every-enemy feed) another enemy's
 -- nameplate. key: the unit's key, which casts and DoTs remember; unit: its token.
 local function placeOnTarget(rec, t, key, unit)
@@ -753,6 +867,22 @@ local function placeOnTarget(rec, t, key, unit)
         if trySwing() or tryCast() then return end
     else
         if tryCast() then return end
+    end
+
+    -- 2b. A proc of what is on your weapon, riding on a melee swing of yours at this
+    --     unit: of its school, in the swing's moment, at most one per swing.
+    if not isMiss and school and school ~= PHYSICAL then
+        local src = procFor(t, school)
+        if src then
+            for _, m in ipairs(swingMoments) do
+                local after = t - m.at
+                if m.key == key and after >= -0.02 and after <= PROC_MOMENT and not m.procs[src.spell] then
+                    m.procs[src.spell] = true
+                    rule("weapon proc")
+                    return out(spellRecord(src.spell, rec, "player"))
+                end
+            end
+        end
     end
 
     -- 3. A DoT of yours whose beat is not known yet -- on this unit, or anywhere
@@ -1056,7 +1186,7 @@ local function keyLabel(key)
     if not spell then return key, nil, nil end
     local f = factCache[spell]
     return ns.SpellName(spell) or ("Spell " .. spell), ns.SpellTexture(spell),
-           (f and f.school) or learnedSchool[spell]
+           (f and (f.school or f.procSchool)) or learnedSchool[spell]
 end
 
 -- Once the meter gives the fight's totals: credit each kill's missing blow.
@@ -1110,6 +1240,29 @@ local function settle(fight)
         meter[key] = (meter[key] or 0) + r.amount
     end
     if all then
+        -- The meter can count a spell under another ID than the one shown live: a
+        -- poison's damage is not the spell that put it on your weapon. A row the feed
+        -- has that the meter lacks takes the meter's row of the same name.
+        local byName = {}
+        for key in pairs(tally) do
+            if meter[key] == nil then
+                local label = keyLabel(key)
+                if label then byName[label] = key end
+            end
+        end
+        local moves = {}
+        for key in pairs(meter) do
+            if tally[key] == nil then
+                local label = keyLabel(key)
+                if byName[label] then
+                    moves[#moves + 1] = { from = key, to = byName[label] }
+                    byName[label] = nil
+                end
+            end
+        end
+        for _, m in ipairs(moves) do
+            meter[m.to], meter[m.from] = meter[m.from], nil
+        end
         for key, total in pairs(meter) do
             local label, icon, school = keyLabel(key)
             total = math.floor(total + 0.5)

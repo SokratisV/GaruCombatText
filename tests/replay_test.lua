@@ -60,9 +60,26 @@ function UnitAffectingCombat() return inFight end
 local SCHOOL_WORD = { [1] = "Physical", [2] = "Holy", [4] = "Fire", [8] = "Nature",
                       [16] = "Frost", [32] = "Shadow", [64] = "Arcane" }
 local DESC, HELPFUL = {}, {}
-local function learn(spell, school, direct, ticks, offensive, duration, heals, hot)
+local PROC_TEXT = {
+    seal    = "Only one Seal can be active. Each melee attack deals 1 %s damage. Unleashing this Seal's energy will judge an enemy.",
+    poison  = "Coats a weapon with poison. Each strike has a chance of inflicting 1 %s damage.",
+    enchant = "Permanently enchant a melee weapon to often strike for 1 additional %s damage.",
+    imbue   = "Imbue the weapon. Each hit causes 1 additional %s damage.",
+}
+local BOLT_WORD = { [4] = "Fireball", [16] = "Frostbolt", [32] = "Shadow Bolt" }
+local function learn(spell, school, direct, ticks, offensive, duration, heals, hot, proc)
     if DESC[spell] ~= nil or HELPFUL[spell] ~= nil then return end
     local dur = duration or 30
+    local kind = type(proc) == "string" and proc:match("^proc:(%a+)$")
+    if kind then
+        if kind == "oil" then
+            DESC[spell] = "When applied to a melee weapon it gives a 10% chance of casting "
+                .. (BOLT_WORD[school] or "Frostbolt") .. " at the opponent when it hits."
+        elseif PROC_TEXT[kind] and SCHOOL_WORD[school] then
+            DESC[spell] = PROC_TEXT[kind]:format(SCHOOL_WORD[school])
+        end
+        return
+    end
     if heals then
         HELPFUL[spell] = true
         DESC[spell] = hot and ("Heals the target of 1 damage over " .. dur .. " sec.") or "Heals a friendly target for 1."
@@ -147,7 +164,7 @@ for line in FIGHT:gmatch("[^\n]+") do
                 local unit, spell = words[3], tonumber(words[4])
                 if words[5] ~= "auto" then
                     learn(spell, value(words[5]), value(words[6]), value(words[7]), value(words[8]),
-                          value(words[9]), value(words[10]), value(words[11]))
+                          value(words[9]), value(words[10]), value(words[11]), words[12])
                 end
                 fire("UNIT_SPELLCAST_SUCCEEDED", unit, "guid", spell)
             elseif kind == "A" then
