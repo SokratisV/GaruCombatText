@@ -3,7 +3,7 @@
 **Damage you deal and take, and healing you receive, broken down per spell.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-![Version](https://img.shields.io/badge/version-2.1.0-brightgreen)
+![Version](https://img.shields.io/badge/version-2.2.0-brightgreen)
 ![WoW](https://img.shields.io/badge/WoW-Forever%20%2F%20TBC%20Classic-f8b700)
 ![Interface](https://img.shields.io/badge/interface-16001%20%7C%2020505-555)
 
@@ -21,8 +21,15 @@ and each hit on your target is matched to them by timing and school, helped by w
 spell's own description says it does.
 
 - **Damage Dealt** is per spell again, with crits, schools and mana spent. Counting every
-  enemy, it also reads other enemies' nameplates (so enemy nameplates need to be shown), and
-  once the fight ends its numbers are set to Blizzard's damage meter's, so they end exact.
+  enemy (the default), it also reads other enemies' nameplates (so enemy nameplates need to
+  be shown), and once the fight ends its numbers are set to Blizzard's damage meter's, so
+  they end exact.
+- **Killing blows** count. A bolt that kills is reported on the dying enemy's nameplate just
+  after your target clears, and is taken from there; a killing swing is never reported, and
+  is filled in from Blizzard's damage meter once the fight is over.
+- **Weapon procs** go on their own line: a seal, poison, oil, weapon enchant or shaman
+  imbue you applied, matched to the hits of its school that land as you swing. Not yet
+  checked in game; a paladin's, rogue's or shaman's `/gct trace` would settle it.
 - **Actions** is back: your target's dodges, parries and resists, matched to your swings
   and casts.
 - **Damage Taken** is grouped **by school** (Physical, Fire, ...): the game says how you
@@ -60,9 +67,10 @@ Screenshots: drop images into docs/ and reference them here, e.g.
 
 - ⚔️ **Damage dealt (per target)** — the cumulative damage you deal to your current target,
   one ever-growing number/row per source (melee, each spell, wand, pet, totem),
-  school-colored, with an optional combat-time header. Tracks each target separately and can
-  remember their totals when you re-select them — or, with **Count: Every enemy**, adds up
-  everything you hit as one set of totals for the fight (Actions has the same choice).
+  school-colored, with an optional combat-time header. By default (**Count: Every enemy**)
+  it adds up everything you hit as one set of totals for the fight; with **Count: Your
+  target** it tracks each target separately and can remember their totals when you re-select
+  them (Actions has the same choice).
 - 🛡️ **Damage taken (by type)** — the cumulative damage you take this fight from **all
   enemies combined, grouped by attack type** (all melee together, each incoming spell, each
   environmental type), school-colored. Optionally also counts your **misses & avoids** —

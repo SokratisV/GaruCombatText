@@ -340,8 +340,15 @@ check("db exists", type(ns.db) == "table")
 check("anchors exist", ns.frames and ns.frames.target and ns.takenHostFrame and ns.healHostFrame
       and ns.actionsHostFrame and true or false)
 
+check("the defaults count every enemy", ns.db.enemyText.scope == "all" and ns.db.actionsText.scope == "all",
+      tostring(ns.db.enemyText.scope) .. " / " .. tostring(ns.db.actionsText.scope))
+
 if FOREVER then
-    ns.db.healText.showMana = true   -- off by default; on, to see the mana path
+    -- off by default; on, to see the mana paths
+    ns.db.healText.showMana, ns.db.enemyText.showMana = true, true
+    -- per target, which the fights below are about (every enemy has its own, further down)
+    ns.db.enemyText.scope = "target"; ns.EnemyScopeChanged()
+    ns.db.actionsText.scope = "target"; ns.ActionsScopeChanged()
     -- The recorder, switched on the way a player would.
     local slash = SlashCmdList.GARUCOMBATTEXT
     check("/gct is registered", type(slash) == "function")
@@ -723,6 +730,7 @@ if not FOREVER then
         local t = em:Trackers(ns.frames.target)
         return t and t["spell:133"] and t["spell:133"].total
     end
+    ns.db.enemyText.scope = "target"; ns.EnemyScopeChanged()
     target = "Creature-T"; fire("PLAYER_TARGET_CHANGED")
     cleu("Creature-Other", 0xa48, 70)
     check("Classic, your target: a hit on another enemy is not counted", fireball() == nil, tostring(fireball()))

@@ -2,7 +2,7 @@
 ## Title: |cff66ccffGaru Combat Text|r
 ## Notes: Damage dealt & taken and healing received, per spell, live. On WoW Forever, where the combat log is gone, your hits are worked out from your casts and swings (/gct).
 ## Author: Sokratis
-## Version: 2.1.0
+## Version: 2.2.0
 ## SavedVariables: GaruCombatTextDB
 ## IconTexture: Interface\Icons\Ability_Warrior_BloodFrenzy
 ## X-License: MIT

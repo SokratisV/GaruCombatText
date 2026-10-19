@@ -218,64 +218,65 @@ ns.defaults = {
     locked = true,   -- /gct unlock to drag the feed anchors
     general = {
         fontSize = 12, fontOutline = "OUTLINE",
+        copyPosition = true, copyMirror = true,   -- "Copy to..." brings position, mirrored
     },
     summary = {   -- post-fight summary behaviour (WoW Forever / any client with C_DamageMeter)
         holdSecs = 15,      -- how long a target's summary stays reachable once first shown
         fadeTime = 0.6,     -- the tail end of that window, spent dimming out
         requireDead = true, -- only report against something that died
     },
-    enemyText = {   -- Damage Dealt: cumulative damage you deal to your current target
+    enemyText = {   -- Damage Dealt: cumulative damage you deal to your target, or every enemy
         enabled = true, style = "float", showBar = true, rowHeight = 18,
         barColor = { 0.80, 0.20, 0.20 }, includePet = true,
-        anchor = "CENTER", xOffset = -30, yOffset = 0, growth = "DOWN", align = "LEFT",
+        anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "DOWN", align = "LEFT",
         matchFrameWidth = false, textWidth = 300, lineSpacing = 18, maxLines = 6,
-        fontSize = 12, maxSize = 34, scaleBySeverity = false, bigPct = 40,
+        fontSize = 15, maxSize = 34, scaleBySeverity = false, bigPct = 40,
         schoolColors = true, crit = false, showLabel = false, maxLabel = 0, showIcon = true,
-        showMana = true, showCombatTime = false, sortMode = "amount",
+        showMana = false, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, persist = true,
-        scope = "target", holdSecs = 8,   -- "target": per target; "all": every enemy, per fight
-        hideBlizzardFCT = false, onFocus = false,
-        layout = "radial", radius = 66, arc = 105, arcAngle = 0, arcFixed = true,
-        attach = "free", point = { "CENTER", 50, -30 },
+        scope = "all", holdSecs = 10,   -- "target": per target; "all": every enemy, per fight
+        hideBlizzardFCT = true, onFocus = false,
+        layout = "radial", radius = 70, arc = 100, arcAngle = 0, arcFixed = true,
+        attach = "free", point = { "CENTER", 75, -50 },
     },
     healText = {
         enabled = true, style = "float", showBar = true, rowHeight = 16,
-        barColor = { 0.20, 0.80, 0.30 }, anchor = "CENTER", xOffset = -24, yOffset = 0,
-        growth = "UP", align = "RIGHT", matchFrameWidth = false, textWidth = 300,
-        lineSpacing = 18, maxLines = 6, fontSize = 12, maxSize = 30, scaleBySeverity = false,
+        barColor = { 0.20, 0.80, 0.30 }, anchor = "CENTER", xOffset = 0, yOffset = 0,
+        growth = "DOWN", align = "RIGHT", matchFrameWidth = false, textWidth = 300,
+        lineSpacing = 18, maxLines = 6, fontSize = 15, maxSize = 30, scaleBySeverity = false,
         bigPct = 30, schoolColors = true, crit = false, showLabel = false, maxLabel = 0,
         showIcon = true, sortMode = "amount", threshold = 0, showMana = false,
-        valueMode = "amount", includeMana = true, windowSecs = 5, holdSecs = 5,
-        layout = "radial", radius = 66, arc = 105, arcAngle = 180, arcFixed = true,
-        attach = "free", point = { "CENTER", -50, -30 },
+        valueMode = "amount", includeMana = true, windowSecs = 5, holdSecs = 10,
+        layout = "radial", radius = 70, arc = 100, arcAngle = 180, arcFixed = true,
+        attach = "free", point = { "CENTER", -150, -50 },
     },
     takenText = {   -- Damage Taken: cumulative damage you take, one row per attack type
         enabled = true, style = "float", showBar = true, rowHeight = 18,
         barColor = { 0.80, 0.30, 0.20 },
-        anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "UP", align = "LEFT",
+        anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "DOWN", align = "RIGHT",
         matchFrameWidth = false, textWidth = 300, lineSpacing = 18, maxLines = 6,
-        fontSize = 12, maxSize = 34, scaleBySeverity = false, bigPct = 40,
+        fontSize = 15, maxSize = 34, scaleBySeverity = false, bigPct = 40,
         schoolColors = true, crit = false, showLabel = false, maxLabel = 0, showIcon = true,
         showMana = false, showCombatTime = false, sortMode = "amount",
-        holdTime = 4, fadeTime = 0.8, threshold = 0, showAvoid = true, holdSecs = 5,
-        layout = "radial", radius = 66, arc = 105, arcAngle = 180, arcFixed = true,
-        attach = "free", point = { "CENTER", -50, -30 },
+        holdTime = 4, fadeTime = 0.8, threshold = 0, showAvoid = true, holdSecs = 10,
+        layout = "radial", radius = 70, arc = 100, arcAngle = 180, arcFixed = true,
+        attach = "free", point = { "CENTER", -75, -50 },
     },
     actionsText = {   -- Actions: how many of your attacks your target (or every enemy) avoided
         enabled = true, style = "float", includePet = false,
-        anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "UP", align = "LEFT",
-        matchFrameWidth = false, textWidth = 300, lineSpacing = 18, maxLines = 8,
-        fontSize = 12, maxSize = 30, scaleBySeverity = false, bigPct = 40,
-        schoolColors = false, crit = false, showLabel = false, maxLabel = 0, showIcon = true,
+        anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "DOWN", align = "LEFT",
+        matchFrameWidth = false, textWidth = 300, lineSpacing = 18, maxLines = 6,
+        fontSize = 15, maxSize = 30, scaleBySeverity = false, bigPct = 40,
+        schoolColors = true, crit = false, showLabel = false, maxLabel = 0, showIcon = true,
         showMana = false, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, persist = true,
-        scope = "target", holdSecs = 8,
-        layout = "radial", radius = 66, arc = 105, arcAngle = 0, arcFixed = true,
-        attach = "free", point = { "CENTER", 50, 30 },
+        scope = "all", holdSecs = 10,
+        layout = "radial", radius = 70, arc = 100, arcAngle = 0, arcFixed = true,
+        attach = "free", point = { "CENTER", 150, -50 },
     },
     combatTimer = {   -- "Combat M:SS" for your current target; positioned on its own
-        enabled = true, attach = "enemy",   -- "free" | "enemy" | "taken" | "heal"
-        point = { "CENTER", 0, 0 }, xOffset = 27, yOffset = -22, fontSize = 12,
+        enabled = true, attach = "free",   -- "free" | "enemy" | "taken" | "heal"
+        point = { "CENTER", 0, -235 }, xOffset = 0, yOffset = 0, fontSize = 14,
     },
 }
 
