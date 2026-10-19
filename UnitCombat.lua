@@ -576,6 +576,7 @@ ns.On("PLAYER_ENTERING_WORLD", function() UC.RebuildShields() end)
 local hitOnMeAt = -10      -- the last melee blow on you that claimed no shield hit
 local lostTargetAt = -10   -- your target last cleared in combat: it died, most likely
 local lostGuid             -- ...and which unit it was
+local lastDying            -- the last report taken as that unit's killing blow
 local SHIELD_WAIT  = 0.6   -- a shield hit waits this long for its blow
 local SHIELD_AFTER = 0.15  -- a blow reported first: a shield hit this close after
 
@@ -693,7 +694,7 @@ local AREA_MOMENT = 0.3
 local function placeOnTarget(rec, t, key, unit)
     key = key or targetKey()
     unit = unit or "target"
-    rec.onTarget = (unit == "target")
+    rec.onTarget = (unit == "target") and not rec.killed
     local school = rec.school
     local physical = (school == nil or school == PHYSICAL)
     local isMiss = rec.missType ~= nil
@@ -908,11 +909,28 @@ local function onUnitCombat(unit, event, flag, amount, school)
         end
     end
     if unit == "target" and yes(UnitIsUnit("target", "player")) then return end
+    -- The killing bolt can come on "target" too, with no target left (/gct trace,
+    -- 19 Oct 2026: two of three Wrath kills came on both, in the same frame, the
+    -- third on the plate alone; with nameplates hidden, on "target" alone).
+    if unit == "target" and not str(UnitGUID("target")) and lostGuid and now() - lostTargetAt <= KILL_PLATE then
+        dying, plateKey = lostGuid, lostGuid
+    end
     if dying then note("U", unit, event, flag, amount, school, "dying")
     else note("U", unit, event, flag, amount, school) end
 
     local t = now()
     tidy(t)
+    if dying then
+        -- one hit, reported on both: counted once
+        local d = lastDying
+        if d and d.unit ~= unit and t - d.at <= 0.05 and d.event == event and d.school == school
+            and (d.amount == amount or not (num(amount) and num(d.amount))) then
+            lastDying = nil
+            note(">", "the same hit, on its other unit")
+            return
+        end
+        lastDying = { unit = unit, at = t, event = event, school = school, amount = amount }
+    end
     flag = str(flag) and flag or ""
     school = (num(school) and school >= 1 and school <= 255) and school or nil
     local hidden = not num(amount)
@@ -966,9 +984,17 @@ local function onUnitCombat(unit, event, flag, amount, school)
             rec = { school = school, hidden = true }
         elseif amount > 0 then
             rec = { amount = amount, school = school, crit = (flag == "CRITICAL") }
+        elseif flag == "ABSORB" or flag == "BLOCK" or flag == "RESIST" then
+            rec = { missType = flag, school = school }
         else
-            rec = { missType = (flag == "ABSORB" or flag == "BLOCK" or flag == "RESIST") and flag or "MISS",
-                    school = school }
+            -- A hit of nothing, with no flag: not a miss (a miss comes as its own
+            -- event). One came in the frame of a Maul, before its swing and its 64
+            -- (/gct trace, 19 Oct 2026; the meter counted Maul 64 and no other
+            -- swing), and taken as a miss it used up Maul's cast, so Maul's hit was
+            -- shown as Melee. Left out.
+            stats[counted] = stats[counted] - 1
+            note(">", "a hit of nothing: left out")
+            return
         end
     elseif FEEDBACK[event] then
         stats[counted] = stats[counted] + 1
@@ -1042,13 +1068,41 @@ local function everyEnemyDealt()
     return ns.db and ns.db.enemyText and ns.db.enemyText.scope == "all"
 end
 
+-- The meter can still hold the fight before this one when it is first read: after
+-- a /reload, the first fight's read half a second after it ended gave the fight from
+-- before the reload (/gct trace, 19 Oct 2026: Moonfire, Melee and Thorns, after a
+-- fight of Wrath alone), and set on an every-enemy feed that showed spells never
+-- cast. So the meter is read before each fight too, and a read after it that is the
+-- same to the last figure is not taken: a later attempt will see this fight's.
+local lastRead, beforeFight   -- the meter as last read; as it read before this fight
+
+local function readMeter()
+    local DM = ns.DM
+    return DM and DM.Capture and DM.TYPES and DM.Capture(DM.TYPES.damage) or nil
+end
+
+local function sameRows(a, b)
+    if not (a and b) then return false end
+    for key, r in pairs(a) do
+        if not b[key] or b[key].amount ~= r.amount then return false end
+    end
+    for key in pairs(b) do
+        if not a[key] then return false end
+    end
+    return true
+end
+
 local function settle(fight)
     if fight ~= fightNo or inCombat then return end
+    local rows = readMeter()
+    if not rows then return end   -- not released yet; a later attempt will see it
+    if sameRows(rows, beforeFight) then
+        note(">", "the meter still shows the last fight")
+        return
+    end
+    lastRead = rows
     local all = everyEnemyDealt()
     if not all and #kills == 0 then return end
-    local DM = ns.DM
-    local rows = DM and DM.Capture and DM.TYPES and DM.Capture(DM.TYPES.damage)
-    if not rows then return end   -- not released yet; a later attempt will see it
     local meter = {}
     for key, r in pairs(rows) do
         -- the meter's melee is spell 6603 (Auto Attack), or 0
@@ -1106,6 +1160,7 @@ end
 -- 2026: a Thorns hit that killed, after a reload mid-fight, was left out).
 ns.On("PLAYER_ENTERING_WORLD", function()
     inCombat = yes(UnitAffectingCombat("player")) or (InCombatLockdown and InCombatLockdown()) or false
+    if not inCombat then lastRead = readMeter() end
 end)
 
 ns.On("PLAYER_REGEN_ENABLED", function()
@@ -1121,6 +1176,7 @@ ns.On("PLAYER_REGEN_DISABLED", function()
     inCombat = true
     fightNo = fightNo + 1
     wipe(tally); wipe(biggest); wipe(kills)
+    beforeFight = lastRead
     lastStats = (stats.target + stats.player > 0) and stats or lastStats
     -- The cast or swing that opened the fight came just before combat began (a
     -- bolt puts you in combat when it lands, not when it leaves your hands), and

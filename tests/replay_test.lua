@@ -41,7 +41,14 @@ Enum = { PlayerSwingType = { MainHand = 0, OffHand = 1, Ranged = 2 } }
 function GetLocale() return "enUS" end
 
 local target, class = nil, "WARRIOR"
-function UnitGUID(u) if u == "target" then return target end if u == "player" then return "Player-1" end end
+-- A nameplate's unit is known only where the recorder marked a report on it
+-- "dying": the plate of the target that had just cleared.
+local plates, cleared = {}, nil
+function UnitGUID(u)
+    if u == "target" then return target end
+    if u == "player" then return "Player-1" end
+    return plates[u]
+end
 function UnitIsUnit(a, b) if a == "target" and b == "player" then return false end return a == b end
 function UnitExists(u) if u == "target" then return target ~= nil end return u ~= "pet" end
 function UnitName() return "Tester" end
@@ -127,6 +134,7 @@ for line in FIGHT:gmatch("[^\n]+") do
                 if words[4] then class = words[4] end
                 fire("PLAYER_ENTERING_WORLD")   -- a login or /reload
             elseif kind == "T" then
+                if value(words[3]) == nil and target then cleared = target end
                 target = value(words[3])
                 fire("PLAYER_TARGET_CHANGED")
             elseif kind == "R+" then
@@ -153,9 +161,15 @@ for line in FIGHT:gmatch("[^\n]+") do
                 fire("PLAYER_SWING", value(words[3]), value(words[4]))
             elseif kind == "U" then
                 local unit, event, flag, amount, school = words[3], words[4], value(words[5]), value(words[6]), value(words[7])
-                if unit == "target" then
+                local dying = words[8] == "dying"
+                if dying and unit:find("^nameplate") then plates[unit] = cleared end
+                if unit == "target" or dying then
                     if event == "WOUND" and type(amount) == "number" and amount > 0 then
-                        hits[#hits + 1] = { at = t, amount = amount }
+                        -- a killing blow reported on its plate and on target is one hit
+                        local last = hits[#hits]
+                        if not (last and last.at == t and last.amount == amount and last.unit ~= unit) then
+                            hits[#hits + 1] = { at = t, amount = amount, unit = unit }
+                        end
                     elseif event ~= "WOUND" or amount == 0 then
                         misses = misses + 1
                     end

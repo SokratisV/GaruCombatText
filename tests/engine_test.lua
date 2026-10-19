@@ -310,12 +310,16 @@ nothing("a target switch is not a kill", 370)
 class = "WARLOCK"
 retarget(375, "Creature-K6"); fight(375)
 plates.nameplate7, plates.nameplate8 = "Creature-K6", "Creature-K9"
-cast(376, 686); retarget(377, nil)              -- the bolt lands: the target clears first
+cast(376, 686); cast(376.5, 686)                -- two bolts in flight
+retarget(377, nil)                              -- the first lands: the target clears first
 advance(377.03); fire("UNIT_COMBAT", "nameplate7", "WOUND", "CRITICAL", 290, 32)
 expect("the killing bolt, on the dying unit's plate", 377.04, "dealt", function(r)
     if r.killed ~= "Creature-K6" then return false, "killed " .. tostring(r.killed) end
     return r.key == "spell:686" and r.amount == 290 and r.crit == true, tostring(r.key) .. " " .. tostring(r.amount)
 end)
+-- the same hit, reported on "target" too with no target left (/gct trace, 19 Oct 2026)
+fire("UNIT_COMBAT", "target", "WOUND", "CRITICAL", 290, 32)
+nothing("one hit, reported on its plate and on target: counted once", 377.04)
 advance(377.05); fire("UNIT_COMBAT", "nameplate8", "WOUND", "", 60, 32)
 nothing("another enemy's plate is still not your target's", 377.1)
 advance(377.6); fire("UNIT_COMBAT", "nameplate7", "WOUND", "", 40, 32)
@@ -482,6 +486,54 @@ locked, lookupHidden, hiddenIndex, auras = false, false, {}, {}
 ns.UC.RebuildShields()
 onMe(530, "WOUND", 12, 1); hit(530.01, 6, 8)
 noDealt("out of combat, gone is gone", 531)
+
+-- 14b. More from the Wrath kills (/gct trace, 19 Oct 2026). With nameplates hidden
+--      the killing bolt came on "target" alone, after the target had cleared.
+class = "DRUID"
+function UnitAffectingCombat() return false end
+retarget(600, "Creature-W1"); fight(600)
+cast(601, 5176); retarget(601.3, nil)
+hit(601.33, 31, 8)
+expect("the killing Wrath, on target with no target left", 601.34, "dealt", function(r)
+    if r.killed ~= "Creature-W1" then return false, "killed " .. tostring(r.killed) end
+    return r.key == "spell:5176" and r.amount == 31, tostring(r.key) .. " " .. tostring(r.amount)
+end)
+peace(601.5)
+meterRows = { ["spell:5176"] = { id = 5176, amount = 31 } }
+nothing("its hit came: nothing to settle", 607)
+
+-- After a /reload the meter, first read, can still hold the fight from before it:
+-- Moonfire, Melee and Thorns, after a fight of Wrath alone. Not taken.
+ns.db.enemyText.scope = "all"
+meterRows = { ["spell:8925"] = { id = 8925, amount = 33 }, ["spell:6603"] = { id = 6603, amount = 42 } }
+fire("PLAYER_ENTERING_WORLD")                     -- the reload, out of combat
+retarget(610, "Creature-W2"); fight(610)
+cast(611, 5176); hit(611.2, 30, 8); expect("Wrath", 611.21, "dealt", key("spell:5176", 30))
+peace(612)
+nothing("the meter still on the fight before the reload is not taken", 612.6)
+meterRows = { ["spell:5176"] = { id = 5176, amount = 30 } }
+expect("this fight's figures, once the meter has them", 613.6, "settledAll", function(r)
+    return r.key == "spell:5176" and r.total == 30, tostring(r.key) .. " " .. tostring(r.total)
+end)
+advance(618)
+local before = {}
+for i = #got, 1, -1 do
+    if got[i].kind == "settledAll" then
+        if got[i].r.key ~= "spell:5176" then before[#before + 1] = got[i].r.key end
+        table.remove(got, i)
+    end
+end
+if #before == 0 and #got == 0 then pass = pass + 1
+else fail = fail + 1; print("FAIL  and nothing of the fight before: " .. table.concat(before, ", ")) end
+ns.db.enemyText.scope = "target"
+
+-- Maul lands on the swing it replaces, in the swing's own frame, with a hit of
+-- nothing and no flag before it. That is no miss, and must not use up Maul's cast.
+DESC[6808] = "Increases the druid's next attack by 18 damage."
+retarget(620, "Creature-W3")
+cast(621, 6808); hit(621, 0, 1); swing(621); hit(621, 64, 1)
+expect("Maul's hit is Maul's", 621.01, "dealt", key("spell:6808", 64))
+nothing("and the hit of nothing is not a miss", 621.5)
 
 -- 13. What descriptions say.
 local function facts(name, id, want)

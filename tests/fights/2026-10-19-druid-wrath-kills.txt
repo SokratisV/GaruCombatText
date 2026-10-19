@@ -1,0 +1,198 @@
+# Recorded with /gct trace on WoW Forever, 19 Oct 2026: level 11 druid, Count: Every enemy, three sessions.
+# 1. Nameplates on: three kills by Wrath. Each killing Wrath came on the dying mob's nameplate 0.02 s after
+#    the target cleared; for two of them the same hit came on "target" too, with no target left.
+#    The first fight's meter read, 0.5 s after it, still held the fight from before the /reload.
+# 2. Nameplates off: one kill by Wrath. The killing hit came on "target" alone, after the target cleared.
+# 3. Bear Form, Maul: Maul landed on the swing it replaced, in that swing's frame, after a hit of 0 with no
+#    flag. The meter: Maul 64, Melee 80 (37 + 43).
+0.00 P 2.1.0 DRUID 11
+2.24 T Creature-0-6783-0-2-475-810658C5C3
+11.27 C player 5178 8 true - true - - -
+11.27 R+
+12.04 U target WOUND "" 30 8
+12.04 > cast spell:5178
+13.16 C player 5178 8 true - true - - -
+13.68 U target WOUND "" 31 8
+13.68 > cast spell:5178
+14.48 U player WOUND "" 5 1
+16.12 C player 5178 8 true - true - - -
+16.31 U target WOUND "" 32 8
+16.31 > cast spell:5178
+16.41 U player WOUND "" 5 1
+18.13 C player 5178 8 true - true - - -
+18.31 T -
+18.31 K Creature-0-6783-0-2-475-810658C5C3 spell:5178
+18.33 U nameplate2 WOUND "" 33 8 dying
+18.33 > cast spell:5178
+18.33 U target WOUND "" 33 8
+18.33 > unplaced
+19.12 U player WOUND "" 5 1
+19.21 R-
+19.30 T Creature-0-6783-0-2-475-810658C5C3
+19.71 > settled all spell:8925 33 0
+19.71 > settled all swing 42 0
+19.71 > settled all spell:782 6 0
+19.79 T -
+21.28 T Creature-0-6783-0-2-475-810658C5C3
+22.54 T Creature-0-6783-0-2-40-5C5862E940
+26.26 T Creature-0-6783-0-2-475-810658C5C3
+28.50 T Creature-0-6783-0-2-40-5C5862E940
+29.04 T Creature-0-6783-0-2-475-810658C5C3
+29.71 T Creature-0-6783-0-2-40-5C5862E940
+32.93 C player 5178 8 true - true - - -
+32.93 R+
+34.24 U target WOUND CRITICAL 46 8
+34.24 > cast spell:5178
+34.86 C player 5178 8 true - true - - -
+36.11 U target WOUND "" 32 8
+36.11 > cast spell:5178
+36.88 C player 5178 8 true - true - - -
+37.34 U target WOUND "" 31 8
+37.34 > cast spell:5178
+38.27 U player MISS "" 0 1
+38.82 C player 5178 8 true - true - - -
+39.01 T -
+39.01 K Creature-0-6783-0-2-40-5C5862E940 spell:5178
+39.01 U nameplate4 WOUND "" 32 8 dying
+39.01 > cast spell:5178
+39.01 U target WOUND "" 32 8
+39.01 > unplaced
+39.47 U player WOUND "" 5 1
+40.60 T Creature-0-6783-0-2-475-661FF446B2
+41.43 U player WOUND "" 4 1
+43.07 C player 5178 8 true - true - - -
+43.27 U target WOUND "" 31 8
+43.27 > cast spell:5178
+43.43 U player DODGE "" 0 1
+45.49 U player WOUND "" 5 1
+46.17 C player 5178 8 true - true - - -
+46.37 U target WOUND "" 31 8
+46.37 > cast spell:5178
+47.35 U player WOUND "" 6 1
+49.10 C player 5178 8 true - true - - -
+49.30 U target WOUND "" 33 8
+49.30 > cast spell:5178
+49.40 U player WOUND "" 4 1
+51.10 C player 5178 8 true - true - - -
+51.28 T -
+51.28 K Creature-0-6783-0-2-475-661FF446B2 spell:5178
+51.30 U nameplate2 WOUND "" 31 8 dying
+51.30 > cast spell:5178
+52.10 U player WOUND "" 5 1
+52.89 R-
+53.91 T Creature-0-6783-0-2-475-661FF446B2
+54.51 T -
+55.03 T Creature-0-6783-0-2-40-5C5862E940
+55.61 T -
+56.44 T Creature-0-6783-0-2-40-5C5862E940
+56.75 T Creature-0-6783-0-2-475-810658C5C3
+57.17 T Creature-0-6783-0-2-40-5C5862E940
+57.81 T Creature-0-6783-0-2-475-661FF446B2
+62.30 T Creature-0-6783-0-2-475-810658C5C3
+63.13 T Creature-0-6783-0-2-475-661FF446B2
+73.04 T -
+0.32 P
+3.12 T Creature-0-6783-0-2-40-C2BE04C569
+7.00 C player 5178 8 true - true - - -
+7.00 R+
+8.31 U target WOUND "" 31 8
+8.31 > cast spell:5178
+8.89 C player 5178 8 true - true - - -
+10.03 U target WOUND "" 33 8
+10.03 > cast spell:5178
+12.56 U player WOUND "" 6 1
+14.03 C player 5178 8 true - true - - -
+14.22 U target WOUND "" 32 8
+14.22 > cast spell:5178
+14.52 U player WOUND "" 8 1
+16.18 C player 5178 8 true - true - - -
+16.38 U target WOUND "" 34 8
+16.38 > cast spell:5178
+16.47 U player WOUND "" 8 1
+18.26 U player WOUND "" 6 1
+19.27 C player 5178 8 true - true - - -
+19.53 T -
+19.53 K Creature-0-6783-0-2-40-C2BE04C569 spell:5178
+19.56 U target WOUND "" 31 8
+19.56 > unplaced
+19.92 T Creature-0-6783-0-2-40-C2BE04C569
+20.21 R-
+20.47 T -
+20.71 > settled all spell:5178 161 130
+21.68 T Creature-0-6783-0-2-40-C2BE04C569
+25.10 T -
+0.30 P
+8.70 C player 5487 - - - false - - -
+11.51 T Player-4613-00C6F64D
+59.00 T -
+61.76 T Creature-0-6783-0-2-40-A75774187F
+63.78 C player 5229 - - - false - - -
+64.39 S 2.4270000457764 0 main
+64.39 R+
+64.68 U player WOUND "" 6 1
+64.87 U target WOUND "" 37 1
+64.87 > swing swing
+66.74 S 2.4270000457764 0 main
+66.74 U player WOUND "" 5 1
+67.22 U target WOUND "" 43 1
+67.22 > swing swing
+68.65 U player WOUND "" 5 1
+69.16 C player 6808 - - - true - - -
+69.16 U target WOUND "" 0 1
+69.16 > cast (school learned) miss:MISS/spell:6808
+69.16 S 2.4270000457764 0 main
+69.16 U target WOUND "" 64 1
+69.16 > swing swing
+69.28 T -
+70.00 T Creature-0-6783-0-2-40-A75774187F
+70.38 R-
+70.55 T -
+70.88 > settled all spell:6808 64 0
+70.88 > settled all swing 80 144
+72.29 T Creature-0-6783-0-2-40-A75774187F
+74.61 T -
+0.31 P
+6.84 T Creature-0-6783-0-2-40-1AB3DA1538
+10.17 S 2.4270000457764 0 main
+10.17 R+
+10.47 U player WOUND "" 4 1
+10.78 U target WOUND "" 41 1
+10.78 > swing swing
+12.52 U player DODGE "" 0 1
+12.56 C player 6808 - - - true - - -
+12.56 U target WOUND "" 0 1
+12.56 > cast (school learned) miss:MISS/spell:6808
+12.56 S 2.4270000457764 0 main
+12.56 U target WOUND "" 64 1
+12.56 > swing swing
+14.41 U player WOUND "" 5 1
+15.04 S 2.4270000457764 0 main
+15.04 T -
+15.04 K Creature-0-6783-0-2-40-1AB3DA1538 swing
+15.79 T Creature-0-6783-0-2-40-1AB3DA1538
+15.95 R-
+16.35 T -
+16.45 > settled all spell:6808 64 0
+16.45 > settled all swing 121 105
+42.57 T Creature-0-6783-0-2-475-ABDC4C42CA
+45.28 S 2.4270000457764 0 main
+45.39 R+
+45.63 U player WOUND "" 2 1
+45.88 U target WOUND "" 37 1
+45.88 > swing swing
+47.07 C player 5229 - - - false - - -
+47.60 U player WOUND "" 3 1
+47.72 S 2.4270000457764 0 main
+48.33 U target WOUND "" 43 1
+48.33 > swing swing
+48.98 C player 779 - - - true - - -
+48.98 U target WOUND "" 20 1
+48.98 > cast (school learned) spell:779
+49.74 U player MISS "" 0 1
+50.24 S 2.4270000457764 0 main
+50.24 T -
+50.24 K Creature-0-6783-0-2-475-ABDC4C42CA swing
+51.09 T Creature-0-6783-0-2-475-ABDC4C42CA
+51.13 R-
+51.63 > settled all swing 124 80
+51.72 T -
