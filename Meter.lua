@@ -439,11 +439,20 @@ function ns.Meter.SpellManaCost(spellId)
     return 0
 end
 
+-- A stacked feed can run sideways (cfg.stackDir "horizontal"), its rows side by side,
+-- growing right or left from the anchor (cfg.growthH). Its rows then line up on the
+-- edge they grow from, whatever Alignment says.
+local function horizontal(cfg) return cfg.layout ~= "radial" and cfg.stackDir == "horizontal" end
+local function rowAlign(cfg)
+    if horizontal(cfg) then return (cfg.growthH == "LEFT") and "RIGHT" or "LEFT" end
+    return cfg.align
+end
+
 -- Which side of its number a hit splashes off: the feed's choice, else the side away
 -- from the anchor (left of rows that line up on the right).
 local function splashSide(cfg)
     if cfg.splashSide == "LEFT" or cfg.splashSide == "RIGHT" then return cfg.splashSide end
-    return (cfg.align == "RIGHT") and "LEFT" or "RIGHT"
+    return (rowAlign(cfg) == "RIGHT") and "LEFT" or "RIGHT"
 end
 
 -- A crit's flourish, while it plays: the colour to draw the number in (gold, easing
@@ -509,8 +518,11 @@ end
 -- `basis` is what severity scales against: the unit's max HP, or the biggest total
 -- in the feed when the client won't hand us a readable max HP (see update()).
 local function layoutFloat(s, list, dt, cfg, basis)
-    local ap = ALIGN_POINT[cfg.align] or "CENTER"
+    local align = rowAlign(cfg)
+    local ap = ALIGN_POINT[align] or "CENTER"
     local up = (cfg.growth ~= "DOWN")
+    local sideways = horizontal(cfg)
+    local cursor = 0                           -- sideways: how far out the next row starts
     local n  = math.min(#list, cfg.maxLines)   -- visible count (for the radial arc spread)
     for i = 1, #list do
         local t = list[i]
@@ -539,11 +551,11 @@ local function layoutFloat(s, list, dt, cfg, basis)
                 t.icon:SetSize(size, size)
             end
 
-            if t.appliedAlign ~= cfg.align then
-                t.appliedAlign = cfg.align
+            if t.appliedAlign ~= align then
+                t.appliedAlign = align
                 t.scaler:ClearAllPoints(); t.scaler:SetPoint(ap, t, ap, 0, 0)
                 t.text:ClearAllPoints();   t.text:SetPoint(ap, t.scaler, ap, 0, 0)
-                t.text:SetJustifyH(cfg.align)
+                t.text:SetJustifyH(align)
                 t.icon:ClearAllPoints();   t.icon:SetPoint("RIGHT", t.text, "LEFT", -4, 0)
             end
 
@@ -614,6 +626,22 @@ local function layoutFloat(s, list, dt, cfg, basis)
                 t.curY = t.curY + (ty - t.curY) * lerp
                 t:ClearAllPoints()
                 t:SetPoint("CENTER", s.container, "CENTER", t.curX, t.curY)
+            elseif sideways then
+                -- side by side, each as wide as it is drawn, Line spacing apart: the
+                -- icon before the number, the mana figure and skull after it
+                local before = hasIcon and (size + 4) or 0
+                local after = (mana and (mana:GetStringWidth() + 5) or 0)
+                if t.skull:IsShown() then
+                    after = after + size * 0.95 + 4 + (t.skullCount:IsShown() and (t.skullCount:GetStringWidth() + 1) or 0)
+                end
+                local x
+                if align == "RIGHT" then x = -(cursor + after) else x = cursor + before end
+                cursor = cursor + before + t.text:GetStringWidth() + after + (cfg.lineSpacing or 18)
+                if not t.curX then t.curX = x end
+                t.curX = t.curX + (x - t.curX) * math.min(1, dt * 10)
+                t.curY = 0
+                t:ClearAllPoints()
+                t:SetPoint(ap, s.container, ap, t.curX, 0)
             else
                 glide(t, up and (slot * cfg.lineSpacing) or (-slot * cfg.lineSpacing), dt)
                 t:ClearAllPoints()
@@ -887,7 +915,8 @@ local function update(M, s, dt)
             s.timeFS:SetText("Combat " .. fmtDuration(endT - s.combatStart))
             s.timeFS:SetTextColor(0.95, 0.85, 0.45)
             s.timeFS:ClearAllPoints()
-            s.timeFS:SetPoint("CENTER", s.container, "CENTER", 0, (up and 1 or -1) * (n * lh))
+            s.timeFS:SetPoint("CENTER", s.container, "CENTER", 0,
+                horizontal(cfg) and ((cfg.fontSize or 14) + 8) or ((up and 1 or -1) * (n * lh)))
             s.timeFS:Show()
         else
             s.timeFS:Hide()
@@ -914,7 +943,7 @@ local function anchorStream(M, s)
     s.container:ClearAllPoints()
     -- Pin the text's alignment edge to the anchor point, so Left/Center/Right place
     -- the numbers relative to that point. Radial centers on the point (arc around it).
-    local ap = (cfg.layout == "radial") and "CENTER" or (ALIGN_POINT[cfg.align] or "CENTER")
+    local ap = (cfg.layout == "radial") and "CENTER" or (ALIGN_POINT[rowAlign(cfg)] or "CENTER")
     s.container:SetPoint(ap, s.frame, "CENTER", cfg.xOffset, cfg.yOffset)
 end
 

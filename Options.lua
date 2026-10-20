@@ -43,6 +43,7 @@ local SCOPE  = { { value = "target", text = "Your target" }, { value = "all", te
 local SORT   = { { value = "amount", text = "Biggest first" }, { value = "lowest", text = "Smallest first" },
                  { value = "recent", text = "Most recent" } }
 local SIDE   = { { value = "LEFT", text = "Left" }, { value = "RIGHT", text = "Right" } }
+local STACKDIR = { { value = "vertical", text = "Vertical" }, { value = "horizontal", text = "Horizontal" } }
 
 local function val(x) if type(x) == "function" then return x() end return x end
 local function Sound(kit)
@@ -102,7 +103,7 @@ end
 -- either side of the centre.
 local LOOK = { "growth", "fontSize", "lineSpacing", "maxLines", "sortMode", "showLabel", "showIcon",
                "schoolColors", "layout", "radius", "arc", "arcFixed", "align", "arcAngle",
-               "pop", "roll", "splash", "splashSide", "critFlash" }
+               "pop", "roll", "splash", "splashSide", "critFlash", "stackDir", "growthH" }
 local FLIP = { LEFT = "RIGHT", RIGHT = "LEFT" }
 local ARCFLIP = { [0] = 180, [180] = 0 }
 local function copyLook(dst, src, mirror, position)
@@ -111,6 +112,7 @@ local function copyLook(dst, src, mirror, position)
         dst.align    = FLIP[src.align] or src.align
         dst.arcAngle = ARCFLIP[src.arcAngle] or src.arcAngle
         dst.splashSide = FLIP[src.splashSide] or src.splashSide
+        dst.growthH = FLIP[src.growthH] or src.growthH
     end
     if position then
         local x = (src.xOffset or 0)
@@ -130,6 +132,9 @@ local function FeedPage(o)
     local function cfg() return ns.db[db] end
     local stack  = function() return cfg().layout ~= "radial" end
     local radial = function() return cfg().layout == "radial" end
+    local sideways = function() return stack() and cfg().stackDir == "horizontal" end
+    local upright  = function() return not sideways() end
+    local column   = function() return stack() and not sideways() end
     local free   = function() return cfg().attach == "free" end
     local function moved() RA(); refresh(); RT() end
     local function laid() refresh(); RT() end
@@ -151,9 +156,12 @@ local function FeedPage(o)
         } },
         { title = "Layout", rows = {
             Choice(db, "layout", "Layout", "Stacked puts the rows one under another. Radial spreads them along an arc around the anchor.", LAYOUT, laid),
-            Choice(db, "growth", "Grow", "Which way new rows are added.", UPDOWN, laid),
-            Choice(db, "align", "Alignment", "Which edge of the rows lines up with the anchor.", ALIGN, refresh, { vis = stack }),
-            Slider(db, "lineSpacing", "Line spacing", "The space between rows, in pixels.", 8, 60, 1, laid, { vis = stack }),
+            Choice(db, "stackDir", "Direction", "Vertical puts the rows one under another; Horizontal puts them side by side in a line.", STACKDIR, laid, { vis = stack }),
+            Choice(db, "growth", "Grow", "Which way new rows are added.", UPDOWN, laid, { vis = upright }),
+            Choice(db, "growthH", "Grow", "Which way the line runs from the anchor. The rows line up on the edge they grow from.", SIDE, laid, { vis = sideways }),
+            Choice(db, "align", "Alignment", "Which edge of the rows lines up with the anchor.", ALIGN, refresh, { vis = column }),
+            Slider(db, "lineSpacing", "Line spacing", "The space between rows, in pixels.", 8, 60, 1, laid, { vis = column }),
+            Slider(db, "lineSpacing", "Space between", "The gap between one row and the next, in pixels.", 0, 60, 1, laid, { vis = sideways }),
             Slider(db, "radius", "Arc radius", "How far from the anchor the arc runs, in pixels.", 20, 400, 2, nil, { vis = radial }),
             Slider(db, "arc", "Arc span", "How much of a circle the arc covers.", 20, 360, 5, nil, { vis = radial, fmt = degrees }),
             Choice(db, "arcAngle", "Arc facing", "Which way the arc opens from the anchor.", FACING, nil, { vis = radial }),
@@ -513,6 +521,11 @@ local function placePreview()
         local needW, needH = horizontal and along or 2 * across, horizontal and 2 * across or along
         scale = math.min(1, w / needW, h / needH)
         ox, oy = -math.cos(a) * along / 2 * scale, -math.sin(a) * along / 2 * scale
+    elseif c.stackDir == "horizontal" then
+        local needW = (c.maxLines or 6) * (fs * 4 + (c.lineSpacing or 18))
+        scale = math.min(1, w / needW, h / (fs * 2))
+        oy = 0
+        ox = ((c.growthH == "LEFT") and 1 or -1) * needW / 2 * scale
     else
         local needH = (c.maxLines or 6) * (c.lineSpacing or 18) + fs
         local needW = fs * 7

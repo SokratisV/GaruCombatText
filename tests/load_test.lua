@@ -408,6 +408,21 @@ if FOREVER then
         check("Pop on each hit off: no jump", t0.pop == 1, tostring(t0.pop))
         ns.db.enemyText.pop = true
         for _ = 1, 25 do tick(0.05) end
+        -- Stacked, horizontal: rows side by side, growing right or left from the anchor
+        local c = ns.db.enemyText
+        c.layout, c.stackDir, c.growthH = "stack", "horizontal", "RIGHT"
+        em0:Bump(ns.frames.target, "spell:172", "Corruption", 5, 32, false, nil)
+        for _ = 1, 40 do tick(0.05) end
+        local big, small = t0, em0:Trackers(ns.frames.target)["spell:172"]
+        check("horizontal, growing right: the biggest at the anchor, the next to its right",
+              big.curX and small.curX and big.curX >= 0 and small.curX > big.curX and big.curY == 0,
+              tostring(big.curX) .. " / " .. tostring(small and small.curX))
+        c.growthH = "LEFT"
+        for _ = 1, 40 do tick(0.05) end
+        check("horizontal, growing left: the next to its left", small.curX < big.curX and big.curX <= 0,
+              tostring(big.curX) .. " / " .. tostring(small.curX))
+        c.layout, c.stackDir, c.growthH = "radial", "vertical", "RIGHT"
+        for _ = 1, 40 do tick(0.05) end
     end
     ok, err = pcall(fire, "PLAYER_SWING", nil, 0)
     check("swing path runs", ok, err)

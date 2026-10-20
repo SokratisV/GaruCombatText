@@ -237,6 +237,7 @@ ns.defaults = {
         scope = "all", holdSecs = 10,   -- "target": per target; "all": every enemy, per fight
         hideBlizzardFCT = true, onFocus = false,
         pop = true, roll = true, splash = true, splashSide = "RIGHT", critFlash = true, killMark = true,   -- effects (Meter.lua)
+        stackDir = "vertical", growthH = "RIGHT",   -- Stacked: one under another, or side by side
         layout = "radial", radius = 70, arc = 100, arcAngle = 0, arcFixed = true,
         attach = "free", point = { "CENTER", 75, -50 },
     },
@@ -249,6 +250,7 @@ ns.defaults = {
         showIcon = true, sortMode = "amount", threshold = 0, showMana = false,
         valueMode = "amount", includeMana = true, windowSecs = 5, holdSecs = 10,
         pop = true, roll = true, splash = true, splashSide = "LEFT", critFlash = true,
+        stackDir = "vertical", growthH = "LEFT",
         layout = "radial", radius = 70, arc = 100, arcAngle = 180, arcFixed = true,
         attach = "free", point = { "CENTER", -150, -50 },
     },
@@ -262,6 +264,7 @@ ns.defaults = {
         showMana = false, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, showAvoid = true, holdSecs = 10,
         pop = true, roll = true, splash = true, splashSide = "LEFT", critFlash = true,
+        stackDir = "vertical", growthH = "LEFT",
         layout = "radial", radius = 70, arc = 100, arcAngle = 180, arcFixed = true,
         attach = "free", point = { "CENTER", -75, -50 },
     },
@@ -274,6 +277,7 @@ ns.defaults = {
         showMana = false, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, persist = true,
         scope = "all", holdSecs = 10, pop = true,
+        stackDir = "vertical", growthH = "RIGHT",
         layout = "radial", radius = 70, arc = 100, arcAngle = 0, arcFixed = true,
         attach = "free", point = { "CENTER", 150, -50 },
     },

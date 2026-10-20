@@ -51,6 +51,8 @@ function ns.RefreshTimer()
         -- feed's grow direction, then add the user's fine offset.
         local up = (fcfg.growth ~= "DOWN")
         local autoY = (up and 1 or -1) * ((fcfg.maxLines or 6) * (fcfg.lineSpacing or 18))
+        -- a feed that runs sideways is one line high: just above it
+        if fcfg.layout ~= "radial" and fcfg.stackDir == "horizontal" then autoY = (fcfg.fontSize or 14) + 8 end
         tf:SetPoint("CENTER", host, "CENTER", c.xOffset or 0, (c.yOffset or 0) + autoY)
         tf:EnableMouse(false)
     else  -- free
