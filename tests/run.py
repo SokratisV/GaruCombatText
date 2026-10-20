@@ -102,6 +102,8 @@ MUTANTS = [
      "every heal is taken as cast on you, never on your target"),
     ("UnitCombat.lua", "if not (ns.db and ns.db.doneText and ns.db.doneText.enabled) then return end", "do return end",
      "Healing Done is never set to the meter's after the fight"),
+    ("Meter.lua", 'if cfg.growthH == "CENTER" then x = x - lastLineW / 2 end', "",
+     "a centred horizontal line runs right from the anchor instead"),
     ("Meter.lua", "if flourish then t.flashT = 0 end", "",
      "a crit no longer flourishes"),
     ("Meter.lua", "t.pop, t.popLen = (cfg.pop ~= false) and 1.45 or 1, POP_LEN", "t.pop, t.popLen = 1.45, POP_LEN",

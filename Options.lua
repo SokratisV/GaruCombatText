@@ -45,6 +45,7 @@ local SORT   = { { value = "amount", text = "Biggest first" }, { value = "lowest
                  { value = "recent", text = "Most recent" } }
 local SIDE   = { { value = "LEFT", text = "Left" }, { value = "RIGHT", text = "Right" } }
 local STACKDIR = { { value = "vertical", text = "Vertical" }, { value = "horizontal", text = "Horizontal" } }
+local SIDEWAYS = { { value = "LEFT", text = "Left" }, { value = "CENTER", text = "Centre" }, { value = "RIGHT", text = "Right" } }
 
 local function val(x) if type(x) == "function" then return x() end return x end
 local function Sound(kit)
@@ -159,7 +160,7 @@ local function FeedPage(o)
             Choice(db, "layout", "Layout", "Stacked puts the rows one under another. Radial spreads them along an arc around the anchor.", LAYOUT, laid),
             Choice(db, "stackDir", "Direction", "Vertical puts the rows one under another; Horizontal puts them side by side in a line.", STACKDIR, laid, { vis = stack }),
             Choice(db, "growth", "Grow", "Which way new rows are added.", UPDOWN, laid, { vis = upright }),
-            Choice(db, "growthH", "Grow", "Which way the line runs from the anchor. The rows line up on the edge they grow from.", SIDE, laid, { vis = sideways }),
+            Choice(db, "growthH", "Grow", "Which way the line runs from the anchor: left, right, or out both ways with the line centred on it.", SIDEWAYS, laid, { vis = sideways }),
             Choice(db, "align", "Alignment", "Which edge of the rows lines up with the anchor.", ALIGN, refresh, { vis = column }),
             Slider(db, "lineSpacing", "Line spacing", "The space between rows, in pixels.", 8, 60, 1, laid, { vis = column }),
             Slider(db, "lineSpacing", "Space between", "The gap between one row and the next, in pixels.", 0, 60, 1, laid, { vis = sideways }),
@@ -558,10 +559,15 @@ local function placePreview()
         scale = math.min(1, w / needW, h / needH)
         ox, oy = -math.cos(a) * along / 2 * scale, -math.sin(a) * along / 2 * scale
     elseif c.stackDir == "horizontal" then
-        local needW = (c.maxLines or 6) * (fs * 4 + (c.lineSpacing or 18))
-        scale = math.min(1, w / needW, h / (fs * 2))
+        -- the line as wide as it is drawn; shrunk at most to three quarters, so it
+        -- stays readable, the rows past the box's edge cut off. It starts at the
+        -- box's edge it grows from, or sits in its middle when centred.
+        local st = pv.meter.streams[pv.host]
+        local needW = (st and st.lineW and st.lineW > 0) and st.lineW or (c.maxLines or 6) * (fs * 4 + (c.lineSpacing or 18))
+        scale = math.max(0.75, math.min(1, w / needW, h / (fs * 2)))
         oy = 0
-        ox = ((c.growthH == "LEFT") and 1 or -1) * needW / 2 * scale
+        if c.growthH == "CENTER" then ox = 0
+        else ox = ((c.growthH == "LEFT") and 1 or -1) * (w / 2 - 2) end
     else
         local needH = (c.maxLines or 6) * (c.lineSpacing or 18) + fs
         local needW = fs * 7

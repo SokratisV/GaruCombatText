@@ -451,8 +451,9 @@ function ns.Meter.SpellManaCost(spellId)
 end
 
 -- A stacked feed can run sideways (cfg.stackDir "horizontal"), its rows side by side,
--- growing right or left from the anchor (cfg.growthH). Its rows then line up on the
--- edge they grow from, whatever Alignment says.
+-- growing right or left from the anchor, or out both ways with the line centred on it
+-- (cfg.growthH RIGHT / LEFT / CENTER). Its rows then line up on the edge they grow
+-- from, whatever Alignment says (a centred line is laid out from its left end).
 local function horizontal(cfg) return cfg.layout ~= "radial" and cfg.stackDir == "horizontal" end
 local function rowAlign(cfg)
     if horizontal(cfg) then return (cfg.growthH == "LEFT") and "RIGHT" or "LEFT" end
@@ -534,6 +535,8 @@ local function layoutFloat(s, list, dt, cfg, basis)
     local up = (cfg.growth ~= "DOWN")
     local sideways = horizontal(cfg)
     local cursor = 0                           -- sideways: how far out the next row starts
+    local lastLineW = s.lineW or 0             -- the line's width last frame, to centre it
+    if sideways then s.lineW = 0 end
     local n  = math.min(#list, cfg.maxLines)   -- visible count (for the radial arc spread)
     for i = 1, #list do
         local t = list[i]
@@ -647,12 +650,15 @@ local function layoutFloat(s, list, dt, cfg, basis)
                 end
                 local x
                 if align == "RIGHT" then x = -(cursor + after) else x = cursor + before end
+                -- centred: the whole line shifted back by half its width (last frame's)
+                if cfg.growthH == "CENTER" then x = x - lastLineW / 2 end
                 cursor = cursor + before + t.text:GetStringWidth() + after + (cfg.lineSpacing or 18)
                 if not t.curX then t.curX = x end
                 t.curX = t.curX + (x - t.curX) * math.min(1, dt * 10)
                 t.curY = 0
                 t:ClearAllPoints()
                 t:SetPoint(ap, s.container, ap, t.curX, 0)
+                s.lineW = cursor - (cfg.lineSpacing or 18)   -- how wide the line is so far
             else
                 glide(t, up and (slot * cfg.lineSpacing) or (-slot * cfg.lineSpacing), dt)
                 t:ClearAllPoints()

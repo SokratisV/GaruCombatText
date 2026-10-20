@@ -422,6 +422,10 @@ if FOREVER then
         for _ = 1, 40 do tick(0.05) end
         check("horizontal, growing left: the next to its left", small.curX < big.curX and big.curX <= 0,
               tostring(big.curX) .. " / " .. tostring(small.curX))
+        c.growthH = "CENTER"
+        for _ = 1, 60 do tick(0.05) end
+        check("horizontal, centred: the line straddles the anchor", big.curX < -5 and small.curX > 5,
+              tostring(big.curX) .. " / " .. tostring(small.curX))
         c.layout, c.stackDir, c.growthH = "radial", "vertical", "RIGHT"
         for _ = 1, 40 do tick(0.05) end
     end
