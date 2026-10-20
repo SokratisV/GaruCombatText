@@ -272,6 +272,7 @@ ns.On("SPELL_TEXT_UPDATE", function(_, spell) if num(spell) then factCache[spell
 -- dealt    { key, label, amount, school, crit, icon, pet }   a hit of yours on your target
 --          (onTarget false: on another enemy's plate; killed = guid: the blow
 --          that killed the target that just cleared, on that unit's plate)
+-- killed   { guid, key, label, icon, school }   your target died, and this attack did it
 -- avoided  { missType, pet }                                 your target avoided you
 -- taken    { amount, school, crit }                          a hit on you
 -- dodged   { missType }                                      you avoided a hit
@@ -321,6 +322,8 @@ stats = newStats()
 --   > <decision> [key]                   what became of the report above it
 --   K <guid> <key>                       your target cleared at your blow, or with a
 --                                        bolt of yours in flight at it: a kill by that
+--   KB <guid> <key>                      the attack the kill is marked on (the killing
+--                                        hit, when it came on the dying unit's plate)
 --   A <school:spell ...> | none          your damage shields that are up, when that changes
 --   M <key> <meter> <shown>              after the fight: the meter's total for a
 --                                        kill's attack, and what the feed had shown
@@ -756,6 +759,8 @@ local SETTLE_AT    = { 0.5, 1.5, 3, 5 }   -- the meter is not final the instant 
 local SETTLE_LIMIT = 3      -- a top-up may be at most this many of the attack's largest hits
 
 local tally, biggest, kills = {}, {}, {}   -- this fight: shown per key, largest hit per key, kills
+local pendingKill                          -- the kill just noticed, waiting for its killing hit
+local emitKill                             -- (below, once keyLabel is)
 local lastBlow                             -- { at, key }: the last thing of yours that landed or swung
 local fightNo, inCombat, prevTarget = 0, false, nil
 
@@ -1137,6 +1142,10 @@ local function onUnitCombat(unit, event, flag, amount, school)
         stats.dying = (stats.dying or 0) + 1
     end
     placeOnTarget(rec, t, plateKey, plateKey and unit)
+    -- the killing hit names the attack that gets the skull
+    if dying and rec.key and pendingKill and pendingKill.guid == dying then
+        pendingKill.hit = pendingKill.hit or rec.key
+    end
 end
 
 ns.On("UNIT_COMBAT", function(_, ...) onUnitCombat(...) end)
@@ -1159,9 +1168,15 @@ ns.On("PLAYER_TARGET_CHANGED", function()
         if inCombat then lostTargetAt, lostGuid = t, prevTarget end
         if inCombat and prevTarget then
             local marked = {}
+            -- which attack gets the skull: the killing hit, if it comes on the dying
+            -- unit's plate in a moment; else the blow or bolt noted here
+            local pending = { guid = prevTarget }
+            pendingKill = pending
+            C_Timer.After(KILL_PLATE + 0.05, function() emitKill(pending) end)
             local function kill(key)
                 if marked[key] then return end
                 marked[key] = true
+                pending.key = pending.key or key
                 kills[#kills + 1] = { guid = prevTarget, key = key, at = t }
                 note("K", prevTarget, key)
             end
@@ -1187,6 +1202,20 @@ local function keyLabel(key)
     local f = factCache[spell]
     return ns.SpellName(spell) or ("Spell " .. spell), ns.SpellTexture(spell),
            (f and (f.school or f.procSchool)) or learnedSchool[spell]
+end
+
+-- A kill, once its killing hit has had its moment to come: the attack that did it,
+-- for the feeds to mark. Nothing when nothing of yours was in it (the target was
+-- cleared by hand).
+emitKill = function(p)
+    if p.done then return end
+    p.done = true
+    if pendingKill == p then pendingKill = nil end
+    local key = p.hit or p.key
+    if not key then return end
+    local label, icon, school = keyLabel(key)
+    note("KB", p.guid, key)
+    emit("killed", { guid = p.guid, key = key, label = label, icon = icon, school = school })
 end
 
 -- Once the meter gives the fight's totals: credit each kill's missing blow.

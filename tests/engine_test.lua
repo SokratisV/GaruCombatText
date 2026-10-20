@@ -605,6 +605,37 @@ else
 end
 ns.db.enemyText.scope = "target"
 
+-- 14d. Which attack a kill is marked on (the skull on Damage Dealt): the killing hit
+--      when it comes on the dying unit's plate, else the blow in the moment the
+--      target cleared; nothing when nothing of yours was in it.
+local killedList = {}
+ns.UC.Subscribe("killed", function(r) killedList[#killedList + 1] = r end)
+local function lastKilled(name, t, guid, k)
+    advance(t)
+    local r = killedList[#killedList]
+    if r and r.guid == guid and r.key == k then pass = pass + 1
+    else fail = fail + 1; print(("FAIL  %s: got %s %s"):format(name, tostring(r and r.guid), tostring(r and r.key))) end
+end
+class = "DRUID"
+retarget(800, "Creature-X1"); fight(800)
+swing(801); hit(801.5, 40, 1); expect("swing", 801.51, "dealt", key("swing", 40))
+swing(803); retarget(803, nil)                   -- killed by the swing: no hit comes
+lastKilled("a killing swing gets the mark", 804, "Creature-X1", "swing")
+retarget(810, "Creature-X2")
+plates.nameplate9 = "Creature-X2"
+cast(810, 686); swing(811.95); retarget(812, nil)  -- a swing in the moment too
+advance(812.03); fire("UNIT_COMBAT", "nameplate9", "WOUND", "", 300, 32)
+expect("the killing bolt", 812.04, "dealt", key("spell:686", 300))
+lastKilled("the killing hit beats the swing in the same moment", 813, "Creature-X2", "spell:686")
+plates.nameplate9 = nil
+local before = #killedList
+retarget(820, "Creature-X3"); retarget(825, nil)   -- cleared by hand, nothing of yours in it
+advance(826)
+if #killedList == before then pass = pass + 1 else fail = fail + 1; print("FAIL  a target cleared by hand is no kill") end
+peace(827)
+advance(840)
+for i = #got, 1, -1 do if got[i].kind == "settled" or got[i].kind == "settledAll" then table.remove(got, i) end end
+
 -- 13. What descriptions say.
 local function facts(name, id, want)
     local f = ns.UC.Facts(id) or {}

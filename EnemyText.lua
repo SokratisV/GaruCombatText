@@ -10,6 +10,7 @@ local MELEE_ICON    = "Interface\\ICONS\\INV_Sword_04"
 
 local playerGUID
 local testAcc = 0
+local lastKeyOn = {}   -- [enemy GUID] = the key of your last hit on it (Classic)
 
 local meter = ns.Meter.New({ cfg = function() return ns.db.enemyText end })
 
@@ -79,6 +80,16 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local frame = destFrame(destGUID, destFlags)
     if not frame then return end
 
+    -- your killing blow: the last thing of yours that hit it gets the skull
+    if sub == "PARTY_KILL" then
+        local key = destGUID and lastKeyOn[destGUID]
+        if key then
+            meter:MarkKill(frame, (not everyEnemy()) and destGUID or nil, key)
+            lastKeyOn[destGUID] = nil
+        end
+        return
+    end
+
     -- mana spent: attribute a cast's mana cost to that spell's line (player only)
     if sub == "SPELL_CAST_SUCCESS" then
         if not cfg.showMana then return end
@@ -115,7 +126,10 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
 
     if everyEnemy() then meter:Fresh() end
     meter:Bump(frame, key, label, amount, school, crit and true or false, iconTex)
+    if destGUID and not ns.IsSecret(destGUID) then lastKeyOn[destGUID] = key end
 end)
+-- what last hit each enemy, for its killing blow; forgotten between fights
+ns.On("PLAYER_REGEN_ENABLED", function() C_Timer.After(2, function() wipe(lastKeyOn) end) end)
 end
 
 -- WoW Forever, live: hits on your target worked out as yours (UnitCombat.lua),
@@ -151,6 +165,15 @@ if ns.UseUnitCombat then
         local frame = ns.frames and ns.frames.target
         if not frame then return end
         meter:SetTotal(frame, r.key, r.label, r.total, r.school, r.icon)
+    end)
+    -- Your target died, and this attack did it: its row gets the skull, on the dead
+    -- unit's own totals (or the fight's, counting every enemy).
+    ns.UC.Subscribe("killed", function(r)
+        local cfg = ns.db.enemyText
+        if not cfg.enabled or ns.test.combat then return end
+        local frame = ns.frames and ns.frames.target
+        if not frame then return end
+        meter:MarkKill(frame, (not everyEnemy()) and r.guid or nil, r.key)
     end)
     -- A killing blow, settled from the meter once the fight is over (UnitCombat.lua):
     -- it goes on the dead unit's own totals, wherever your target is by then.
@@ -246,6 +269,7 @@ function ns.EnemyTextTest(dt)
     local amt = math.random(80, 1400)
     if math.random() < 0.15 then amt = amt * 3 end
     meter:Bump(f, src.key, src.label, amt, src.school, math.random() < 0.2, src.icon)
+    if math.random() < 0.06 then meter:MarkKill(f, nil, src.key) end   -- now and then, a kill
     if ns.db.enemyText.showMana and src.key ~= "swing" then
         local trackers = meter:Trackers(f)
         local t = trackers and trackers[src.key]

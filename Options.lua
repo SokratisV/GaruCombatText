@@ -102,7 +102,8 @@ end
 -- different on each. Mirrored, left and right swap, so two feeds sit as a pair
 -- either side of the centre.
 local LOOK = { "growth", "fontSize", "lineSpacing", "maxLines", "sortMode", "showLabel", "showIcon",
-               "schoolColors", "layout", "radius", "arc", "arcFixed", "align", "arcAngle" }
+               "schoolColors", "layout", "radius", "arc", "arcFixed", "align", "arcAngle",
+               "roll", "splash", "critFlash" }
 local FLIP = { LEFT = "RIGHT", RIGHT = "LEFT" }
 local ARCFLIP = { [0] = 180, [180] = 0 }
 local function copyLook(dst, src, mirror, position)
@@ -160,6 +161,19 @@ local function FeedPage(o)
         } },
         { title = "Text", rows = text },
     }
+    -- what a hit looks like as it lands (Meter.lua); not for Actions, which only counts
+    if o.effects then
+        local half = { half = true }
+        local fx = {
+            Toggle(db, "roll", "Rolling totals", "A total counts up to its new value instead of jumping to it.", nil, half),
+            Toggle(db, "splash", "Hit splashes", "Each hit floats off its row as +N for a moment, while the total grows.", nil, half),
+            Toggle(db, "critFlash", "Crit flourish", "A critical hit makes its number jump, flash gold and burst.", nil, half),
+        }
+        if o.killMark then
+            fx[#fx + 1] = Toggle(db, "killMark", "Killing blow mark", "A skull on the row whose attack killed the enemy, with a count once it has killed more than one.", nil, half)
+        end
+        sections[#sections + 1] = { title = "Effects", rows = fx }
+    end
     if o.counting then sections[#sections + 1] = { title = "Counting", rows = o.counting } end
     return { key = o.key, title = o.title, desc = o.desc, enabledDb = db, onToggle = refresh,
              banner = o.banner, unavailable = o.unavailable, sections = sections, copy = true }
@@ -184,7 +198,7 @@ local function definePages()
 
     pages = {
         FeedPage({
-            key = "heal", db = "healText", refresh = RH,
+            key = "heal", db = "healText", refresh = RH, effects = true,
             title = function() return ns.SummaryMode and "Healing Cast" or "Healing Received" end,
             desc = "Healing that lands on you, one row per spell, from anyone. Out of combat it shows a rolling window of the last few seconds; in a fight it keeps every heal, and holds the lot for a moment after.",
             banner = function()
@@ -212,7 +226,7 @@ local function definePages()
             },
         }),
         FeedPage({
-            key = "taken", db = "takenText", refresh = RK,
+            key = "taken", db = "takenText", refresh = RK, effects = true,
             title = "Damage Taken",
             desc = function()
                 return ns.UseUnitCombat and "The damage you take this fight from every enemy together, one row per school."
@@ -236,7 +250,7 @@ local function definePages()
             },
         }),
         FeedPage({
-            key = "dealt", db = "enemyText", refresh = RE,
+            key = "dealt", db = "enemyText", refresh = RE, effects = true, killMark = true,
             title = "Damage Dealt",
             desc = function()
                 if ns.db.enemyText.scope == "all" then
@@ -429,6 +443,140 @@ local function ShowPageInfo()
     end
     local p = pageByKey and pageByKey[current]
     if p then ShowInfo(val(p.title), val(p.desc), "Hover any setting to see what it does.") end
+end
+
+--------------------------------------------------------------------------
+-- 4b. THE PREVIEW: the page's feed, drawn small at the foot of the right column
+--------------------------------------------------------------------------
+-- A meter of its own, read with the page's settings, fed made-up hits, so a change
+-- shows at once: an arc's radius as it is dragged, the effects as they play. Scaled
+-- to fit the box, and set off to the side the feed grows away from.
+local PREVIEW_H = 190
+local MELEE = "Interface\\ICONS\\INV_Sword_04"
+local function spellTex(id) return ns.SpellTexture and ns.SpellTexture(id) or nil end
+local SAMPLES = {
+    dealt = { { key = "spell:686", label = "Shadow Bolt", school = 32, spell = 686, base = 310 },
+              { key = "swing", label = "Melee", school = 1, icon = MELEE, base = 46 },
+              { key = "spell:348", label = "Immolate", school = 4, spell = 348, base = 120 },
+              { key = "spell:172", label = "Corruption", school = 32, spell = 172, base = 38 } },
+    heal  = { { key = "spell:2061", label = "Flash Heal", school = 2, spell = 2061, base = 220 },
+              { key = "spell:139", label = "Renew", school = 2, spell = 139, base = 45 },
+              { key = "heal:other", label = "Healing", school = 2, icon = "Interface\\ICONS\\Spell_Holy_Heal", base = 90 } },
+    taken = { { key = "school:1", label = "Physical", school = 1, icon = "Interface\\ICONS\\Ability_MeleeDamage", base = 60 },
+              { key = "school:4", label = "Fire", school = 4, icon = "Interface\\ICONS\\Spell_Fire_FlameBolt", base = 140 },
+              { key = "school:32", label = "Shadow", school = 32, icon = "Interface\\ICONS\\Spell_Shadow_ShadowBolt", base = 95 },
+              { key = "miss:DODGE", label = "Dodge", count = true, icon = "DODGE" } },
+    actions = { { key = "miss:DODGE", label = "Dodge", count = true, icon = "DODGE" },
+                { key = "miss:PARRY", label = "Parry", count = true, icon = "PARRY" },
+                { key = "miss:RESIST", label = "Resist", count = true, icon = "RESIST" } },
+}
+local DB_OF = { dealt = "enemyText", heal = "healText", taken = "takenText", actions = "actionsText" }
+
+local pv = { db = "enemyText" }
+local function previewCfg() return ns.db[pv.db] end
+
+local function sampleIcon(sm)
+    if sm.count then return ns.AVOID_ICON and ns.AVOID_ICON[sm.icon] end
+    return sm.icon or spellTex(sm.spell)
+end
+
+-- One made-up hit on a sample row; a crit now and then, a kill on Damage Dealt.
+local function previewHit(sm, first)
+    if sm.count then
+        pv.meter:Bump(pv.host, sm.key, sm.label, 1, 1, false, sampleIcon(sm))
+        return
+    end
+    local crit = (not first) and math.random() < 0.2
+    local amount = math.floor(sm.base * (0.8 + math.random() * 0.4) * (crit and 2 or 1))
+    pv.meter:Bump(pv.host, sm.key, sm.label, amount, sm.school, crit, sampleIcon(sm))
+end
+
+-- Where the anchor sits in the box, and how small the feed is drawn to fit.
+local function placePreview()
+    local c = previewCfg()
+    local w, h = pv.box:GetWidth() - 16, pv.box:GetHeight() - 24
+    if not w or w <= 0 then return end
+    local fs = c.fontSize or 14
+    local scale, ox, oy
+    if c.layout == "radial" then
+        local R = c.radius or 70
+        local along = R + fs * 3.5                                  -- out to a row's number
+        local across = R * math.sin(math.rad(math.min(c.arc or 100, 180)) / 2) + fs
+        local a = math.rad(c.arcAngle or 0)
+        local horizontal = math.abs(math.cos(a)) > 0.5
+        local needW, needH = horizontal and along or 2 * across, horizontal and 2 * across or along
+        scale = math.min(1, w / needW, h / needH)
+        ox, oy = -math.cos(a) * along / 2 * scale, -math.sin(a) * along / 2 * scale
+    else
+        local needH = (c.maxLines or 6) * (c.lineSpacing or 18) + fs
+        local needW = fs * 7
+        scale = math.min(1, h / needH, w / needW)
+        oy = ((c.growth ~= "DOWN") and -1 or 1) * needH / 2 * scale
+        ox = (c.align == "LEFT" and -needW / 2 or c.align == "RIGHT" and needW / 2 or 0) * scale
+    end
+    scale = math.max(0.3, scale)
+    pv.host:SetScale(scale)
+    pv.host:ClearAllPoints()
+    pv.host:SetPoint("CENTER", pv.box, "CENTER", ox / scale, (oy - 8) / scale)
+    pv.meter:Refresh({ pv.host }, function() return true end)
+end
+
+-- The page shown is a feed: show its preview, filled afresh.
+local function ShowPreview(key)
+    if not pv.box then return end
+    local db = DB_OF[key]
+    if not db then
+        pv.box:Hide()
+        pv.page = nil
+        return
+    end
+    pv.box:Show()
+    if pv.page == key then return end
+    pv.page, pv.db, pv.since, pv.age = key, db, 0, 0
+    pv.meter:Clear()
+    placePreview()
+    for _, sm in ipairs(SAMPLES[key]) do previewHit(sm, true) end
+end
+
+local function BuildPreview(right)
+    local box = CreateFrame("Frame", nil, right)
+    box:SetPoint("BOTTOMLEFT", PAD, PAD)
+    box:SetPoint("BOTTOMRIGHT", -PAD, PAD)
+    box:SetHeight(PREVIEW_H)
+    if box.SetClipsChildren then pcall(box.SetClipsChildren, box, true) end
+    local bg = box:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.35)
+    local top = Line(box)
+    top:SetPoint("TOPLEFT"); top:SetPoint("TOPRIGHT")
+    local label = Text(box, "GameFontDisableSmall")
+    label:SetPoint("TOPLEFT", 6, -5)
+    label:SetText("Preview")
+    pv.box = box
+    pv.host = CreateFrame("Frame", nil, box)
+    pv.host:SetSize(1, 1)
+    pv.host.unit = "player"                     -- the meter keys its rows by a unit
+    pv.meter = ns.Meter.New({ cfg = previewCfg, noFade = true, strata = "DIALOG" })
+    pv.meter.ignorePersist = true
+    -- hits every so often; refilled now and then so the numbers stay small
+    box:SetScript("OnUpdate", function(_, dt)
+        if not pv.page then return end
+        placePreview()                          -- a slider may be moving
+        pv.since, pv.age = pv.since + dt, pv.age + dt
+        if pv.since < 0.85 then return end
+        pv.since = 0
+        local list = SAMPLES[pv.page]
+        if pv.age > 30 then
+            pv.age = 0
+            pv.meter:Clear()
+            for _, sm in ipairs(list) do previewHit(sm, true) end
+            return
+        end
+        local sm = list[math.random(1, #list)]
+        previewHit(sm)
+        if pv.page == "dealt" and math.random() < 0.12 then pv.meter:MarkKill(pv.host, nil, sm.key) end
+    end)
+    box:Hide()
 end
 
 --------------------------------------------------------------------------
@@ -812,6 +960,7 @@ function Panel.Refresh()
     ReleaseAll()
     local searching = searchText ~= ""
     local p = pageByKey[current]
+    ShowPreview(current)
 
     -- header: switch and title, Copy to..., the client's note
     local banner, bannerLong
@@ -1179,6 +1328,7 @@ local function BuildWindow()
     preview.tip:SetPoint("TOPLEFT", preview.desc, "BOTTOMLEFT", 0, -10)
     preview.tip:SetPoint("RIGHT", -PAD, 0)
     preview.tip:SetSpacing(2)
+    BuildPreview(right)
 
     -- middle column: the page
     local middle = CreateFrame("Frame", nil, body)

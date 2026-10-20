@@ -21,6 +21,22 @@ local SCHOOL_COLOR = {
     [64] = { 0.95, 0.55, 1.00 },  -- Arcane
 }
 local NEUTRAL = { 1.00, 0.95, 0.85 }
+local CRIT_GOLD = { 1.00, 0.82, 0.25 }
+local NEUTRAL_WHITE = { 1, 1, 1 }
+local MANA_COLOR = { 0.35, 0.62, 1.00 }
+local BURST_TEX = "Interface\\Cooldown\\star4"                       -- the cooldown "bling"
+local SKULL_TEX = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull"
+
+-- Effects (each feed's own switches; see Options.lua's Effects section):
+--   roll       a total counts up to its new value instead of jumping to it
+--   splash     each hit floats off its row as +N and fades
+--   critFlash  a crit pops bigger, flashes gold, and a star bursts behind it
+--   killMark   a skull on the row whose attack killed the enemy (Damage Dealt)
+local ROLL_RATE   = 9      -- how fast a rolling total closes the gap (per second)
+local SPLASH_LIFE = 0.9    -- how long a splash floats, in seconds
+local SPLASH_MAX  = 12     -- splashes in the air at once, per feed
+local FLASH_LIFE  = 0.7    -- a crit's gold and its star
+local SKULL_IN    = 0.35   -- the skull dropping into place
 local AVOID_COLOR = { 0.72, 0.74, 0.80 }   -- miss / dodge / parry / block count rows
 local ALIGN_POINT = { LEFT = "LEFT", CENTER = "CENTER", RIGHT = "RIGHT" }
 ns.Meter.SCHOOL_COLOR = SCHOOL_COLOR
@@ -76,6 +92,21 @@ local function newTracker(s)
     f.manaText:SetShadowColor(0, 0, 0, 1)
     f.manaText:SetShadowOffset(1, -1)
     f.manaText:Hide()
+
+    -- a crit's flourish: a star that bursts out behind the icon and fades
+    f.burst = g:CreateTexture(nil, "ARTWORK")
+    f.burst:SetTexture(BURST_TEX)
+    f.burst:SetBlendMode("ADD")
+    f.burst:Hide()
+
+    -- the killing blow's mark, past the number, and how many kills when more than one
+    f.skull = g:CreateTexture(nil, "OVERLAY")
+    f.skull:SetTexture(SKULL_TEX)
+    f.skull:Hide()
+    f.skullCount = g:CreateFontString(nil, "OVERLAY")
+    f.skullCount:SetShadowColor(0, 0, 0, 1)
+    f.skullCount:SetShadowOffset(1, -1)
+    f.skullCount:Hide()
     return f
 end
 
@@ -83,6 +114,25 @@ local function release(s, key, t)
     t:Hide()
     s.trackers[key] = nil
     s.pool[#s.pool + 1] = t
+end
+
+-- Kills, per unit the stream has shown and per row: { [guid] = { [key] = n } }. Kept
+-- apart from the remembered totals, so a kill marked before its row exists (a killing
+-- swing that is only settled after the fight) still shows once the row comes.
+local function killsOf(s, guid)
+    if not guid then return nil end
+    s.kills = s.kills or {}
+    s.kills[guid] = s.kills[guid] or {}
+    return s.kills[guid]
+end
+
+local function clearSplashes(s)
+    for i = #(s.splashes or {}), 1, -1 do
+        local sp = s.splashes[i]
+        sp.fs:Hide()
+        s.splashPool[#s.splashPool + 1] = sp.fs
+        s.splashes[i] = nil
+    end
 end
 
 local function resetStream(s)
@@ -94,6 +144,8 @@ local function resetStream(s)
     end
     s.combatStart, s.lastHit = nil, nil          -- combat-duration tracking
     if s.timeFS then s.timeFS:Hide() end
+    clearSplashes(s)
+    if s.kills and s.guid then s.kills[s.guid] = nil end
 end
 
 --------------------------------------------------------------------------
@@ -123,9 +175,13 @@ local function restoreInto(s, guid)
     s.lastHit     = tw and tw[2] or nil
     local snap = s.store[guid]
     if not snap then return end
+    local kills = s.kills and s.kills[guid]
     for key, d in pairs(snap) do             -- rebuild from saved totals, no pop
         local t = table.remove(s.pool) or newTracker(s)
+        t.key = key
         t.total, t.label, t.school, t.iconTex = d.total, d.label, d.school, d.iconTex
+        t.shown = d.total                    -- no count-up for totals coming back
+        t.kills, t.killT, t.flashT = kills and kills[key] or 0, nil, nil
         t.mana = d.mana or 0
         t.isMana  = (type(key) == "string" and key:sub(1, 5) == "mana:") or false
         t.isCount = (type(key) == "string" and key:sub(1, 5) == "miss:") or false
@@ -172,7 +228,13 @@ local function ensureTracker(s, key)
     local t = s.trackers[key]
     if not t then
         t = table.remove(s.pool) or newTracker(s)
+        t.key   = key
         t.total = 0
+        t.shown = 0     -- what the rolling total shows on its way to .total
+        t.flashT = nil  -- a crit's flourish, while it plays
+        local kills = s.kills and s.guid and s.kills[s.guid]
+        t.kills = kills and kills[key] or 0
+        t.killT = nil
         t.mana  = 0
         t.curX  = nil
         t.curY  = nil
@@ -194,6 +256,38 @@ local function ensureTracker(s, key)
     return t
 end
 
+-- A hit floating off its row: +N in the row's colour (gold for a crit), on the side
+-- away from the anchor. Drawn and moved in update (moveSplashes).
+local function spawnSplash(M, s, t, amount, crit)
+    local cfg = M.cfg()
+    s.splashes = s.splashes or {}
+    s.splashPool = s.splashPool or {}
+    if #s.splashes >= SPLASH_MAX then          -- the oldest makes room
+        local old = table.remove(s.splashes, 1)
+        old.fs:Hide()
+        s.splashPool[#s.splashPool + 1] = old.fs
+    end
+    local fs = table.remove(s.splashPool)
+    if not fs then
+        fs = s.container:CreateFontString(nil, "OVERLAY")
+        fs:SetShadowColor(0, 0, 0, 1)
+        fs:SetShadowOffset(1, -1)
+    end
+    fs:SetFont(ns.Font(ns.db.general.font), math.max(8, math.floor((cfg.fontSize or 14) * 0.72)), "OUTLINE")
+    local c = (crit and cfg.critFlash and CRIT_GOLD) or (t.isMana and MANA_COLOR)
+        or (cfg.schoolColors and SCHOOL_COLOR[t.school]) or NEUTRAL
+    fs:SetTextColor(c[1], c[2], c[3])
+    fs:SetText("+" .. ns.FormatNumber(amount))
+    fs:SetAlpha(0)
+    fs:Show()
+    -- hits close together on one row lift off a little apart
+    local lane = 0
+    for _, sp in ipairs(s.splashes) do
+        if sp.t == t and sp.age < 0.3 then lane = lane + 1 end
+    end
+    s.splashes[#s.splashes + 1] = { fs = fs, t = t, key = t.key, age = 0, lane = lane % 3 }
+end
+
 local function bump(M, s, key, label, amount, school, crit, iconTex)
     local cfg = M.cfg()
     local t = ensureTracker(s, key)
@@ -203,8 +297,11 @@ local function bump(M, s, key, label, amount, school, crit, iconTex)
     t.isMana  = (type(key) == "string" and key:sub(1, 5) == "mana:") or false
     t.isCount = (type(key) == "string" and key:sub(1, 5) == "miss:") or false
     t.last    = GetTime()
-    t.pop     = (crit and cfg.crit) and 1.9 or 1.45
+    local flourish = crit and cfg.critFlash and not t.isCount
+    t.pop     = flourish and 2.0 or ((crit and cfg.crit) and 1.9 or 1.45)
     t.popT    = 0
+    if flourish then t.flashT = 0 end
+    if cfg.splash and not t.isCount and amount and amount > 0 then spawnSplash(M, s, t, amount, crit) end
     if M.windowed then
         t.samples[#t.samples + 1] = { tm = t.last, amt = amount, mana = 0, casts = 0 }
         t.windowAmt = t.windowAmt + amount
@@ -258,7 +355,7 @@ local function valueString(t, cfg)
     if mode == "mana" then            -- show the mana spent (blue), not the healing
         return "|cff599eff" .. ns.FormatNumber(t.mana or 0) .. "|r"
     end
-    local amt = ns.FormatNumber(t.total)
+    local amt = ns.FormatNumber(t.shown or t.total)   -- a rolling total, on its way up
     if (mode == "permana" or mode == "both") and (t.mana or 0) > 0 then
         local r  = t.total / t.mana
         local rs = string.format(r >= 10 and "%.0f/m" or "%.1f/m", r)
@@ -294,8 +391,6 @@ local function autoLabelChars(areaW, fontSize, numberStr, hasIcon)
     local budget = math.floor(usable / charW) - (#(numberStr or "") + 2)  -- 2 = the "  " gap
     return math.max(3, budget)
 end
-
-local MANA_COLOR = { 0.35, 0.62, 1.00 }
 
 -- Lay out the smaller, tinted mana figure beside a line's main number. `where`
 -- is "after" (float: to the right of the amount) or "before" (meter: to the left
@@ -335,6 +430,65 @@ function ns.Meter.SpellManaCost(spellId)
         end
     end
     return 0
+end
+
+-- A crit's flourish, while it plays: the colour to draw the number in (gold, easing
+-- back to its own), and the star bursting out behind `around`.
+local function flourish(t, c, dt, around, size)
+    if not t.flashT then
+        t.burst:Hide()
+        return c[1], c[2], c[3]
+    end
+    t.flashT = t.flashT + dt
+    local k = t.flashT / FLASH_LIFE
+    if k >= 1 then
+        t.flashT = nil
+        t.burst:Hide()
+        return c[1], c[2], c[3]
+    end
+    local g = (k < 0.4) and 1 or (1 - (k - 0.4) / 0.6)
+    if around then
+        local bs = size * (1.4 + 2.2 * k)
+        t.burst:ClearAllPoints()
+        t.burst:SetPoint("CENTER", around, "CENTER", 0, 0)
+        t.burst:SetSize(bs, bs)
+        t.burst:SetAlpha(0.9 * (1 - k))
+        t.burst:Show()
+    end
+    return c[1] + (CRIT_GOLD[1] - c[1]) * g, c[2] + (CRIT_GOLD[2] - c[2]) * g, c[3] + (CRIT_GOLD[3] - c[3]) * g
+end
+
+-- The killing blow's skull, just past `after`, dropping into place when first marked;
+-- with a count once that attack has killed more than one. Returns the last thing
+-- drawn on the line, for a splash to start from, or nil when there is no skull.
+local function layoutSkull(t, cfg, after, size, dt)
+    if not (cfg.killMark and (t.kills or 0) > 0) then
+        t.skull:Hide(); t.skullCount:Hide()
+        return nil
+    end
+    local sc, alpha = 1, 1
+    if t.killT then
+        t.killT = t.killT + dt
+        local k = t.killT / SKULL_IN
+        if k >= 1 then t.killT = nil else sc, alpha = 1 + 1.4 * (1 - k), k end
+    end
+    local sz = size * 0.95
+    t.skull:SetSize(sz * sc, sz * sc)
+    t.skull:ClearAllPoints()
+    t.skull:SetPoint("LEFT", after, "RIGHT", 4, 0)
+    t.skull:SetAlpha(alpha)
+    t.skull:Show()
+    if t.kills > 1 then
+        t.skullCount:SetFont(ns.Font(ns.db.general.font), math.max(6, math.floor(size * 0.62)), "OUTLINE")
+        t.skullCount:SetText("\195\151" .. t.kills)   -- "xN"
+        t.skullCount:SetTextColor(0.94, 0.58, 0.58)
+        t.skullCount:ClearAllPoints()
+        t.skullCount:SetPoint("LEFT", t.skull, "RIGHT", 1, 0)
+        t.skullCount:Show()
+        return t.skullCount
+    end
+    t.skullCount:Hide()
+    return t.skull
 end
 
 -- Floating, Apex-style growing numbers.
@@ -381,7 +535,8 @@ local function layoutFloat(s, list, dt, cfg, basis)
 
             local c = (t.isCount and AVOID_COLOR) or (t.isMana and MANA_COLOR)
                 or (cfg.schoolColors and SCHOOL_COLOR[t.school]) or NEUTRAL
-            t.text:SetTextColor(c[1], c[2], c[3])
+            local hasIcon = cfg.showIcon and t.iconTex
+            t.text:SetTextColor(flourish(t, c, dt, hasIcon and t.icon or t.text, size))
 
             local txt = valueString(t, cfg)
             if cfg.showLabel and t.label then
@@ -392,12 +547,21 @@ local function layoutFloat(s, list, dt, cfg, basis)
                 txt = abbrevN(t.label, cap) .. "  " .. txt
             end
             t.text:SetText(txt)
-            layoutMana(t, cfg, "after")
+            local mana = layoutMana(t, cfg, "after")
 
-            if cfg.showIcon and t.iconTex then
+            if hasIcon then
                 t.icon:SetTexture(t.iconTex); t.icon:Show()
             else
                 t.icon:Hide()
+            end
+
+            -- where a splash starts: past the end of the line, or before its start
+            -- when the feed lines up on the right (its rows reach out to the left)
+            local tail = layoutSkull(t, cfg, mana or t.text, size, dt) or mana or t.text
+            if cfg.align == "RIGHT" then
+                t.edge, t.edgeSide = hasIcon and t.icon or t.text, "left"
+            else
+                t.edge, t.edgeSide = tail, "right"
             end
 
             local sc = 1
@@ -500,16 +664,15 @@ local function layoutMeter(s, list, dt, cfg)
                 or (cfg.schoolColors and SCHOOL_COLOR[t.school]) or cfg.barColor or NEUTRAL
             t.bar:SetStatusBarColor(c[1], c[2], c[3], 0.85)
             t.bar:SetMinMaxValues(0, maxTotal)
-            t.bar:SetValue(t.total)
+            t.bar:SetValue(t.shown or t.total)   -- the bar grows with a rolling total
 
             t.name:SetText(cfg.showLabel and abbrev(t.label or "", cfg) or "")
             t.name:SetTextColor(0.96, 0.96, 0.96)
             t.text:SetText(valueString(t, cfg))
-            if t.isMana then
-                t.text:SetTextColor(MANA_COLOR[1], MANA_COLOR[2], MANA_COLOR[3])
-            else
-                t.text:SetTextColor(1, 1, 1)
-            end
+            t.text:SetTextColor(flourish(t, t.isMana and MANA_COLOR or NEUTRAL_WHITE, dt,
+                (cfg.showIcon and t.iconTex) and t.icon or t.text, iconSz))
+            local tail = layoutSkull(t, cfg, t.bar, fs, dt)
+            t.edge, t.edgeSide = tail or t.bar, "right"
 
             -- mana sits just left of the amount; the label clips before it
             local mana = layoutMana(t, cfg, "before")
@@ -564,6 +727,56 @@ local function windowUpdate(M, t, now, cfg)
         t.mana  = t.baseMana + t.windowMana
         t.casts = t.baseCasts + t.windowCasts
         return false
+    end
+end
+
+-- Rolling totals: what each row shows closes in on its real total a little each
+-- frame. A total that went down (a rolling window, a correction from the meter)
+-- shows its new value at once; counts never roll.
+local function rollTotals(list, dt, cfg)
+    for i = 1, #list do
+        local t = list[i]
+        local goal = t.total or 0
+        if cfg.roll and not t.isCount then
+            local cur = t.shown or goal
+            if cur >= goal then
+                t.shown = goal
+            else
+                cur = cur + (goal - cur) * math.min(1, dt * ROLL_RATE)
+                if goal - cur < 0.5 then cur = goal end
+                t.shown = cur
+            end
+        else
+            t.shown = goal
+        end
+    end
+end
+
+-- Splashes rise and drift away from their row's edge, and fade; one whose row has
+-- gone, or gone to another source, goes with it.
+local function moveSplashes(s, dt)
+    local list = s.splashes
+    if not list then return end
+    for i = #list, 1, -1 do
+        local sp = list[i]
+        sp.age = sp.age + dt
+        local t = sp.t
+        local k = sp.age / SPLASH_LIFE
+        if k >= 1 or s.trackers[sp.key] ~= t or not t:IsShown() or not t.edge then
+            sp.fs:Hide()
+            s.splashPool[#s.splashPool + 1] = sp.fs
+            table.remove(list, i)
+        else
+            local a = (k < 0.12) and (k / 0.12) or (1 - (k - 0.12) / 0.88)
+            sp.fs:SetAlpha(a * (t:GetAlpha() or 1))
+            local dx, dy = 6 + 18 * k, 2 + 18 * k - sp.lane * 9
+            sp.fs:ClearAllPoints()
+            if t.edgeSide == "left" then
+                sp.fs:SetPoint("RIGHT", t.edge, "LEFT", -dx, dy)
+            else
+                sp.fs:SetPoint("LEFT", t.edge, "RIGHT", dx, dy)
+            end
+        end
     end
 end
 
@@ -633,11 +846,13 @@ local function update(M, s, dt)
         end
     end
 
+    rollTotals(list, dt, cfg)
     if cfg.style == "meter" then
         layoutMeter(s, list, dt, cfg)
     else
         layoutFloat(s, list, dt, cfg, basis)
     end
+    moveSplashes(s, dt)
 
     -- Combat-duration header (clients opt in via cfg.showCombatTime, e.g. Damage
     -- Dealt). Counts from the first hit on this target; freezes at the last hit
@@ -691,7 +906,8 @@ local function getStream(M, frame)
     s = { frame = frame, pool = {}, trackers = {}, sorted = {}, store = {} }
     s.container = CreateFrame("Frame", nil, frame)
     s.container:SetSize(16, 16)   -- a sized frame reliably fires OnUpdate
-    s.container:SetFrameStrata("HIGH")
+    s.container:SetFrameStrata(M.strata or "HIGH")
+    if M.strata then s.container:SetFrameLevel(frame:GetFrameLevel() + 5) end
     s.container:SetScript("OnUpdate", function(_, dt) update(M, s, dt) end)
     s.timeFS = s.container:CreateFontString(nil, "OVERLAY")   -- combat-duration header
     s.timeFS:SetShadowColor(0, 0, 0, 1); s.timeFS:SetShadowOffset(1, -1)
@@ -705,8 +921,9 @@ end
 -- Public constructor
 --------------------------------------------------------------------------
 function ns.Meter.New(opts)
+    -- strata: drawn on this layer rather than HIGH (the settings window's preview)
     local M = { streams = {}, cfg = opts.cfg, noFade = opts.noFade,
-                windowed = opts.windowed, rolling = true }
+                windowed = opts.windowed, rolling = true, strata = opts.strata }
 
     -- Toggle the rolling X-second window on/off. While off (in combat, or the
     -- post-combat hold) the meter accumulates and nothing ages out; turning it
@@ -767,6 +984,24 @@ function ns.Meter.New(opts)
         end
     end
 
+    -- The attack under `key` killed the unit `guid` (nil: whatever the stream shows
+    -- now, as for an every-enemy feed, whose one set of totals covers every kill).
+    -- Its row gets the skull, now or once that unit is selected again.
+    function M:MarkKill(frame, guid, key)
+        local s = getStream(M, frame)
+        if not s or not key then return end
+        local g = guid
+        if g == nil or (M.isGlobal and M.isGlobal()) then g = s.guid end
+        if g ~= s.guid and not persistOn(M) then return end   -- nowhere to keep it
+        local kills = killsOf(s, g)
+        if not kills then return end
+        kills[key] = (kills[key] or 0) + 1
+        if g == s.guid then
+            local t = s.trackers[key]
+            if t then t.kills, t.killT = kills[key], 0 end
+        end
+    end
+
     -- Set a row to a known total: the meter's figure for the whole fight, once it
     -- ends (UnitCombat.lua). A correction, not a hit: no pop, and it does not start
     -- a new fight's totals.
@@ -805,6 +1040,7 @@ function ns.Meter.New(opts)
             resetStream(s)
             wipe(s.store)
             if s.timeStore then wipe(s.timeStore) end
+            if s.kills then wipe(s.kills) end
             s.guid = nil
         end
     end

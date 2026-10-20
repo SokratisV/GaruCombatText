@@ -45,8 +45,20 @@ function Stub() return setmetatable({}, StubMT) end
 
 local onEvent = {}   -- every frame's OnEvent script, with what it registered
 local onUpdate = {}
+-- Textures and font strings keep whether they are shown and how faded, as frames do.
+local function visible(r)
+    r.shown, r.alpha = true, 1
+    r.Show = function(self) self.shown = true end
+    r.Hide = function(self) self.shown = false end
+    r.SetShown = function(self, v) self.shown = v and true or false end
+    r.IsShown = function(self) return self.shown ~= false end
+    r.SetAlpha = function(self, a) self.alpha = a end
+    r.GetAlpha = function(self) return self.alpha end
+    return r
+end
+local function newTexture() return visible(Stub()) end
 local function newText()
-    local fs = Stub()
+    local fs = visible(Stub())
     fs.SetText = function(self, t) self.text = t end
     fs.GetText = function(self) return self.text end
     fs.GetStringWidth = function() return 40 end
@@ -84,7 +96,12 @@ local function newFrame()
     f.SetText = function(self, t) self.text = t end
     f.GetText = function(self) return self.text end
     f.CreateFontString = function() return newText() end
-    f.CreateTexture = function() return Stub() end
+    f.CreateTexture = function() return newTexture() end
+    f.SetAlpha = function(self, a) self.alpha = a end
+    f.GetAlpha = function(self) return self.alpha or 1 end
+    f.SetScale = function(self, v) self.scale = v end
+    f.GetScale = function(self) return self.scale or 1 end
+    f.GetParent = function(self) return self.parent end
     f.GetFontString = function(self) self.fs = self.fs or newText(); return self.fs end
     f.GetWidth = function() return 100 end
     f.GetHeight = function(self) return self.height or 26 end
@@ -362,6 +379,23 @@ if FOREVER then
     advance(11)
     local ok, err = pcall(fire, "UNIT_COMBAT", "target", "WOUND", "CRITICAL", 300, 32)
     check("Damage Dealt path runs", ok, err)
+    -- the effects, on that crit: it rolls up, splashes, and flourishes, then settles
+    do
+        local em0 = meterOf("enemyText")
+        local s0 = em0.streams[ns.frames.target]
+        local t0 = em0:Trackers(ns.frames.target)["spell:686"]
+        check("a crit starts its flourish", t0 and t0.flashT == 0, t0 and tostring(t0.flashT))
+        check("a hit splashes off its row", s0.splashes and #s0.splashes == 1, s0.splashes and tostring(#s0.splashes))
+        local okT, errT = pcall(tick, 0.05)
+        check("effects draw", okT, errT)
+        check("a rolling total is on its way up", t0.shown > 0 and t0.shown < 300, tostring(t0.shown))
+        check("the crit's star bursts", t0.burst:IsShown())
+        check("the splash shows", s0.splashes[1] and s0.splashes[1].fs:IsShown())
+        for _ = 1, 25 do tick(0.05) end
+        check("the total has rolled all the way", t0.shown == 300, tostring(t0.shown))
+        check("the flourish is over", t0.flashT == nil and not t0.burst:IsShown())
+        check("the splash has gone", #s0.splashes == 0, tostring(#s0.splashes))
+    end
     ok, err = pcall(fire, "PLAYER_SWING", nil, 0)
     check("swing path runs", ok, err)
     advance(11.1)
@@ -412,6 +446,10 @@ if FOREVER then
     local tr = em and em:Trackers(ns.frames.target)
     check("the corpse shows the killing blow in its Melee total", tr and tr.swing and tr.swing.total == 91,
           tr and tr.swing and tostring(tr.swing.total) or "no Melee row")
+    check("and the skull on Melee, the attack that killed it", tr and tr.swing and tr.swing.kills == 1,
+          tr and tr.swing and tostring(tr.swing.kills) or "no Melee row")
+    tick(0.05)
+    check("the skull is drawn", tr and tr.swing and tr.swing.skull:IsShown())
 
     -- A killing bolt, end to end: reported on the dying unit's nameplate just after
     -- the target clears, it goes on that unit's totals, live.
@@ -431,6 +469,8 @@ if FOREVER then
     tr = em and em:Trackers(ns.frames.target)
     check("the corpse shows the killing bolt, once", tr and tr["spell:686"] and tr["spell:686"].total == 280,
           tr and tr["spell:686"] and tostring(tr["spell:686"].total) or "no Shadow Bolt row")
+    check("and the skull on Shadow Bolt", tr and tr["spell:686"] and tr["spell:686"].kills == 1,
+          tr and tr["spell:686"] and tostring(tr["spell:686"].kills) or "no Shadow Bolt row")
 
     -- Every enemy, end to end: one set of totals across a target switch and another
     -- enemy's nameplate, the meter's figures once the fight is over, and a fresh
@@ -603,6 +643,25 @@ do
               table.concat(problems, "; "))
         print(("window: %d controls worked across %d pages"):format(worked, #nav))
 
+        -- The preview: the page's feed, drawn small, fed made-up hits, fitted to its box.
+        local pvm
+        for _, M in ipairs(allMeters) do if M.strata == "DIALOG" then pvm = M end end
+        open("Damage Dealt")
+        for _ = 1, 30 do tick(0.05) end
+        local pvRows = 0
+        for _, s in pairs(pvm and pvm.streams or {}) do for _ in pairs(s.trackers) do pvRows = pvRows + 1 end end
+        check("the preview shows Damage Dealt's rows", pvRows == 4, tostring(pvRows))
+        local host
+        for f in pairs(pvm and pvm.streams or {}) do host = f end
+        local r0 = ns.db.enemyText.radius
+        ns.db.enemyText.radius = 380; tick(0.05)
+        local small = host and host:GetScale()
+        ns.db.enemyText.radius = r0; tick(0.05)
+        check("a wide arc is drawn smaller to fit", small and small < host:GetScale(),
+              tostring(small) .. " vs " .. tostring(host and host:GetScale()))
+        open("General")
+        check("no preview on a page without a feed", host and not host:GetParent():IsShown())
+
         -- A row that stops applying goes, and comes back.
         open("Damage Dealt")
         ns.db.enemyText.attach = "player"; ns.RefreshOptions()
@@ -746,6 +805,13 @@ if not FOREVER then
     local tt = em:Trackers(ns.frames.target)
     check("Classic: Thorns (DAMAGE_SHIELD) on your target is counted", tt and tt["spell:782"] and tt["spell:782"].total == 6,
           tt and tt["spell:782"] and tostring(tt["spell:782"].total) or "no Thorns row")
+    -- your killing blow: PARTY_KILL names you, and the last thing of yours on it gets the skull
+    cleu("Creature-T", 0x10a48, 40)
+    info = { 0, "PARTY_KILL", false, "Player-1", "Me", 0x511, 0, "Creature-T", "Mob", 0x10a48, 0 }
+    fire("COMBAT_LOG_EVENT_UNFILTERED")
+    tt = em:Trackers(ns.frames.target)
+    check("Classic: a killing blow marks its spell", tt and tt["spell:133"] and tt["spell:133"].kills == 1,
+          tt and tt["spell:133"] and tostring(tt["spell:133"].kills) or "no Fireball row")
     CombatLogGetCurrentEventInfo = nil
 
     -- Classic: the combat-log path is the live one, UnitCombat stays out of it.
