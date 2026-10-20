@@ -392,6 +392,10 @@ if FOREVER then
         check("a rolling total is on its way up", t0.shown > 0 and t0.shown < 300, tostring(t0.shown))
         check("the crit's star bursts", t0.burst:IsShown())
         check("the splash shows", s0.splashes[1] and s0.splashes[1].fs:IsShown())
+        check("Damage Dealt splashes off the right of its numbers", t0.edgeSide == "right", tostring(t0.edgeSide))
+        ns.db.enemyText.splashSide = "LEFT"; tick(0.05)
+        check("Splash side: Left", t0.edgeSide == "left", tostring(t0.edgeSide))
+        ns.db.enemyText.splashSide = "RIGHT"
         for _ = 1, 25 do tick(0.05) end
         check("the total has rolled all the way", t0.shown == 300, tostring(t0.shown))
         check("the flourish is over", t0.flashT == nil and not t0.burst:IsShown())

@@ -439,6 +439,13 @@ function ns.Meter.SpellManaCost(spellId)
     return 0
 end
 
+-- Which side of its number a hit splashes off: the feed's choice, else the side away
+-- from the anchor (left of rows that line up on the right).
+local function splashSide(cfg)
+    if cfg.splashSide == "LEFT" or cfg.splashSide == "RIGHT" then return cfg.splashSide end
+    return (cfg.align == "RIGHT") and "LEFT" or "RIGHT"
+end
+
 -- A crit's flourish, while it plays: the colour to draw the number in (gold, easing
 -- back to its own), and the star bursting out behind `around`.
 local function flourish(t, c, dt, around, size)
@@ -563,9 +570,9 @@ local function layoutFloat(s, list, dt, cfg, basis)
             end
 
             -- where a splash starts: past the end of the line, or before its start
-            -- when the feed lines up on the right (its rows reach out to the left)
+            -- (cfg.splashSide; unset, the side away from the anchor)
             local tail = layoutSkull(t, cfg, mana or t.text, size, dt) or mana or t.text
-            if cfg.align == "RIGHT" then
+            if splashSide(cfg) == "LEFT" then
                 t.edge, t.edgeSide = hasIcon and t.icon or t.text, "left"
             else
                 t.edge, t.edgeSide = tail, "right"
@@ -680,7 +687,11 @@ local function layoutMeter(s, list, dt, cfg)
             t.text:SetTextColor(flourish(t, t.isMana and MANA_COLOR or NEUTRAL_WHITE, dt,
                 (cfg.showIcon and t.iconTex) and t.icon or t.text, iconSz))
             local tail = layoutSkull(t, cfg, t.bar, fs, dt)
-            t.edge, t.edgeSide = tail or t.bar, "right"
+            if splashSide(cfg) == "LEFT" then
+                t.edge, t.edgeSide = t.bar, "left"
+            else
+                t.edge, t.edgeSide = tail or t.bar, "right"
+            end
 
             -- mana sits just left of the amount; the label clips before it
             local mana = layoutMana(t, cfg, "before")

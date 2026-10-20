@@ -42,8 +42,7 @@ local FACING = { { value = 90, text = "Up" }, { value = 270, text = "Down" }, { 
 local SCOPE  = { { value = "target", text = "Your target" }, { value = "all", text = "Every enemy" } }
 local SORT   = { { value = "amount", text = "Biggest first" }, { value = "lowest", text = "Smallest first" },
                  { value = "recent", text = "Most recent" } }
-local VALUE  = { { value = "amount", text = "Healing" }, { value = "both", text = "Healing and mana" },
-                 { value = "mana", text = "Mana only" } }
+local SIDE   = { { value = "LEFT", text = "Left" }, { value = "RIGHT", text = "Right" } }
 
 local function val(x) if type(x) == "function" then return x() end return x end
 local function Sound(kit)
@@ -103,7 +102,7 @@ end
 -- either side of the centre.
 local LOOK = { "growth", "fontSize", "lineSpacing", "maxLines", "sortMode", "showLabel", "showIcon",
                "schoolColors", "layout", "radius", "arc", "arcFixed", "align", "arcAngle",
-               "pop", "roll", "splash", "critFlash" }
+               "pop", "roll", "splash", "splashSide", "critFlash" }
 local FLIP = { LEFT = "RIGHT", RIGHT = "LEFT" }
 local ARCFLIP = { [0] = 180, [180] = 0 }
 local function copyLook(dst, src, mirror, position)
@@ -111,6 +110,7 @@ local function copyLook(dst, src, mirror, position)
     if mirror then
         dst.align    = FLIP[src.align] or src.align
         dst.arcAngle = ARCFLIP[src.arcAngle] or src.arcAngle
+        dst.splashSide = FLIP[src.splashSide] or src.splashSide
     end
     if position then
         local x = (src.xOffset or 0)
@@ -173,6 +173,8 @@ local function FeedPage(o)
         if o.killMark then
             fx[#fx + 1] = Toggle(db, "killMark", "Killing blow mark", "A skull on the row whose attack killed the enemy, with a count once it has killed more than one.", nil, half)
         end
+        fx[#fx + 1] = Choice(db, "splashSide", "Splash side", "Which side of the number a hit floats off.", SIDE, nil,
+            { vis = function() return cfg().splash end })
         sections[#sections + 1] = { title = "Effects", rows = fx }
     elseif o.popOnly then
         sections[#sections + 1] = { title = "Effects", rows = {
@@ -217,7 +219,6 @@ local function definePages()
             end,
             rowsLabel = "Rows shown",
             text = {
-                Choice("healText", "valueMode", "Show", "What each row's number is: the healing, the mana spent on it beside it, or only the mana.", VALUE),
                 half(Toggle("healText", "showLabel", "Spell names", "The spell's name beside its number.")),
                 half(Toggle("healText", "showIcon", "Spell icons", "The spell's icon beside its number.")),
                 half(Toggle("healText", "schoolColors", "School colours", "Colours each row by its spell school.")),

@@ -81,6 +81,8 @@ MUTANTS = [
      "rolling totals jump straight to the new value"),
     ("Meter.lua", "if cfg.splash and not t.isCount and amount and amount > 0 then spawnSplash(M, s, t, amount, crit) end", "",
      "hits stop splashing off their rows"),
+    ("Meter.lua", 'if cfg.splashSide == "LEFT" or cfg.splashSide == "RIGHT" then return cfg.splashSide end', "",
+     "Splash side is ignored"),
     ("Meter.lua", "if flourish then t.flashT = 0 end", "",
      "a crit no longer flourishes"),
     ("Meter.lua", "t.pop, t.popLen = (cfg.pop ~= false) and 1.45 or 1, POP_LEN", "t.pop, t.popLen = 1.45, POP_LEN",
