@@ -258,7 +258,6 @@ local function definePages()
                 half(Toggle("takenText", "schoolColors", "School colours", "Colours each row by its school.")),
             },
             counting = {
-                Toggle("takenText", "showAvoid", "Misses and avoids", "Counts your dodges, parries, blocks and the attacks that missed you as rows of their own (Dodge x4).", RK),
                 Slider("takenText", "threshold", "Ignore hits below", "Hits smaller than this are left out.", 0, 3000, 25),
                 Slider("takenText", "holdSecs", "Hold after combat", "How long the feed stays up once combat ends.", 0, 60, 1, nil, { vis = notSummary, fmt = seconds }),
             },
@@ -298,10 +297,11 @@ local function definePages()
             key = "actions", db = "actionsText", refresh = RAc, popOnly = true,
             title = "Actions",
             desc = function()
+                local both = ns.db.actionsText.showIncoming and " In green, how often you avoided theirs." or ""
                 if ns.db.actionsText.scope == "all" then
-                    return "How often every enemy avoided you this fight: dodges, parries, blocks, misses, resists."
+                    return "In red, how often every enemy avoided your attacks this fight: dodges, parries, blocks, misses, resists." .. both
                 end
-                return "How often your target avoided you this fight: dodges, parries, blocks, misses, resists. Each target keeps its own count."
+                return "In red, how often your target avoided your attacks this fight: dodges, parries, blocks, misses, resists." .. both .. " Each target keeps its own count."
             end,
             banner = function()
                 if ns.UseUnitCombat then
@@ -322,6 +322,10 @@ local function definePages()
             counting = {
                 Choice("actionsText", "scope", "Count", function() return scopeDesc("what was avoided") end,
                     SCOPE, function() ns.ActionsScopeChanged(); RAc() end, { vis = notSummary }),
+                Toggle("actionsText", "showIncoming", "Attacks you avoided", function()
+                    return "Counts your own dodges, parries and blocks, and the attacks that missed you, in green beside the red of yours that were avoided."
+                        .. (ns.UseUnitCombat and " On this client the game does not say who attacked you, so counting your target, they go on whichever target you have." or "")
+                end, RAc),
                 half(Toggle("actionsText", "includePet", "Pet and totems", "Counts what your target avoided of your pet's and totems' attacks too.")),
                 half(Toggle("actionsText", "persist", "Remember each target", "Each target keeps its count while you look at another.", RAc, { vis = perTarget("actionsText") })),
                 Slider("actionsText", "holdSecs", "Hold after combat", "How long the fight's count stays up once combat ends, before it fades.", 0, 60, 1, nil, { vis = everyEnemy("actionsText"), fmt = seconds }),
@@ -478,11 +482,12 @@ local SAMPLES = {
               { key = "heal:other", label = "Healing", school = 2, icon = "Interface\\ICONS\\Spell_Holy_Heal", base = 90 } },
     taken = { { key = "school:1", label = "Physical", school = 1, icon = "Interface\\ICONS\\Ability_MeleeDamage", base = 60 },
               { key = "school:4", label = "Fire", school = 4, icon = "Interface\\ICONS\\Spell_Fire_FlameBolt", base = 140 },
-              { key = "school:32", label = "Shadow", school = 32, icon = "Interface\\ICONS\\Spell_Shadow_ShadowBolt", base = 95 },
-              { key = "miss:DODGE", label = "Dodge", count = true, icon = "DODGE" } },
+              { key = "school:32", label = "Shadow", school = 32, icon = "Interface\\ICONS\\Spell_Shadow_ShadowBolt", base = 95 } },
     actions = { { key = "miss:DODGE", label = "Dodge", count = true, icon = "DODGE" },
                 { key = "miss:PARRY", label = "Parry", count = true, icon = "PARRY" },
-                { key = "miss:RESIST", label = "Resist", count = true, icon = "RESIST" } },
+                { key = "miss:RESIST", label = "Resist", count = true, icon = "RESIST" },
+                { key = "avoid:DODGE", label = "Dodge", count = true, icon = "DODGE" },
+                { key = "avoid:MISS", label = "Miss", count = true, icon = "MISS" } },
 }
 local DB_OF = { dealt = "enemyText", heal = "healText", taken = "takenText", actions = "actionsText" }
 

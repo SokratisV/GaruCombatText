@@ -542,7 +542,18 @@ if FOREVER then
     check("Damage Dealt: mana spent on its line", fed("enemyText", "spell:686", 25, true) ~= nil)
     check("Actions: the dodge", fed("actionsText", "miss:DODGE", 1) ~= nil)
     check("Damage Taken: Fire 40 on the Fire line", fed("takenText", "school:4", 40) ~= nil)
-    check("Damage Taken: your dodge as an avoid row", fed("takenText", "miss:DODGE", 1) ~= nil)
+    check("Actions: your own dodge, beside the ones your target made", fed("actionsText", "avoid:DODGE", 1) ~= nil)
+    check("Damage Taken: no avoid rows any more", fed("takenText", "miss:DODGE") == nil and fed("takenText", "avoid:DODGE") == nil)
+    do
+        local am = meterOf("actionsText")
+        am:Bump(ns.actionsHostFrame, "miss:DODGE", "Dodge", 1, 1, false, nil)
+        am:Bump(ns.actionsHostFrame, "avoid:DODGE", "Dodge", 1, 1, false, nil)
+        local tr2 = am and am:Trackers(ns.actionsHostFrame)
+        local theirs, yours = tr2 and tr2["miss:DODGE"], tr2 and tr2["avoid:DODGE"]
+        check("Actions: their dodge counts against you, your dodge for you",
+              theirs and yours and theirs.good == false and yours.good == true and theirs.isCount and yours.isCount,
+              tostring(theirs and theirs.good) .. " / " .. tostring(yours and yours.good))
+    end
     check("Healing: Lesser Heal 55 on its line", fed("healText", "spell:2050", 55) ~= nil)
     local manaBumps = 0
     for _, x in ipairs(bumps) do if x.feed == "healText" and x.mana and x.key == "spell:2050" then manaBumps = manaBumps + 1 end end
@@ -833,6 +844,12 @@ if not FOREVER then
     local tt = em:Trackers(ns.frames.target)
     check("Classic: Thorns (DAMAGE_SHIELD) on your target is counted", tt and tt["spell:782"] and tt["spell:782"].total == 6,
           tt and tt["spell:782"] and tostring(tt["spell:782"].total) or "no Thorns row")
+    -- an attack on you that you avoided, from your target: on Actions, as yours
+    info = { 0, "SWING_MISSED", false, "Creature-T", "Mob", 0x10a48, 0, "Player-1", "Me", 0x511, 0, "PARRY" }
+    fire("COMBAT_LOG_EVENT_UNFILTERED")
+    local at = meterOf("actionsText"):Trackers(ns.actionsHostFrame)
+    check("Classic: your parry of your target's swing, on Actions", at and at["avoid:PARRY"] and at["avoid:PARRY"].total == 1,
+          at and at["avoid:PARRY"] and tostring(at["avoid:PARRY"].total) or "no Parry row")
     -- your killing blow: PARTY_KILL names you, and the last thing of yours on it gets the skull
     cleu("Creature-T", 0x10a48, 40)
     info = { 0, "PARTY_KILL", false, "Player-1", "Me", 0x511, 0, "Creature-T", "Mob", 0x10a48, 0 }

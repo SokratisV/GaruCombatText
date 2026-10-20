@@ -262,7 +262,7 @@ ns.defaults = {
         fontSize = 15, maxSize = 34, scaleBySeverity = false, bigPct = 40,
         schoolColors = true, crit = false, showLabel = false, maxLabel = 0, showIcon = true,
         showMana = false, showCombatTime = false, sortMode = "amount",
-        holdTime = 4, fadeTime = 0.8, threshold = 0, showAvoid = true, holdSecs = 10,
+        holdTime = 4, fadeTime = 0.8, threshold = 0, holdSecs = 10,
         pop = true, roll = true, splash = true, splashSide = "LEFT", critFlash = true,
         stackDir = "vertical", growthH = "LEFT",
         layout = "radial", radius = 70, arc = 100, arcAngle = 180, arcFixed = true,
@@ -277,6 +277,7 @@ ns.defaults = {
         showMana = false, showCombatTime = false, sortMode = "amount",
         holdTime = 4, fadeTime = 0.8, threshold = 0, persist = true,
         scope = "all", holdSecs = 10, pop = true,
+        showIncoming = true,   -- the attacks on you that you avoided, in green, beside yours in red
         stackDir = "vertical", growthH = "RIGHT",
         layout = "radial", radius = 70, arc = 100, arcAngle = 0, arcFixed = true,
         attach = "free", point = { "CENTER", 150, -50 },

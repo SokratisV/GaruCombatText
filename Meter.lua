@@ -39,7 +39,16 @@ local SPLASH_MAX  = 12     -- splashes in the air at once, per feed
 local FLASH_LIFE  = 0.9    -- a crit's gold and its star
 local POP_LEN, CRIT_POP_LEN = 0.15, 0.35   -- how long a hit's jump takes to settle
 local SKULL_IN    = 0.35   -- the skull dropping into place
-local AVOID_COLOR = { 0.72, 0.74, 0.80 }   -- miss / dodge / parry / block count rows
+-- Count rows (Actions): "miss:" is one of your attacks avoided, bad for you, in red;
+-- "avoid:" an attack on you that you avoided, good, in green.
+local BAD_COLOR  = { 1.00, 0.42, 0.42 }
+local GOOD_COLOR = { 0.45, 0.90, 0.40 }
+local function countKind(key)
+    if type(key) ~= "string" then return nil end
+    if key:sub(1, 5) == "miss:" then return "bad" end
+    if key:sub(1, 6) == "avoid:" then return "good" end
+end
+local function countColor(t) return t.good and GOOD_COLOR or BAD_COLOR end
 local ALIGN_POINT = { LEFT = "LEFT", CENTER = "CENTER", RIGHT = "RIGHT" }
 ns.Meter.SCHOOL_COLOR = SCHOOL_COLOR
 
@@ -186,7 +195,8 @@ local function restoreInto(s, guid)
         t.kills, t.killT, t.flashT = kills and kills[key] or 0, nil, nil
         t.mana = d.mana or 0
         t.isMana  = (type(key) == "string" and key:sub(1, 5) == "mana:") or false
-        t.isCount = (type(key) == "string" and key:sub(1, 5) == "miss:") or false
+        t.isCount = countKind(key) ~= nil
+        t.good    = countKind(key) == "good"
         t.curX, t.curY, t.alpha, t.size = nil, nil, 1, nil
         t.last, t.pop, t.popT = GetTime(), 1, 1
         t.appliedAlign = nil
@@ -297,7 +307,8 @@ local function bump(M, s, key, label, amount, school, crit, iconTex)
     t.school  = school
     t.iconTex = iconTex
     t.isMana  = (type(key) == "string" and key:sub(1, 5) == "mana:") or false
-    t.isCount = (type(key) == "string" and key:sub(1, 5) == "miss:") or false
+    t.isCount = countKind(key) ~= nil
+    t.good    = countKind(key) == "good"
     t.last    = GetTime()
     local flourish = crit and cfg.critFlash and not t.isCount
     -- a crit's flourish jumps further and settles slower than any other hit's
@@ -357,7 +368,7 @@ end
 -- Displayed main value: the running total, or (when a meter opts in via
 -- cfg.valueMode) the value-per-mana ratio, or both. Mana is drawn separately.
 local function valueString(t, cfg)
-    if t.isCount then return "|cffb9bcc6\195\151" .. (t.total or 0) .. "|r" end   -- "xN"
+    if t.isCount then return "\195\151" .. (t.total or 0) end   -- "xN", in the row's colour
     local mode = cfg and cfg.valueMode
     if mode == "mana" then            -- show the mana spent (blue), not the healing
         return "|cff599eff" .. ns.FormatNumber(t.mana or 0) .. "|r"
@@ -559,7 +570,7 @@ local function layoutFloat(s, list, dt, cfg, basis)
                 t.icon:ClearAllPoints();   t.icon:SetPoint("RIGHT", t.text, "LEFT", -4, 0)
             end
 
-            local c = (t.isCount and AVOID_COLOR) or (t.isMana and MANA_COLOR)
+            local c = (t.isCount and countColor(t)) or (t.isMana and MANA_COLOR)
                 or (cfg.schoolColors and SCHOOL_COLOR[t.school]) or NEUTRAL
             local hasIcon = cfg.showIcon and t.iconTex
             t.text:SetTextColor(flourish(t, c, dt, hasIcon and t.icon or t.text, size))
@@ -712,7 +723,7 @@ local function layoutMeter(s, list, dt, cfg)
             t.name:SetText(cfg.showLabel and abbrev(t.label or "", cfg) or "")
             t.name:SetTextColor(0.96, 0.96, 0.96)
             t.text:SetText(valueString(t, cfg))
-            t.text:SetTextColor(flourish(t, t.isMana and MANA_COLOR or NEUTRAL_WHITE, dt,
+            t.text:SetTextColor(flourish(t, (t.isCount and countColor(t)) or (t.isMana and MANA_COLOR) or NEUTRAL_WHITE, dt,
                 (cfg.showIcon and t.iconTex) and t.icon or t.text, iconSz))
             local tail = layoutSkull(t, cfg, t.bar, fs, dt)
             if splashSide(cfg) == "LEFT" then

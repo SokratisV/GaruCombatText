@@ -73,11 +73,10 @@ Screenshots: drop images into docs/ and reference them here, e.g.
   them (Actions has the same choice).
 - 🛡️ **Damage taken (by type)** — the cumulative damage you take this fight from **all
   enemies combined, grouped by attack type** (all melee together, each incoming spell, each
-  environmental type), school-colored. Optionally also counts your **misses & avoids** —
-  dodge / parry / block / miss / absorb / resist — as their own "Dodge ×4" rows.
-- 🎯 **Actions (per target)** — how many of *your* attacks the current target avoided this
-  fight — dodge / parry / block / miss / resist / immune — as count rows. Tracks each target
-  separately like Damage Dealt.
+  environmental type), school-colored.
+- 🎯 **Actions** — the attacks avoided this fight, both ways, as count rows: in red, *your*
+  attacks your target (or every enemy) dodged, parried, blocked or resisted; in green, the
+  attacks on you that you dodged, parried or blocked, and the ones that missed you.
 - 💚 **Healing received** — a per-spell meter of effective healing from any source, with a
   rolling out-of-combat window. The value shown can be **healing**, **both**, or **mana only**.
 - ⏱️ **Combat timer** — an optional "Combat M:SS" readout for your current target, toggled on
