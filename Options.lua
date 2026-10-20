@@ -103,7 +103,7 @@ end
 -- either side of the centre.
 local LOOK = { "growth", "fontSize", "lineSpacing", "maxLines", "sortMode", "showLabel", "showIcon",
                "schoolColors", "layout", "radius", "arc", "arcFixed", "align", "arcAngle",
-               "roll", "splash", "critFlash" }
+               "pop", "roll", "splash", "critFlash" }
 local FLIP = { LEFT = "RIGHT", RIGHT = "LEFT" }
 local ARCFLIP = { [0] = 180, [180] = 0 }
 local function copyLook(dst, src, mirror, position)
@@ -161,18 +161,23 @@ local function FeedPage(o)
         } },
         { title = "Text", rows = text },
     }
-    -- what a hit looks like as it lands (Meter.lua); not for Actions, which only counts
+    -- what a hit looks like as it lands (Meter.lua); Actions, which only counts, has the jump alone
     if o.effects then
         local half = { half = true }
         local fx = {
+            Toggle(db, "pop", "Pop on each hit", "Each hit makes its number jump for a moment. Crits jump further when Crit flourish is on.", nil, half),
             Toggle(db, "roll", "Rolling totals", "A total counts up to its new value instead of jumping to it.", nil, half),
             Toggle(db, "splash", "Hit splashes", "Each hit floats off its row as +N for a moment, while the total grows.", nil, half),
-            Toggle(db, "critFlash", "Crit flourish", "A critical hit makes its number jump, flash gold and burst.", nil, half),
+            Toggle(db, "critFlash", "Crit flourish", "Critical hits only: the number jumps much further, flashes gold, and a star bursts behind its icon.", nil, half),
         }
         if o.killMark then
             fx[#fx + 1] = Toggle(db, "killMark", "Killing blow mark", "A skull on the row whose attack killed the enemy, with a count once it has killed more than one.", nil, half)
         end
         sections[#sections + 1] = { title = "Effects", rows = fx }
+    elseif o.popOnly then
+        sections[#sections + 1] = { title = "Effects", rows = {
+            Toggle(db, "pop", "Pop on each count", "Each dodge, parry or resist makes its count jump for a moment."),
+        } }
     end
     if o.counting then sections[#sections + 1] = { title = "Counting", rows = o.counting } end
     return { key = o.key, title = o.title, desc = o.desc, enabledDb = db, onToggle = refresh,
@@ -281,7 +286,7 @@ local function definePages()
             },
         }),
         FeedPage({
-            key = "actions", db = "actionsText", refresh = RAc,
+            key = "actions", db = "actionsText", refresh = RAc, popOnly = true,
             title = "Actions",
             desc = function()
                 if ns.db.actionsText.scope == "all" then
@@ -486,7 +491,7 @@ local function previewHit(sm, first)
         pv.meter:Bump(pv.host, sm.key, sm.label, 1, 1, false, sampleIcon(sm))
         return
     end
-    local crit = (not first) and math.random() < 0.2
+    local crit = (not first) and math.random() < 0.35
     local amount = math.floor(sm.base * (0.8 + math.random() * 0.4) * (crit and 2 or 1))
     pv.meter:Bump(pv.host, sm.key, sm.label, amount, sm.school, crit, sampleIcon(sm))
 end

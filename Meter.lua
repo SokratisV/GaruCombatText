@@ -28,6 +28,7 @@ local BURST_TEX = "Interface\\Cooldown\\star4"                       -- the cool
 local SKULL_TEX = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull"
 
 -- Effects (each feed's own switches; see Options.lua's Effects section):
+--   pop        each hit makes its number jump for a moment
 --   roll       a total counts up to its new value instead of jumping to it
 --   splash     each hit floats off its row as +N and fades
 --   critFlash  a crit pops bigger, flashes gold, and a star bursts behind it
@@ -35,7 +36,8 @@ local SKULL_TEX = "Interface\\TargetingFrame\\UI-TargetingFrame-Skull"
 local ROLL_RATE   = 9      -- how fast a rolling total closes the gap (per second)
 local SPLASH_LIFE = 0.9    -- how long a splash floats, in seconds
 local SPLASH_MAX  = 12     -- splashes in the air at once, per feed
-local FLASH_LIFE  = 0.7    -- a crit's gold and its star
+local FLASH_LIFE  = 0.9    -- a crit's gold and its star
+local POP_LEN, CRIT_POP_LEN = 0.15, 0.35   -- how long a hit's jump takes to settle
 local SKULL_IN    = 0.35   -- the skull dropping into place
 local AVOID_COLOR = { 0.72, 0.74, 0.80 }   -- miss / dodge / parry / block count rows
 local ALIGN_POINT = { LEFT = "LEFT", CENTER = "CENTER", RIGHT = "RIGHT" }
@@ -298,7 +300,12 @@ local function bump(M, s, key, label, amount, school, crit, iconTex)
     t.isCount = (type(key) == "string" and key:sub(1, 5) == "miss:") or false
     t.last    = GetTime()
     local flourish = crit and cfg.critFlash and not t.isCount
-    t.pop     = flourish and 2.0 or ((crit and cfg.crit) and 1.9 or 1.45)
+    -- a crit's flourish jumps further and settles slower than any other hit's
+    if flourish then
+        t.pop, t.popLen = 2.4, CRIT_POP_LEN
+    else
+        t.pop, t.popLen = (cfg.pop ~= false) and 1.45 or 1, POP_LEN
+    end
     t.popT    = 0
     if flourish then t.flashT = 0 end
     if cfg.splash and not t.isCount and amount and amount > 0 then spawnSplash(M, s, t, amount, crit) end
@@ -565,9 +572,10 @@ local function layoutFloat(s, list, dt, cfg, basis)
             end
 
             local sc = 1
-            if t.popT < 0.15 then
+            local len = t.popLen or POP_LEN
+            if t.popT < len then
                 t.popT = t.popT + dt
-                sc = 1 + (t.pop - 1) * math.max(0, 1 - t.popT / 0.15)
+                sc = 1 + (t.pop - 1) * math.max(0, 1 - t.popT / len)
             end
             t.scaler:SetScale(sc)
             t:SetAlpha(t.alpha)

@@ -385,6 +385,7 @@ if FOREVER then
         local s0 = em0.streams[ns.frames.target]
         local t0 = em0:Trackers(ns.frames.target)["spell:686"]
         check("a crit starts its flourish", t0 and t0.flashT == 0, t0 and tostring(t0.flashT))
+        check("a crit jumps further than a hit", t0 and t0.pop > 2, t0 and tostring(t0.pop))
         check("a hit splashes off its row", s0.splashes and #s0.splashes == 1, s0.splashes and tostring(#s0.splashes))
         local okT, errT = pcall(tick, 0.05)
         check("effects draw", okT, errT)
@@ -395,6 +396,14 @@ if FOREVER then
         check("the total has rolled all the way", t0.shown == 300, tostring(t0.shown))
         check("the flourish is over", t0.flashT == nil and not t0.burst:IsShown())
         check("the splash has gone", #s0.splashes == 0, tostring(#s0.splashes))
+        -- an ordinary hit pops a little; with Pop on each hit off, not at all
+        em0:Bump(ns.frames.target, "spell:686", "Shadow Bolt", 10, 32, false, nil)
+        check("a hit pops", t0.pop > 1 and t0.pop < 2, tostring(t0.pop))
+        ns.db.enemyText.pop = false
+        em0:Bump(ns.frames.target, "spell:686", "Shadow Bolt", 10, 32, false, nil)
+        check("Pop on each hit off: no jump", t0.pop == 1, tostring(t0.pop))
+        ns.db.enemyText.pop = true
+        for _ = 1, 25 do tick(0.05) end
     end
     ok, err = pcall(fire, "PLAYER_SWING", nil, 0)
     check("swing path runs", ok, err)
