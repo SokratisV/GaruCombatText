@@ -198,7 +198,7 @@ function ns.FormatNumber(v)
 end
 ns.test = { combat = false }   -- set true via /gct test to preview
 
--- Shared icons for the miss/avoid count rows (Damage Taken + Actions feeds).
+-- Shared icons for the miss/avoid count rows (Actions).
 ns.AVOID_ICON = {
     DODGE   = "Interface\\ICONS\\Ability_Rogue_Sprint",
     PARRY   = "Interface\\ICONS\\Ability_Parry",
@@ -254,7 +254,20 @@ ns.defaults = {
         layout = "radial", radius = 70, arc = 100, arcAngle = 180, arcFixed = true,
         attach = "free", point = { "CENTER", -150, -50 },
     },
-    takenText = {   -- Damage Taken: cumulative damage you take, one row per attack type
+    doneText = {   -- Healing Done: the healing you cast this fight, on anyone, one row per spell
+        enabled = false, style = "float", showBar = true, rowHeight = 16,
+        barColor = { 0.30, 0.85, 0.50 }, anchor = "CENTER", xOffset = 0, yOffset = 0,
+        growth = "DOWN", align = "RIGHT", matchFrameWidth = false, textWidth = 300,
+        lineSpacing = 18, maxLines = 6, fontSize = 15, maxSize = 30, scaleBySeverity = false,
+        bigPct = 30, schoolColors = true, crit = false, showLabel = false, maxLabel = 0,
+        showIcon = true, sortMode = "amount", threshold = 0, showMana = false, includePet = true,
+        holdTime = 4, fadeTime = 0.8, holdSecs = 10,
+        pop = true, roll = true, splash = true, splashSide = "LEFT", critFlash = true,
+        stackDir = "vertical", growthH = "LEFT",
+        layout = "radial", radius = 70, arc = 100, arcAngle = 180, arcFixed = true,
+        attach = "free", point = { "CENTER", -150, 70 },
+    },
+    takenText = {   -- Damage Received: cumulative damage you take, one row per attack type
         enabled = true, style = "float", showBar = true, rowHeight = 18,
         barColor = { 0.80, 0.30, 0.20 },
         anchor = "CENTER", xOffset = 0, yOffset = 0, growth = "DOWN", align = "RIGHT",
@@ -306,7 +319,7 @@ local function initDB()
 
     -- Plain-text (float) only; severity scaling, crit emphasis and the sized box were
     -- all removed -- the feed is placed at a movable anchor point.
-    for _, k in ipairs({ "enemyText", "healText", "takenText", "actionsText" }) do
+    for _, k in ipairs({ "enemyText", "healText", "doneText", "takenText", "actionsText" }) do
         local c = ns.db[k]
         c.style, c.scaleBySeverity, c.crit, c.matchFrameWidth = "float", false, false, false
         c.showCombatTime = false   -- the standalone Combat Timer element handles this now
@@ -334,11 +347,12 @@ ns.groupFrames = {}
 function ns.ResetSettings()
     GaruCombatTextDB = copyDefaults(ns.defaults, {})
     ns.db = GaruCombatTextDB
-    -- every feed, not just two of them: Damage Taken and Actions used to keep their
+    -- every feed, not just two of them: Damage Received and Actions used to keep their
     -- old look until the next reload
     if ns.RefreshAnchors then ns.RefreshAnchors() end
     if ns.RefreshEnemyText then ns.RefreshEnemyText() end
     if ns.RefreshHealText then ns.RefreshHealText() end
+    if ns.RefreshDoneText then ns.RefreshDoneText() end
     if ns.RefreshTakenText then ns.RefreshTakenText() end
     if ns.RefreshActionsText then ns.RefreshActionsText() end
     if ns.RefreshTimer then ns.RefreshTimer() end

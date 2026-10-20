@@ -232,3 +232,119 @@ function ns.BuildHealText()
         end)
     end
 end
+
+--------------------------------------------------------------------------
+-- Healing Done: the healing YOU cast this fight, on anyone, one row per spell
+--------------------------------------------------------------------------
+-- One set of totals for the fight: cleared when the next one starts, held for
+-- holdSecs once it ends, then each row fades as the others' do. Heals out of combat
+-- show and fade on their own. On the Classic clients the combat log says every heal
+-- of yours and how much of it was overhealing (left out, as on Healing Received). On
+-- Forever the game reports a heal where it lands but not whose it was; yours are
+-- matched to your casts (UnitCombat.lua) on you, your target, and anyone else it
+-- reports, and once the fight is over every row is set to Blizzard's damage meter's
+-- figure for that spell, so the totals end exact.
+local doneMeter = ns.Meter.New({ cfg = function() return ns.db.doneText end })
+doneMeter.isGlobal = function() return true end     -- one set of totals, whoever you heal
+local doneGen = 0
+
+local function doneFrame() return ns.doneHostFrame end
+
+if not ns.SummaryMode then
+    ns.On("PLAYER_REGEN_DISABLED", function()
+        doneGen = doneGen + 1
+        doneMeter:Clear()
+        doneMeter.noFade = true
+    end)
+    ns.On("PLAYER_REGEN_ENABLED", function()
+        doneGen = doneGen + 1
+        local g = doneGen
+        C_Timer.After(ns.db.doneText.holdSecs or 10, function()
+            if g == doneGen and not InCombatLockdown() then doneMeter.noFade = nil end
+        end)
+    end)
+end
+
+if ns.CombatLogLive then
+ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
+    local cfg = ns.db.doneText
+    if not cfg.enabled or ns.test.combat then return end
+    playerGUID = playerGUID or UnitGUID("player")
+    local info = { CombatLogGetCurrentEventInfo() }
+    local sub, srcGUID, srcFlags = info[2], info[4], info[6]
+    if sub ~= "SPELL_HEAL" and sub ~= "SPELL_PERIODIC_HEAL" then return end
+    if not (ns.SourceIsMine(srcFlags, cfg.includePet) or ns.SameGUID(srcGUID, playerGUID)) then return end
+    local f = doneFrame()
+    if not f then return end
+    local spellId, spellName, spellSchool = info[12], info[13], info[14]
+    local amount, overheal, _, crit = info[15], info[16], info[17], info[18]
+    local eff = (tonumber(amount) or 0) - (tonumber(overheal) or 0)
+    if eff <= 0 or eff < (cfg.threshold or 0) then return end
+    doneMeter:Bump(f, "spell:" .. tostring(spellId or spellName or "?"), spellName or "Heal", eff,
+                   spellSchool, crit and true or false, ns.SpellTexture(spellId))
+end)
+end
+
+if ns.UseUnitCombat then
+    ns.UC.Subscribe("healDone", function(r)
+        local cfg = ns.db.doneText
+        if not cfg.enabled or ns.test.combat then return end
+        if r.amount < (cfg.threshold or 0) then return end
+        local f = doneFrame()
+        if not f then return end
+        doneMeter:Bump(f, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
+    end)
+    -- the meter's figure for each spell, once the fight is over; a spell the meter
+    -- counts under another ID than the cast takes the row of the same name
+    ns.UC.Subscribe("healSettled", function(r)
+        local cfg = ns.db.doneText
+        if not cfg.enabled or ns.test.combat then return end
+        local f = doneFrame()
+        if not f then return end
+        local rows = doneMeter:Trackers(f)
+        local key = r.key
+        if rows and not rows[key] then
+            for k, t in pairs(rows) do
+                if t.label == r.label and k ~= key then key = k break end
+            end
+        end
+        doneMeter:SetTotal(f, key, r.label, r.total, r.school, r.icon)
+    end)
+end
+
+local DONE_TEST = {
+    { key = "spell:2061",  label = "Flash Heal",   school = 2 },
+    { key = "spell:139",   label = "Renew",        school = 2 },
+    { key = "spell:2050",  label = "Lesser Heal",  school = 2 },
+    { key = "spell:774",   label = "Rejuvenation", school = 8 },
+}
+local doneAcc = 0
+function ns.DoneTextTest(dt)
+    doneAcc = doneAcc + dt
+    if doneAcc < 0.35 then return end
+    doneAcc = 0
+    local f = doneFrame()
+    if not f or not f:IsShown() then return end
+    local src = DONE_TEST[math.random(1, #DONE_TEST)]
+    local amt = math.random(80, 700)
+    doneMeter:Bump(f, src.key, src.label, amt, src.school, math.random() < 0.2,
+                   ns.SpellTexture(tonumber(src.key:match("%d+"))))
+end
+
+function ns.ClearDoneText() doneMeter:Clear() end
+
+function ns.RefreshDoneText()
+    local cfg = ns.db.doneText
+    local f = doneFrame()
+    doneMeter:Refresh(f and { f } or {}, function(frame) return cfg.enabled and frame == f end)
+end
+
+function ns.BuildDoneText()
+    ns.RefreshDoneText()
+    if not ns.hdTicker then
+        ns.hdTicker = CreateFrame("Frame", nil, UIParent)
+        ns.hdTicker:SetScript("OnUpdate", function(_, dt)
+            if ns.test.combat and ns.db.doneText.enabled then ns.DoneTextTest(dt) end
+        end)
+    end
+end

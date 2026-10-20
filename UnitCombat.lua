@@ -273,6 +273,8 @@ ns.On("SPELL_TEXT_UPDATE", function(_, spell) if num(spell) then factCache[spell
 --          (onTarget false: on another enemy's plate; killed = guid: the blow
 --          that killed the target that just cleared, on that unit's plate)
 -- killed   { guid, key, label, icon, school }   your target died, and this attack did it
+-- healDone { key, label, amount, school, crit, icon, on }    a heal of yours, on `on`
+-- healSettled { key, label, icon, school, total }   after a fight: the meter's healing of yours
 -- avoided  { missType, pet }                                 your target avoided you
 -- taken    { amount, school, crit }                          a hit on you
 -- dodged   { missType }                                      you avoided a hit
@@ -318,7 +320,8 @@ stats = newStats()
 --   C <unit> <spell> auto                Auto Shot / Shoot: left to its swing
 --   S <arg1> <arg2> <hand>               PLAYER_SWING, its payload as it came
 --   U <unit> <event> <flag> <amount> <school> [dying]       a UNIT_COMBAT report;
---                                        "dying": on the plate of the target that just cleared
+--                                        "dying": on the plate of the target that just cleared;
+--                                        "other": a heal on someone else (party, target, plate)
 --   > <decision> [key]                   what became of the report above it
 --   K <guid> <key>                       your target cleared at your blow, or with a
 --                                        bolt of yours in flight at it: a kill by that
@@ -469,6 +472,21 @@ local function procFor(t, school)
     return best
 end
 
+-- Who a heal of yours is cast on: your target, when that is a living friend, else
+-- you (the game's own rule for a heal with no friendly target). A guess the game never
+-- confirms -- a self-cast key or a mouseover macro heals someone else -- so a heal
+-- landing on you still takes a cast that was meant for your target, when nothing
+-- landed on the target for it.
+local function healTargetGUID()
+    local t = UnitGUID("target")
+    if str(t) and yes(UnitExists("target")) and not yes(UnitCanAttack("player", "target"))
+        and not (UnitIsDeadOrGhost and yes(UnitIsDeadOrGhost("target"))) then
+        return t
+    end
+    local me = UnitGUID("player")
+    return str(me) and me or nil
+end
+
 local function onCast(unit, spell)
     if not (str(unit) and (unit == "player" or unit == "pet")) or not num(spell) then return end
     if AUTO_RANGED[spell] then note("C", unit, spell, "auto") return end
@@ -500,10 +518,15 @@ local function onCast(unit, spell)
         -- One cast, one mana cost: Regrowth's direct heal and its ticks share this,
         -- so whichever lands first carries the cost and the other does not.
         local cast = { mana = false }
-        if f.direct then heals[#heals + 1] = { spell = spell, at = t, cast = cast } end
+        local on = healTargetGUID()
+        if f.direct then heals[#heals + 1] = { spell = spell, at = t, cast = cast, on = on } end
         if f.hot then
-            for i = #hots, 1, -1 do if hots[i].spell == spell then table.remove(hots, i) end end
-            hots[#hots + 1] = { spell = spell, from = t, to = t + (f.duration or 15) + DOT_SLACK, cast = cast }
+            -- a recast refreshes the HoT on that one; on someone else it is a second one
+            for i = #hots, 1, -1 do
+                if hots[i].spell == spell and hots[i].on == on then table.remove(hots, i) end
+            end
+            hots[#hots + 1] = { spell = spell, from = t, to = t + (f.duration or 15) + DOT_SLACK, cast = cast,
+                                on = on, lastBy = {} }
         end
     end
 
@@ -980,27 +1003,49 @@ end
 --------------------------------------------------------------------------
 -- Hits and heals on you
 --------------------------------------------------------------------------
+local function myGUID()
+    local me = UnitGUID("player")
+    return str(me) and me or nil
+end
+
+-- Healing Done: a heal of yours, wherever it landed.
+local function healDone(spell, amount, school, crit, on)
+    emit("healDone", spellRecord(spell, { amount = amount, school = school, crit = crit, on = on }, "player"))
+end
+
+-- A HoT of yours ticking on `guid` now: on its beat for that unit, never in its cast's
+-- own moment (a heal landing then is somebody else's).
+local function hotTick(h, guid, t)
+    local last = h.lastBy[guid]
+    if (last and t - last >= TICK_GAP) or (not last and t - h.from >= 0.8) then
+        h.lastBy[guid] = t
+        return true
+    end
+end
+
 local function placeHealOnMe(amount, school, crit, t)
     local rec = { amount = amount, school = school, crit = crit }
+    local me = myGUID()
     local function mine(spell, cast, name)
         rule(name)
         note(">", name, "spell:" .. spell)
         spellRecord(spell, rec, "player")
         rec.spell, rec.first = spell, not cast.mana
         cast.mana = true
+        healDone(spell, amount, school, crit, me)
         return emit("healed", rec)
     end
-    for _, h in ipairs(heals) do
-        if not h.used and t - h.at <= HEAL_WINDOW then
-            h.used = true
-            return mine(h.spell, h.cast, "your heal")
+    -- a heal cast at you first; then one meant for your target, which landed on you
+    for pass = 1, 2 do
+        for _, h in ipairs(heals) do
+            if not h.used and t - h.at <= HEAL_WINDOW and (pass == 2 or h.on == me) then
+                h.used = true
+                return mine(h.spell, h.cast, "your heal")
+            end
         end
     end
-    -- A HoT's first tick is never in its cast's own moment: a heal landing then is
-    -- somebody else's.
     for _, h in ipairs(hots) do
-        if (h.last and t - h.last >= TICK_GAP) or (not h.last and t - h.from >= 0.8) then
-            h.last = t
+        if (h.on == nil or h.on == me) and hotTick(h, me or "player", t) then
             return mine(h.spell, h.cast, "your heal over time")
         end
     end
@@ -1024,8 +1069,60 @@ local function wantAll()
     return (db.enemyText and db.enemyText.scope == "all") or (db.actionsText and db.actionsText.scope == "all") or false
 end
 
+-- Heals on someone else (Healing Done): only yours count, and only where the game
+-- reports them -- your target, a friendly nameplate, and party or raid members if it
+-- reports those at all (not yet seen; /gct trace records any that come). The heal
+-- cast at that unit just before, or a HoT of yours on it ticking on its beat. One
+-- heal reported twice (on your target and on its plate) is counted once.
+local lastDone
+local OTHER_UNITS = { "^target$", "^focus$", "^pet$", "^party%d$", "^raid%d+$", "^nameplate%d+$" }
+local function healOnOther(unit, flag, amount, school)
+    local known = false
+    for _, p in ipairs(OTHER_UNITS) do if unit:find(p) then known = true break end end
+    if not known then return false end
+    if yes(UnitCanAttack("player", unit)) then return false end       -- an enemy healing
+    local guid = UnitGUID(unit)
+    if not str(guid) then return true end
+    if guid == myGUID() then return true end                          -- counted on you
+    note("U", unit, "HEAL", flag, amount, school, "other")
+    if not num(amount) or amount <= 0 then return true end
+    local t = now()
+    tidy(t)
+    local d = lastDone
+    if d and d.guid == guid and d.amount == amount and t - d.at <= 0.05 then
+        note(">", "the same heal, on its other unit")
+        return true
+    end
+    lastDone = { guid = guid, amount = amount, at = t }
+    stats.healsOthers = (stats.healsOthers or 0) + 1
+    local crit = (flag == "CRITICAL")
+    for _, h in ipairs(heals) do
+        if not h.used and h.on == guid and t - h.at <= HEAL_WINDOW then
+            h.used = true
+            rule("your heal on another")
+            note(">", "your heal on another", "spell:" .. h.spell)
+            healDone(h.spell, amount, school, crit, guid)
+            return true
+        end
+    end
+    for _, h in ipairs(hots) do
+        if h.on == guid and hotTick(h, guid, t) then
+            rule("your heal over time on another")
+            note(">", "your heal over time on another", "spell:" .. h.spell)
+            healDone(h.spell, amount, school, crit, guid)
+            return true
+        end
+    end
+    note(">", "someone else's heal on another")
+    return true
+end
+
 local function onUnitCombat(unit, event, flag, amount, school)
     if not str(unit) or not str(event) then return end
+    if event == "HEAL" and unit ~= "player" then
+        if unit == "target" and yes(UnitIsUnit("target", "player")) then return end   -- reported on you too
+        if healOnOther(unit, str(flag) and flag or "", amount, school) then return end
+    end
     local plateKey, dying
     if unit ~= "target" and unit ~= "player" then
         if not unit:find("^nameplate%d+$") then return end
@@ -1233,11 +1330,13 @@ end
 -- fight of Wrath alone), and set on an every-enemy feed that showed spells never
 -- cast. So the meter is read before each fight too, and a read after it that is the
 -- same to the last figure is not taken: a later attempt will see this fight's.
-local lastRead, beforeFight   -- the meter as last read; as it read before this fight
+-- Per meter: damage, and healing for Healing Done.
+local lastRead, beforeFight = {}, {}   -- the meter as last read; as it read before this fight
 
-local function readMeter()
+local function readMeter(kind)
     local DM = ns.DM
-    return DM and DM.Capture and DM.TYPES and DM.Capture(DM.TYPES.damage) or nil
+    kind = kind or "damage"
+    return DM and DM.Capture and DM.TYPES and DM.TYPES[kind] and DM.Capture(DM.TYPES[kind]) or nil
 end
 
 local function sameRows(a, b)
@@ -1251,15 +1350,32 @@ local function sameRows(a, b)
     return true
 end
 
+-- Healing Done, once the fight is over: the meter's healing of yours, per spell, is
+-- exactly that feed's figures -- heals on people the game did not report, overhealing
+-- the live numbers may have counted, all set right. Set, not added.
+local function settleHealing()
+    if not (ns.db and ns.db.doneText and ns.db.doneText.enabled) then return end
+    local rows = readMeter("healing")
+    if not rows or sameRows(rows, beforeFight.healing) then return end
+    lastRead.healing = rows
+    for key, r in pairs(rows) do
+        local label, icon, school = keyLabel(key)
+        local total = math.floor(r.amount + 0.5)
+        note(">", "settled healing", key, total)
+        emit("healSettled", { key = key, label = label, icon = icon, school = school, total = total })
+    end
+end
+
 local function settle(fight)
     if fight ~= fightNo or inCombat then return end
+    settleHealing()
     local rows = readMeter()
     if not rows then return end   -- not released yet; a later attempt will see it
-    if sameRows(rows, beforeFight) then
+    if sameRows(rows, beforeFight.damage) then
         note(">", "the meter still shows the last fight")
         return
     end
-    lastRead = rows
+    lastRead.damage = rows
     local all = everyEnemyDealt()
     if not all and #kills == 0 then return end
     local meter = {}
@@ -1342,7 +1458,7 @@ end
 -- 2026: a Thorns hit that killed, after a reload mid-fight, was left out).
 ns.On("PLAYER_ENTERING_WORLD", function()
     inCombat = yes(UnitAffectingCombat("player")) or (InCombatLockdown and InCombatLockdown()) or false
-    if not inCombat then lastRead = readMeter() end
+    if not inCombat then lastRead.damage, lastRead.healing = readMeter(), readMeter("healing") end
 end)
 
 ns.On("PLAYER_REGEN_ENABLED", function()
@@ -1358,7 +1474,7 @@ ns.On("PLAYER_REGEN_DISABLED", function()
     inCombat = true
     fightNo = fightNo + 1
     wipe(tally); wipe(biggest); wipe(kills)
-    beforeFight = lastRead
+    beforeFight.damage, beforeFight.healing = lastRead.damage, lastRead.healing
     lastStats = (stats.target + stats.player > 0) and stats or lastStats
     -- The cast or swing that opened the fight came just before combat began (a
     -- bolt puts you in combat when it lands, not when it leaves your hands), and

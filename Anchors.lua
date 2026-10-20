@@ -12,6 +12,7 @@ local anchors = {}
 local DEFAULT_POINT = {
     enemyText   = { "CENTER",  250,  40 },
     healText    = { "CENTER", -250,  40 },
+    doneText    = { "CENTER", -250, 150 },
     takenText   = { "CENTER",  250, -120 },
     actionsText = { "CENTER", -250, -120 },
 }
@@ -42,9 +43,10 @@ local function apply(key)
         f:EnableMouse(false)
     else
         f:SetPoint("CENTER", UIParent, cfg.point[1], cfg.point[2], cfg.point[3])
-        f:EnableMouse(not ns.db.locked)
+        f:EnableMouse(not ns.db.locked and cfg.enabled ~= false)
     end
-    local editing = (not ns.db.locked) and not af
+    -- a feed that is switched off has no marker to drag
+    local editing = (not ns.db.locked) and not af and cfg.enabled ~= false
     f.bg:SetShown(editing); f.border:SetShown(editing); f.dot:SetShown(editing); f.label:SetShown(editing)
 end
 
@@ -78,15 +80,17 @@ end
 
 makeAnchor("enemyText", "Damage Dealt", "target")
 makeAnchor("healText", "Healing Received", "player")
-makeAnchor("takenText", "Damage Taken", "player")
+makeAnchor("doneText", "Healing Done", "player")
+makeAnchor("takenText", "Damage Received", "player")
 makeAnchor("actionsText", "Actions", "target")
 ns.frames.target    = anchors.enemyText   -- EnemyText anchors + routes target damage here
 ns.healHostFrame    = anchors.healText    -- HealText anchors here
+ns.doneHostFrame    = anchors.doneText    -- Healing Done (HealText.lua) anchors here
 ns.takenHostFrame   = anchors.takenText   -- TakenText anchors here
 ns.actionsHostFrame = anchors.actionsText -- ActionsText anchors here (per current target)
 
 function ns.RefreshAnchors()
-    apply("enemyText"); apply("healText"); apply("takenText"); apply("actionsText")
+    apply("enemyText"); apply("healText"); apply("doneText"); apply("takenText"); apply("actionsText")
 end
 
 function ns.SetLocked(v)

@@ -39,7 +39,10 @@ function UnitGUID(u)
     if u == "player" then return "Player-1" end
     return plates[u]
 end
-function UnitCanAttack(_, u) return plates[u] ~= nil and not friendly[u] end
+function UnitCanAttack(_, u)
+    if u == "target" then return target ~= nil and target:find("^Creature") ~= nil end
+    return plates[u] ~= nil and not friendly[u]
+end
 function UnitIsUnit(a, b)
     if plates[a] and b == "target" then return plates[a] == target end
     if a == "target" and b == "player" then return false end
@@ -634,6 +637,61 @@ advance(826)
 if #killedList == before then pass = pass + 1 else fail = fail + 1; print("FAIL  a target cleared by hand is no kill") end
 peace(827)
 advance(840)
+for i = #got, 1, -1 do if got[i].kind == "settled" or got[i].kind == "settledAll" then table.remove(got, i) end end
+
+-- 14e. Healing Done: your heals, wherever the game reports them landing.
+local done, doneSettled = {}, {}
+ns.UC.Subscribe("healDone", function(r) done[#done + 1] = r end)
+ns.UC.Subscribe("healSettled", function(r) doneSettled[#doneSettled + 1] = r end)
+local function lastDone(name, t, k, amount, on)
+    advance(t)
+    local r = done[#done]
+    if r and r.key == k and r.amount == amount and (on == nil or r.on == on) then pass = pass + 1
+    else fail = fail + 1; print(("FAIL  %s: got %s %s on %s"):format(name, tostring(r and r.key), tostring(r and r.amount), tostring(r and r.on))) end
+    done = {}
+end
+local function noDone(name, t)
+    advance(t)
+    if #done == 0 then pass = pass + 1 else fail = fail + 1; print("FAIL  " .. name .. ": got " .. tostring(done[1].key)); done = {} end
+end
+local function healOn(t, unit, amount) advance(t); fire("UNIT_COMBAT", unit, "HEAL", "", amount, 2) end
+retarget(900, "Player-Friend")                       -- a friend: heals go to them
+cast(901, 2050); healOn(901.2, "target", 50)
+lastDone("a heal on your friendly target", 901.3, "spell:2050", 50, "Player-Friend")
+nothing("and it is no heal received", 901.4)
+healOn(903, "target", 70)
+noDone("someone else's heal on your target is not yours", 903.1)
+cast(905, 139); healOn(905.1, "target", 99)          -- someone's heal in the cast's own moment
+noDone("not in its HoT's cast moment", 905.2)
+healOn(908, "target", 15)
+lastDone("your Renew ticking on your target", 908.1, "spell:139", 15, "Player-Friend")
+plates.nameplate11, friendly.nameplate11 = "Player-Friend", true
+cast(910, 2050); cast(910.1, 2050)                  -- two heals on the way
+healOn(910.2, "target", 48); healOn(910.2, "nameplate11", 48)
+advance(910.3)
+if #done == 1 then pass = pass + 1 else fail = fail + 1; print("FAIL  one heal, reported on your target and its plate, counted once: " .. #done) end
+done = {}
+healOn(910.4, "target", 51)
+lastDone("...and the second heal still has its cast", 910.5, "spell:2050", 51)
+plates.party1, friendly.party1 = "Player-Friend", true
+cast(912, 2050); healOn(912.2, "party1", 52)
+lastDone("a heal reported on a party member", 912.3, "spell:2050", 52, "Player-Friend")
+plates.nameplate11, plates.party1 = nil, nil
+retarget(915, "Creature-H1")                         -- an enemy targeted: heals go to you
+cast(916, 2050); onMe(916.2, "HEAL", 55, 2)
+lastDone("a heal on yourself, with an enemy targeted", 916.3, "spell:2050", 55, "Player-1")
+expect("...and on Healing Received", 916.31, "healed", key("spell:2050", 55))
+-- once the fight is over, the meter's healing of yours, per spell
+ns.db.doneText = { enabled = true }
+ns.DM.TYPES.healing = 2
+fight(920); peace(921)
+meterRows = { ["spell:2050"] = { id = 2050, amount = 205 } }
+advance(923)
+local s1 = doneSettled[1]
+if s1 and s1.key == "spell:2050" and s1.total == 205 then pass = pass + 1
+else fail = fail + 1; print("FAIL  Healing Done set to the meter's after the fight: " .. tostring(s1 and s1.key) .. " " .. tostring(s1 and s1.total)) end
+ns.db.doneText = nil
+advance(930)
 for i = #got, 1, -1 do if got[i].kind == "settled" or got[i].kind == "settledAll" then table.remove(got, i) end end
 
 -- 13. What descriptions say.

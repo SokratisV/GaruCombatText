@@ -5,6 +5,7 @@ ns.On("PLAYER_LOGIN", function()
     ns.RunWhenSafe(function()
         if ns.BuildEnemyText then ns.BuildEnemyText() end
         if ns.BuildHealText then ns.BuildHealText() end
+        if ns.BuildDoneText then ns.BuildDoneText() end
         if ns.BuildTakenText then ns.BuildTakenText() end
         if ns.BuildActionsText then ns.BuildActionsText() end
     end)
@@ -17,6 +18,7 @@ function ns.SetPreview(on)
     if not ns.test.combat then
         if ns.ClearEnemyText then ns.ClearEnemyText() end
         if ns.ClearHealText then ns.ClearHealText() end
+        if ns.ClearDoneText then ns.ClearDoneText() end
         if ns.ClearTakenText then ns.ClearTakenText() end
         if ns.ClearActionsText then ns.ClearActionsText() end
     end

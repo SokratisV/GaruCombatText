@@ -314,7 +314,7 @@ for _, name in ipairs(ORDER) do
             local M = New(opts)
             allMeters[#allMeters + 1] = M
             local function feed()
-                for _, k in ipairs({ "enemyText", "healText", "takenText", "actionsText" }) do
+                for _, k in ipairs({ "enemyText", "healText", "doneText", "takenText", "actionsText" }) do
                     if ns.db and M.cfg() == ns.db[k] then return k end
                 end
             end
@@ -363,6 +363,7 @@ check("the defaults count every enemy", ns.db.enemyText.scope == "all" and ns.db
 if FOREVER then
     -- off by default; on, to see the mana paths
     ns.db.healText.showMana, ns.db.enemyText.showMana = true, true
+    ns.db.doneText.enabled = true   -- off by default
     -- per target, which the fights below are about (every enemy has its own, further down)
     ns.db.enemyText.scope = "target"; ns.EnemyScopeChanged()
     ns.db.actionsText.scope = "target"; ns.ActionsScopeChanged()
@@ -430,7 +431,7 @@ if FOREVER then
     ok, err = pcall(fire, "UNIT_COMBAT", "target", "DODGE", "", 0, 1)
     check("Actions path runs", ok, err)
     ok, err = pcall(fire, "UNIT_COMBAT", "player", "WOUND", "", 40, 4)
-    check("Damage Taken path runs", ok, err)
+    check("Damage Received path runs", ok, err)
     ok, err = pcall(fire, "UNIT_COMBAT", "player", "DODGE", "", 0, 1)
     check("Taken avoid path runs", ok, err)
     fire("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 2050)
@@ -465,7 +466,7 @@ if FOREVER then
     advance(23); fire("PLAYER_SWING", 2.4, 0)
     target = nil; fire("PLAYER_TARGET_CHANGED")             -- dies at the swing
     advance(23.3); fire("PLAYER_REGEN_ENABLED")
-    ns.DM.TYPES = ns.DM.TYPES or {}
+    ns.DM.TYPES = { damage = 0, taken = 1, healing = 2 }   -- Enum.DamageMeterType, as the client has it
     ns.DM.Capture = function() return { ["spell:6603"] = { id = 6603, amount = 91 } } end
     ok, err = pcall(advance, 30)
     check("settling runs", ok, err)
@@ -541,9 +542,9 @@ if FOREVER then
     check("Damage Dealt: its school came through", b and b.school == 32, b and tostring(b.school))
     check("Damage Dealt: mana spent on its line", fed("enemyText", "spell:686", 25, true) ~= nil)
     check("Actions: the dodge", fed("actionsText", "miss:DODGE", 1) ~= nil)
-    check("Damage Taken: Fire 40 on the Fire line", fed("takenText", "school:4", 40) ~= nil)
+    check("Damage Received: Fire 40 on the Fire line", fed("takenText", "school:4", 40) ~= nil)
     check("Actions: your own dodge, beside the ones your target made", fed("actionsText", "avoid:DODGE", 1) ~= nil)
-    check("Damage Taken: no avoid rows any more", fed("takenText", "miss:DODGE") == nil and fed("takenText", "avoid:DODGE") == nil)
+    check("Damage Received: no avoid rows any more", fed("takenText", "miss:DODGE") == nil and fed("takenText", "avoid:DODGE") == nil)
     do
         local am = meterOf("actionsText")
         am:Bump(ns.actionsHostFrame, "miss:DODGE", "Dodge", 1, 1, false, nil)
@@ -555,6 +556,7 @@ if FOREVER then
               tostring(theirs and theirs.good) .. " / " .. tostring(yours and yours.good))
     end
     check("Healing: Lesser Heal 55 on its line", fed("healText", "spell:2050", 55) ~= nil)
+    check("Healing Done: your Lesser Heal on yourself", fed("doneText", "spell:2050", 55) ~= nil)
     local manaBumps = 0
     for _, x in ipairs(bumps) do if x.feed == "healText" and x.mana and x.key == "spell:2050" then manaBumps = manaBumps + 1 end end
     check("Healing: its mana, exactly once", manaBumps == 1, tostring(manaBumps))
@@ -607,6 +609,7 @@ do
     end
     local function settle() advance(clock + 0.01) end   -- a change redraws a frame later
     local slash = SlashCmdList.GARUCOMBATTEXT
+    ns.db.doneText.enabled = true   -- off by default: on, so its page has rows to work
     local ok, err = pcall(slash, "")
     local win = rawget(_G, "GaruCombatTextOptions")
     check("/gct opens the settings window", ok and win and win:IsShown(), err)
@@ -618,7 +621,7 @@ do
                 byName[f.text.text] = f
             end
         end
-        check("six pages in the list", #nav == 6, tostring(#nav))
+        check("seven pages in the list", #nav == 7, tostring(#nav))
         local function open(name)
             local b = byName[name]
             if b then b.scripts.OnClick(b); settle() end
@@ -718,7 +721,7 @@ do
                 if f.crumb.text and f.crumb.text:find(">") then crumbed = crumbed + 1 end
             end
         end
-        check("search: Font size from all five pages, each with its page named", found == 5 and crumbed == 5,
+        check("search: Font size from all six pages, each with its page named", found == 6 and crumbed == 6,
               found .. " found, " .. crumbed .. " with a page")
         check("search: and nothing that does not match", #shownRows() == found,
               #shownRows() .. " rows shown for " .. found .. " matches")
@@ -749,10 +752,10 @@ do
             ns.db.enemyText.threshold = 777
             ns.db.healText.point = { "CENTER", -50, -30 }
             local items = copyMenu()
-            assert(item(items, "Damage Taken") and item(items, "Actions") and item(items, "Healing Received")
+            assert(item(items, "Damage Received") and item(items, "Actions") and item(items, "Healing Received")
                 and item(items, "All other feeds"), "the menu does not offer every other feed and all")
             assert(not item(items, "Damage Dealt"), "the menu offers the page itself")
-            pick("Damage Taken")
+            pick("Damage Received")
             assert(ns.db.takenText.fontSize == 31, "copying to one feed")
             assert(ns.db.healText.fontSize ~= 31, "copying to one feed touched another")
             pick("All other feeds")
@@ -844,6 +847,12 @@ if not FOREVER then
     local tt = em:Trackers(ns.frames.target)
     check("Classic: Thorns (DAMAGE_SHIELD) on your target is counted", tt and tt["spell:782"] and tt["spell:782"].total == 6,
           tt and tt["spell:782"] and tostring(tt["spell:782"].total) or "no Thorns row")
+    -- Healing Done: your heal on a friend, its effective part (100 less 30 overhealing)
+    ns.db.doneText.enabled = true
+    info = { 0, "SPELL_HEAL", false, "Player-1", "Me", 0x511, 0, "Player-2", "Friend", 0x514, 0,
+             2061, "Flash Heal", 2, 100, 30, 0, false }
+    fire("COMBAT_LOG_EVENT_UNFILTERED")
+    check("Classic: Healing Done counts your heal on a friend, less overhealing", fed("doneText", "spell:2061", 70) ~= nil)
     -- an attack on you that you avoided, from your target: on Actions, as yours
     info = { 0, "SWING_MISSED", false, "Creature-T", "Mob", 0x10a48, 0, "Player-1", "Me", 0x511, 0, "PARRY" }
     fire("COMBAT_LOG_EVENT_UNFILTERED")

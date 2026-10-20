@@ -32,7 +32,7 @@ spell's own description says it does.
   checked in game; a paladin's, rogue's or shaman's `/gct trace` would settle it.
 - **Actions** is back: your target's dodges, parries and resists, matched to your swings
   and casts.
-- **Damage Taken** is grouped **by school** (Physical, Fire, ...): the game says how you
+- **Damage Received** is grouped **by school** (Physical, Fire, ...): the game says how you
   were hit, not by what.
 - **Healing Received** counts every heal on you. Your own are on their spell; everyone
   else's share one *Healing* line.
@@ -71,7 +71,7 @@ Screenshots: drop images into docs/ and reference them here, e.g.
   it adds up everything you hit as one set of totals for the fight; with **Count: Your
   target** it tracks each target separately and can remember their totals when you re-select
   them (Actions has the same choice).
-- 🛡️ **Damage taken (by type)** — the cumulative damage you take this fight from **all
+- 🛡️ **Damage received (by type)** — the cumulative damage you take this fight from **all
   enemies combined, grouped by attack type** (all melee together, each incoming spell, each
   environmental type), school-colored.
 - 🎯 **Actions** — the attacks avoided this fight, both ways, as count rows: in red, *your*

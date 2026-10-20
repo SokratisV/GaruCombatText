@@ -1,6 +1,6 @@
 local ADDON, ns = ...
 
--- Damage Taken (by type): the cumulative damage YOU take this fight from ALL enemies,
+-- Damage Received (by type): the cumulative damage YOU take this fight from ALL enemies,
 -- combined per attack type -- all melee together, each incoming spell together, each
 -- environmental type. On the shared ns.Meter engine; routed from hits where you're hit.
 

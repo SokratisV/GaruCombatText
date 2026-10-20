@@ -25,6 +25,7 @@ local BRONZE = { 0.61, 0.48, 0.29 }
 
 local function RE() if ns.RefreshEnemyText then ns.RefreshEnemyText() end end
 local function RH() if ns.RefreshHealText then ns.RefreshHealText() end end
+local function RD() if ns.RefreshDoneText then ns.RefreshDoneText() end end
 local function RK() if ns.RefreshTakenText then ns.RefreshTakenText() end end
 local function RAc() if ns.RefreshActionsText then ns.RefreshActionsText() end end
 local function RA() if ns.RefreshAnchors then ns.RefreshAnchors() end end
@@ -33,8 +34,8 @@ local function RT() if ns.RefreshTimer then ns.RefreshTimer() end end
 local ATTACH = { { value = "free", text = "Free (movable)" }, { value = "player", text = "Player frame" },
                  { value = "target", text = "Target frame" } }
 local TIMER_ATTACH = { { value = "free", text = "Free (movable)" }, { value = "enemy", text = "Damage Dealt" },
-                       { value = "taken", text = "Damage Taken" }, { value = "actions", text = "Actions" },
-                       { value = "heal", text = "Healing" } }
+                       { value = "taken", text = "Damage Received" }, { value = "actions", text = "Actions" },
+                       { value = "heal", text = "Healing" }, { value = "done", text = "Healing Done" } }
 local UPDOWN = { { value = "UP", text = "Up" }, { value = "DOWN", text = "Down" } }
 local ALIGN  = { { value = "LEFT", text = "Left" }, { value = "CENTER", text = "Centre" }, { value = "RIGHT", text = "Right" } }
 local LAYOUT = { { value = "stack", text = "Stacked" }, { value = "radial", text = "Radial (arc)" } }
@@ -240,8 +241,35 @@ local function definePages()
             },
         }),
         FeedPage({
+            key = "done", db = "doneText", refresh = RD, effects = true,
+            title = "Healing Done",
+            desc = "The healing you cast this fight, on anyone, one row per spell. Held for a while once the fight ends, cleared when the next one starts.",
+            banner = function()
+                if ns.UseUnitCombat then
+                    return "Live where the game reports the heal; exact after the fight",
+                        "The game reports a heal where it lands, but not whose it was. Yours are matched to your casts on you, your target, and anyone else the game reports a heal on, so healing a group member you have not targeted may only show once the fight ends. Then every number is set to Blizzard's damage meter's, so the totals end exact. Whether the live numbers include overhealing is not yet known: if they do, they drop to the meter's when the fight ends."
+                end
+            end,
+            unavailable = function()
+                if ns.SummaryMode then
+                    return "On this client the Healing Received feed already shows the healing you cast, once each fight is over."
+                end
+            end,
+            rowsLabel = "Spells shown",
+            text = {
+                half(Toggle("doneText", "showLabel", "Spell names", "The spell's name beside its number.")),
+                half(Toggle("doneText", "showIcon", "Spell icons", "The spell's icon beside its number.")),
+                half(Toggle("doneText", "schoolColors", "School colours", "Colours each row by its spell school.")),
+            },
+            counting = {
+                Toggle("doneText", "includePet", "Pet", "Counts your pet's healing too.", nil, { vis = function() return ns.CombatLogLive end }),
+                Slider("doneText", "threshold", "Ignore heals below", "Heals smaller than this are left out.", 0, 5000, 25),
+                Slider("doneText", "holdSecs", "Hold after combat", "How long the fight's healing stays up once combat ends, before it fades.", 0, 60, 1, nil, { fmt = seconds }),
+            },
+        }),
+        FeedPage({
             key = "taken", db = "takenText", refresh = RK, effects = true,
-            title = "Damage Taken",
+            title = "Damage Received",
             desc = function()
                 return ns.UseUnitCombat and "The damage you take this fight from every enemy together, one row per school."
                     or "The damage you take this fight from every enemy together, one row per kind of attack: all melee on one, each spell on its own."
@@ -403,7 +431,7 @@ if StaticPopupDialogs then
 end
 
 local NAV = {
-    { label = "Feeds", keys = { "heal", "taken", "dealt", "actions" } },
+    { label = "Feeds", keys = { "heal", "done", "taken", "dealt", "actions" } },
     { label = "Extras", keys = { "timer" } },
     { keys = { "general" }, gap = true },
 }
@@ -480,6 +508,9 @@ local SAMPLES = {
     heal  = { { key = "spell:2061", label = "Flash Heal", school = 2, spell = 2061, base = 220 },
               { key = "spell:139", label = "Renew", school = 2, spell = 139, base = 45 },
               { key = "heal:other", label = "Healing", school = 2, icon = "Interface\\ICONS\\Spell_Holy_Heal", base = 90 } },
+    done  = { { key = "spell:2061", label = "Flash Heal", school = 2, spell = 2061, base = 260 },
+              { key = "spell:139", label = "Renew", school = 2, spell = 139, base = 50 },
+              { key = "spell:2050", label = "Lesser Heal", school = 2, spell = 2050, base = 120 } },
     taken = { { key = "school:1", label = "Physical", school = 1, icon = "Interface\\ICONS\\Ability_MeleeDamage", base = 60 },
               { key = "school:4", label = "Fire", school = 4, icon = "Interface\\ICONS\\Spell_Fire_FlameBolt", base = 140 },
               { key = "school:32", label = "Shadow", school = 32, icon = "Interface\\ICONS\\Spell_Shadow_ShadowBolt", base = 95 } },
@@ -489,7 +520,7 @@ local SAMPLES = {
                 { key = "avoid:DODGE", label = "Dodge", count = true, icon = "DODGE" },
                 { key = "avoid:MISS", label = "Miss", count = true, icon = "MISS" } },
 }
-local DB_OF = { dealt = "enemyText", heal = "healText", taken = "takenText", actions = "actionsText" }
+local DB_OF = { dealt = "enemyText", heal = "healText", done = "doneText", taken = "takenText", actions = "actionsText" }
 
 local pv = { db = "enemyText" }
 local function previewCfg() return ns.db[pv.db] end
@@ -1373,6 +1404,7 @@ local function BuildWindow()
         if p and p.enabledDb then
             ns.db[p.enabledDb].enabled = on
             if p.onToggle then p.onToggle() end
+            RA()   -- a feed's marker comes and goes with it
         end
         Panel.Refresh()
     end)
@@ -1441,6 +1473,7 @@ local function BuildWindow()
             Sound("IG_MAINMENU_OPTION_CHECKBOX_ON")
             ns.db[p.enabledDb].enabled = true
             if p.onToggle then p.onToggle() end
+            RA()   -- a feed's marker comes and goes with it
             Panel.Refresh()
         end
     end)

@@ -50,6 +50,11 @@ function UnitGUID(u)
     return plates[u]
 end
 function UnitIsUnit(a, b) if a == "target" and b == "player" then return false end return a == b end
+-- the recorded fights are against creatures: those can be attacked
+function UnitCanAttack(_, u)
+    local g = UnitGUID(u)
+    return type(g) == "string" and g:find("^Creature") ~= nil
+end
 function UnitExists(u) if u == "target" then return target ~= nil end return u ~= "pet" end
 function UnitName() return "Tester" end
 function UnitClass() return "X", class end
