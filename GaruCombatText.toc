@@ -22,7 +22,7 @@
 ## Title-zhTW: |cff66ccffGaru Combat Text|r
 ## Notes-zhTW: 依法術即時顯示造成和受到的傷害以及受到的治療。在沒有戰鬥紀錄的 WoW Forever 上，依你的法術和武器攻擊推算你的命中（/gct）。
 ## Author: Sokratis
-## Version: 2.2.0
+## Version: 2.3.0
 ## SavedVariables: GaruCombatTextDB
 ## IconTexture: Interface\Icons\Ability_Warrior_BloodFrenzy
 ## X-License: MIT

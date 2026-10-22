@@ -3,7 +3,7 @@
 **Damage you deal and take, and healing you receive, broken down per spell.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-![Version](https://img.shields.io/badge/version-2.2.0-brightgreen)
+![Version](https://img.shields.io/badge/version-2.3.0-brightgreen)
 ![WoW](https://img.shields.io/badge/WoW-Forever%20%2F%20TBC%20Classic-f8b700)
 ![Interface](https://img.shields.io/badge/interface-16001%20%7C%2020505-555)
 
@@ -78,14 +78,22 @@ Screenshots: drop images into docs/ and reference them here, e.g.
   attacks your target (or every enemy) dodged, parried, blocked or resisted; in green, the
   attacks on you that you dodged, parried or blocked, and the ones that missed you.
 - 💚 **Healing received** — a per-spell meter of effective healing from any source, with a
-  rolling out-of-combat window. The value shown can be **healing**, **both**, or **mana only**.
+  rolling out-of-combat window.
+- ✨ **Healing done** — the healing you cast this fight, on anyone, one row per spell
+  (off by default).
 - ⏱️ **Combat timer** — an optional "Combat M:SS" readout for your current target, toggled on
   its own and positioned freely or anchored to either feed.
 - 🪧 **Freeform anchors** — each feed has its own movable anchor. Unlock and drag the marker
   anywhere, set its text alignment and grow direction, or optionally **pin** it to the
   Player or Target frame.
-- 🌀 **Stacked or radial** — show each feed as a vertical line **or** a configurable **arc**
-  (radius, span in degrees, and which way it faces).
+- 🌀 **Stacked or radial** — show each feed as a vertical or horizontal line (growing left,
+  right or centred) **or** a configurable **arc** (radius, span in degrees, and which way it
+  faces).
+- 💥 **Effects** — numbers that count up instead of jumping, hits that float off their row
+  as +N, crits that flash gold and burst, a skull on the attack that landed the killing
+  blow; each one switchable per feed, with a live preview in the settings.
+- 📋 **Profiles** — every setting, anchor and position as one string to copy to another
+  character or install (`/gct export`, `/gct import`).
 - 🪶 **Lightweight & standalone** — its own saved settings; no dependencies.
 
 ## Usage
