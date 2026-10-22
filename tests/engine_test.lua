@@ -9,7 +9,7 @@ tinsert, tremove = table.insert, table.remove
 local clock = 0
 function GetTime() return clock end
 local timers = {}
-C_Timer = { After = function(d, fn) timers[#timers + 1] = { at = clock + d, fn = fn } end }
+C_Timer = { After = function(d, fn) timers[#timers + 1] = { at = clock + math.max(d, 0.001), fn = fn } end }
 local function advance(to)
     while true do
         local idx, best
@@ -238,6 +238,8 @@ onMe(140, "WOUND", 40, 4)
 expect("Fire on you", 140.01, "taken", function(r) return r.amount == 40 and r.school == 4, tostring(r.school) end)
 onMe(141, "DODGE", 0, 1)
 expect("you dodge", 141.01, "dodged", function(r) return r.missType == "DODGE", tostring(r.missType) end)
+onMe(141.5, "WOUND", 0, 1)
+nothing("a hit of nothing on you, with no flag, is no miss", 141.6)
 onMe(142, "WOUND", 0, 1, "ABSORB")
 expect("a fully absorbed hit", 142.01, "dodged", function(r) return r.missType == "ABSORB", tostring(r.missType) end)
 onMe(143, "ENERGIZE", 25)
@@ -681,6 +683,16 @@ retarget(915, "Creature-H1")                         -- an enemy targeted: heals
 cast(916, 2050); onMe(916.2, "HEAL", 55, 2)
 lastDone("a heal on yourself, with an enemy targeted", 916.3, "spell:2050", 55, "Player-1")
 expect("...and on Healing Received", 916.31, "healed", key("spell:2050", 55))
+-- A heal that lands as its cast completes comes a moment ahead of the cast, in the same
+-- frame (/gct trace, 21 Oct 2026): it is still the cast's, not a HoT tick or someone's.
+cast(925, 8936); onMe(928, "HEAL", 14, 8)          -- Regrowth's HoT has its first tick
+expect("Regrowth's tick", 928.01, "healed", key("spell:8936", 14))
+done = {}
+onMe(930, "HEAL", 193, 8); cast(930, 2050)          -- a heal, then its own cast, one frame
+expect("a heal reported just ahead of its own cast is that cast's", 930.01, "healed", key("spell:2050", 193))
+onMe(931, "HEAL", 14, 8)
+expect("...and the HoT keeps its tick", 931.01, "healed", key("spell:8936", 14))
+done = {}
 -- once the fight is over, the meter's healing of yours, per spell
 ns.db.doneText = { enabled = true }
 ns.DM.TYPES.healing = 2

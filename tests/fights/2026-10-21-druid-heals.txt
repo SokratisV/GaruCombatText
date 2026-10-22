@@ -1,0 +1,606 @@
+# Recorded with /gct trace on WoW Forever, 21 Oct 2026: druid, Healing Done on, in a group and solo.
+# Party heals ARE reported: a Rejuvenation on a party member came as party1, on its nameplate and on target in one frame.
+# A heal landing as its cast completes is reported BEFORE that cast's UNIT_SPELLCAST_SUCCEEDED, in the same
+# frame (Regrowth's 174, Healing Touch's 193): the > lines here are from before that was fixed.
+# A weak mob hit for 0 with no flag between its 1s. Hits on target that were someone else's stay unplaced.
+# expect-unplaced: 5   (a party member's Fire 1s at 155-165, its melee 7 at 167, someone's 1 at 2034: no cast or swing of yours by them)
+153.72 > unplaced
+153.78 U party1 HEAL "" 12 1 other
+153.78 > your heal over time on another spell:1058
+153.78 U nameplate9 HEAL "" 12 1 other
+153.78 > the same heal, on its other unit
+153.78 U target HEAL "" 12 1 other
+153.78 > the same heal, on its other unit
+153.91 T Creature-0-4621-0-2-299-FD98B564A0
+155.34 T Creature-0-4621-0-2-299-B690F561D8
+155.58 U target WOUND "" 1 4
+155.58 > unplaced
+155.94 T Creature-0-4621-0-2-299-FD98B564A0
+156.76 U party1 HEAL "" 12 1 other
+156.76 > your heal over time on another spell:1058
+156.76 U nameplate9 HEAL "" 12 1 other
+156.76 > the same heal, on its other unit
+157.41 T Creature-0-4621-0-2-299-B690F561D8
+157.56 U target WOUND "" 1 4
+157.56 > unplaced
+157.56 T -
+157.58 T -
+158.46 U nameplate3 WOUND "" 21 4
+158.46 > unplaced
+159.78 U party1 HEAL "" 12 1 other
+159.78 > your heal over time on another spell:1058
+159.78 U nameplate9 HEAL "" 12 1 other
+159.78 > the same heal, on its other unit
+160.30 U nameplate3 WOUND "" 1 4
+160.30 > unplaced
+162.36 U nameplate3 WOUND CRITICAL 1 4
+162.36 > unplaced
+162.65 T Creature-0-4621-0-2-299-FD98B564A0
+162.75 U party1 HEAL "" 12 1 other
+162.75 > your heal over time on another spell:1058
+162.75 U nameplate9 HEAL "" 12 1 other
+162.75 > the same heal, on its other unit
+163.52 C player 8925 64 true true true 12 - -
+163.52 U target WOUND "" 23 64
+163.52 > cast spell:8925
+163.52 T -
+163.52 K Creature-0-4621-0-2-299-FD98B564A0 spell:8925
+163.53 T -
+164.08 KB Creature-0-4621-0-2-299-FD98B564A0 spell:8925
+164.15 R-
+164.20 T Creature-0-4621-0-2-299-A4A7503AB6
+164.66 > settled healing spell:1058 82
+164.66 > settled healing spell:5187 31
+164.95 U target WOUND "" 1 4
+164.95 > unplaced
+164.95 C player 8925 64 true true true 12 - -
+164.95 U target WOUND "" 24 64
+164.95 > cast spell:8925
+164.95 R+
+166.96 T -
+167.34 T Creature-0-4621-0-2-299-A4A7503AB6
+167.39 U target WOUND "" 7 1
+167.39 > held for a late swing
+167.76 > no late swing came: unplaced 7
+167.77 R-
+167.95 T -
+168.12 U player WOUND "" 1 1
+168.28 > settled all spell:8925 47 0
+10.85 P
+12.16 C player 836 - - - false - - -
+25.25 T Player-4619-0197CEA9
+25.68 C player 5232 - - - false - - -
+27.15 C player 782 - - - false - - -
+28.88 T -
+29.94 T Player-4613-00C6F64D
+61.15 T -
+70.51 T Player-4613-00C6F64D
+80.29 T -
+82.13 T Player-4613-00C6F64D
+195.74 T -
+0.29 P
+19.25 C player 5487 - - - false - - -
+23.28 C player 5487 - - - false - - -
+31.51 U nameplate2 WOUND "" 20 1
+31.51 > held for a late swing
+31.89 > no late swing came: unplaced 20
+33.02 U nameplate2 WOUND "" 10 2
+33.02 > unplaced
+173.57 C player 5487 - - - false - - -
+178.41 C player 5487 - - - false - - -
+184.71 T Player-4613-00C6F64D
+189.13 U nameplate6 WOUND "" 19 4
+189.13 > unplaced
+190.43 U nameplate6 WOUND "" 17 4
+190.43 > unplaced
+251.38 U nameplate1 WOUND "" 2 1
+251.38 > held for a late swing
+251.43 U nameplate1 WOUND "" 5 32
+251.43 > unplaced
+251.75 > no late swing came: unplaced 2
+254.38 U nameplate1 WOUND CRITICAL 7 32
+254.38 > unplaced
+255.26 U nameplate1 WOUND "" 3 1
+255.26 > held for a late swing
+255.64 > no late swing came: unplaced 3
+257.16 U nameplate1 WOUND "" 3 1
+257.16 > held for a late swing
+257.43 U nameplate1 WOUND "" 5 32
+257.43 > unplaced
+257.53 > no late swing came: unplaced 3
+259.04 U nameplate1 WOUND "" 3 1
+259.04 > held for a late swing
+259.41 > no late swing came: unplaced 3
+260.40 U nameplate1 WOUND "" 5 32
+260.40 > unplaced
+260.97 U nameplate1 WOUND "" 5 1
+260.97 > held for a late swing
+261.35 > no late swing came: unplaced 5
+262.88 U nameplate1 WOUND "" 3 1
+262.88 > held for a late swing
+263.26 > no late swing came: unplaced 3
+263.35 U nameplate1 WOUND "" 5 32
+263.35 > unplaced
+265.37 U nameplate6 HEAL "" 1 1 other
+265.37 > someone else's heal on another
+267.40 U nameplate6 HEAL "" 2 1 other
+267.40 > someone else's heal on another
+269.40 U nameplate6 HEAL "" 2 1 other
+269.40 > someone else's heal on another
+271.45 U nameplate6 HEAL "" 1 1 other
+271.45 > someone else's heal on another
+273.37 U nameplate6 HEAL "" 1 1 other
+273.37 > someone else's heal on another
+297.46 T -
+305.74 C player 5232 - - - false - - -
+307.17 C player 782 - - - false - - -
+314.27 T Creature-0-6783-0-2-299-83D2042BC3
+315.01 C player 8925 64 true true true 12 - -
+315.01 U target WOUND "" 25 64
+315.01 > cast spell:8925
+315.01 R+
+318.02 U target WOUND "" 9 64
+318.02 > tick on beat spell:8925
+319.40 U player WOUND "" 1 1
+321.02 U target WOUND "" 9 64
+321.02 > tick on beat spell:8925
+321.02 T -
+321.02 K Creature-0-6783-0-2-299-83D2042BC3 spell:8925
+321.39 R-
+321.58 KB Creature-0-6783-0-2-299-83D2042BC3 spell:8925
+321.89 > settled all spell:8925 43 18
+322.91 T Creature-0-6783-0-2-299-83D2042BC3
+323.45 T -
+324.51 T Creature-0-6783-0-2-299-093891E3B9
+326.26 C player 8925 64 true true true 12 - -
+326.26 R+
+326.26 U target WOUND "" 24 64
+326.26 > cast spell:8925
+329.35 U target WOUND "" 9 64
+329.35 > tick on beat spell:8925
+329.75 C player 5178 8 true - true - - -
+330.27 U target WOUND "" 34 8
+330.27 > cast spell:5178
+330.27 T -
+330.27 K Creature-0-6783-0-2-299-093891E3B9 spell:5178
+330.82 KB Creature-0-6783-0-2-299-093891E3B9 spell:5178
+331.16 R-
+331.40 T Creature-0-6783-0-2-299-093891E3B9
+331.98 T -
+510.08 T Creature-0-6783-0-2-299-359BDB2494
+537.68 C player 8925 64 true true true 12 - -
+537.68 R+
+537.68 U target WOUND "" 25 64
+537.68 > cast spell:8925
+540.69 U target WOUND "" 9 64
+540.69 > tick on beat spell:8925
+543.17 U player WOUND "" 1 1
+543.68 U target WOUND "" 9 64
+543.68 > tick on beat spell:8925
+543.68 T -
+543.68 K Creature-0-6783-0-2-299-359BDB2494 spell:8925
+543.68 R-
+544.23 KB Creature-0-6783-0-2-299-359BDB2494 spell:8925
+544.95 T Creature-0-6783-0-2-299-359BDB2494
+545.67 T -
+546.08 T Creature-0-6783-0-2-299-03511D4CD7
+546.37 C player 8925 64 true true true 12 - -
+546.37 U target WOUND "" 26 64
+546.37 > cast spell:8925
+546.49 R+
+546.86 T Creature-0-6783-0-2-299-C1F85FF989
+547.86 C player 8925 64 true true true 12 - -
+547.86 U target WOUND "" 24 64
+547.86 > cast spell:8925
+549.38 U player MISS "" 0 1
+549.43 U nameplate2 WOUND "" 9 64
+549.43 > tick on beat spell:8925
+550.91 U target WOUND "" 9 64
+550.91 > tick on beat spell:8925
+551.42 U player WOUND "" 1 1
+551.69 U player WOUND "" 1 1
+552.46 U nameplate2 WOUND "" 9 64
+552.46 > tick on beat spell:8925
+553.71 U player MISS "" 0 1
+553.92 U target WOUND "" 9 64
+553.92 > tick on beat spell:8925
+553.92 T -
+553.92 K Creature-0-6783-0-2-299-C1F85FF989 spell:8925
+553.97 T -
+554.45 T Creature-0-6783-0-2-299-03511D4CD7
+554.48 KB Creature-0-6783-0-2-299-C1F85FF989 spell:8925
+554.99 T -
+555.03 R-
+555.51 T Creature-0-6783-0-2-299-C1F85FF989
+555.53 > settled all spell:8925 129 60
+556.04 T -
+557.13 T Creature-0-6783-0-2-299-C9B8F949DE
+559.16 C player 1062 8 false true true 15 - -
+559.16 R+
+562.11 U target WOUND "" 9 8
+562.11 > tick on beat spell:1062
+565.13 U target WOUND CRITICAL 14 8
+565.13 > tick on beat spell:1062
+568.13 U target WOUND "" 9 8
+568.13 > tick on beat spell:1062
+571.10 U target WOUND "" 9 8
+571.10 > tick on beat spell:1062
+574.15 U target WOUND CRITICAL 13 8
+574.15 > tick on beat spell:1062
+574.15 T -
+574.15 K Creature-0-6783-0-2-299-C9B8F949DE spell:1062
+574.19 T -
+574.71 KB Creature-0-6783-0-2-299-C9B8F949DE spell:1062
+575.24 R-
+604.13 T Creature-0-6783-0-2-69-6EF0D9688D
+619.41 C player 1062 8 false true true 15 - -
+619.41 R+
+622.44 U target WOUND "" 9 8
+622.44 > tick on beat spell:1062
+623.30 C player 1062 8 false true true 15 - -
+626.28 U target WOUND CRITICAL 14 8
+626.28 > tick on beat spell:1062
+629.36 U target WOUND "" 9 8
+629.36 > tick on beat spell:1062
+629.51 U nameplate1 WOUND "" 19 16
+629.51 > unplaced
+631.16 U nameplate1 WOUND "" 21 4
+631.16 > unplaced
+632.30 U target WOUND "" 9 8
+632.30 > tick on beat spell:1062
+632.40 U nameplate1 WOUND "" 19 4
+632.40 > unplaced
+635.31 U target WOUND CRITICAL 13 8
+635.31 > tick on beat spell:1062
+636.44 U nameplate1 HEAL "" 1 1 other
+636.44 > someone else's heal on another
+638.35 U target WOUND "" 9 8
+638.35 > tick on beat spell:1062
+638.35 T -
+638.35 K Creature-0-6783-0-2-69-6EF0D9688D spell:1062
+638.42 T -
+638.86 R-
+638.90 KB Creature-0-6783-0-2-69-6EF0D9688D spell:1062
+642.62 T Creature-0-6783-0-2-299-8AE3376BE7
+653.57 T -
+653.63 T -
+654.89 T Player-4613-00C6F64D
+679.91 T -
+680.85 T Creature-0-6783-0-2-299-8AE3376BE7
+684.51 C player 1062 8 false true true 15 - -
+684.51 R+
+686.39 C player 8925 64 true true true 12 - -
+686.39 U target WOUND CRITICAL 33 64
+686.39 > cast spell:8925
+689.41 U target WOUND "" 9 64
+689.41 > tick on beat spell:8925
+689.41 T -
+689.41 K Creature-0-6783-0-2-299-8AE3376BE7 spell:8925
+689.96 KB Creature-0-6783-0-2-299-8AE3376BE7 spell:8925
+690.15 T Creature-0-6783-0-2-299-8AE3376BE7
+690.27 R-
+690.85 T -
+691.45 T Creature-0-6783-0-2-299-5A947D6AF5
+790.52 T Player-4613-00C6F64D
+793.10 U player HEAL "" 174 1
+793.10 > someone else's heal
+793.10 C player 8938 - true - false 21 true true
+795.50 U player HEAL "" 197 1
+795.50 > your heal over time spell:8938
+795.50 C player 5187 - true - false - true false
+796.07 U player HEAL "" 22 1
+796.07 > someone else's heal
+799.02 U player HEAL "" 22 1
+799.02 > your heal over time spell:8938
+802.02 U player HEAL CRITICAL 33 1
+802.02 > your heal over time spell:8938
+805.08 U player HEAL "" 22 1
+805.08 > your heal over time spell:8938
+808.04 U player HEAL "" 22 1
+808.04 > your heal over time spell:8938
+811.07 U player HEAL "" 22 1
+811.07 > your heal over time spell:8938
+811.44 C player 1430 - false - false 12 true true
+814.00 U player HEAL "" 22 1
+814.00 > your heal over time spell:8938
+814.47 U player HEAL "" 23 1
+814.47 > your heal over time spell:1430
+817.47 U player HEAL "" 23 1
+817.47 > your heal over time spell:1430
+819.68 U player HEAL "" 193 1
+819.68 > your heal over time spell:1430
+819.68 C player 5187 - true - false - true false
+820.51 U player HEAL "" 23 1
+820.51 > someone else's heal
+823.41 U player HEAL "" 23 1
+823.41 > your heal over time spell:1430
+832.23 T Creature-0-6783-0-2-299-3264180919
+832.95 U nameplate1 WOUND "" 3 1
+832.95 > held for a late swing
+833.32 > no late swing came: unplaced 3
+835.04 S 1.9420001506805 0 main
+835.04 R+
+835.29 U target WOUND "" 9 1
+835.29 > swing swing
+835.39 T -
+835.44 U player MISS "" 0 1
+836.96 T Creature-0-6783-0-2-299-3264180919
+837.36 U player WOUND "" 0 1
+839.38 U player WOUND "" 1 1
+841.42 U player WOUND "" 0 1
+843.36 U player WOUND "" 1 1
+845.45 U player WOUND "" 1 1
+847.31 U player WOUND "" 1 1
+849.40 U player WOUND "" 1 1
+851.45 U player WOUND "" 1 1
+852.31 C player 1430 - false - false 12 true true
+853.37 U player WOUND "" 0 1
+855.30 U player HEAL "" 23 1
+855.30 > your heal over time spell:1430
+855.48 U player WOUND "" 1 1
+856.86 U player HEAL "" 169 1
+856.86 > your heal over time spell:1430
+856.86 C player 8938 - true - false 21 true true
+857.43 U player WOUND "" 1 1
+858.25 U player HEAL CRITICAL 35 1
+858.25 > your heal over time spell:1430
+859.39 U player WOUND "" 1 1
+859.86 U player HEAL "" 22 1
+859.86 > your heal over time spell:1430
+861.32 U player HEAL "" 23 1
+861.32 > your heal over time spell:1430
+861.41 U player MISS "" 0 1
+861.47 U player HEAL "" 198 1
+861.47 > your heal over time spell:8938
+861.47 C player 5187 - true - false - true false
+862.85 U player HEAL "" 22 1
+862.85 > your heal over time spell:1430
+863.48 U player WOUND "" 1 1
+864.28 U player HEAL "" 23 1
+864.28 > your heal over time spell:1430
+865.43 U player WOUND "" 1 1
+865.91 U player HEAL "" 22 1
+865.91 > your heal over time spell:8938
+867.41 U player WOUND "" 1 1
+868.85 U player HEAL "" 22 1
+868.85 > your heal over time spell:8938
+869.40 U player WOUND "" 1 1
+871.51 U player WOUND "" 1 1
+871.91 U player HEAL "" 22 1
+871.91 > your heal over time spell:8938
+873.53 U player WOUND "" 1 1
+874.91 U player HEAL "" 22 1
+874.91 > your heal over time spell:8938
+875.46 U player WOUND "" 0 1
+877.47 U player WOUND "" 1 1
+877.90 U player HEAL "" 22 1
+877.90 > your heal over time spell:8938
+879.52 U player WOUND "" 1 1
+881.51 U player WOUND "" 1 1
+883.46 U player WOUND "" 1 1
+885.51 U player MISS "" 0 1
+885.52 T Creature-0-6783-0-2-299-3264180919
+885.78 S 1.9420001506805 0 main
+886.17 U target WOUND "" 9 1
+886.17 > swing swing
+886.65 T -
+887.09 T Creature-0-6783-0-2-299-3264180919
+887.49 U player DODGE "" 0 1
+889.43 U player WOUND "" 1 1
+891.52 U player WOUND "" 1 1
+893.51 U player WOUND "" 1 1
+895.07 C player 1430 - false - false 12 true true
+895.60 U player WOUND "" 1 1
+897.45 U player WOUND "" 1 1
+898.08 U player HEAL "" 23 1
+898.08 > your heal over time spell:1430
+899.53 U player WOUND "" 1 1
+901.09 U player HEAL "" 23 1
+901.09 > your heal over time spell:1430
+901.54 U player WOUND "" 1 1
+903.10 U player HEAL "" 154 1
+903.10 > your heal over time spell:1430
+903.10 C player 8938 - true - false 21 true true
+903.61 U player WOUND "" 1 1
+904.09 U player HEAL "" 23 1
+904.09 > your heal over time spell:1430
+905.52 U player WOUND "" 1 1
+906.14 U player HEAL "" 22 1
+906.14 > your heal over time spell:1430
+907.07 U player HEAL "" 23 1
+907.07 > your heal over time spell:1430
+907.58 U player WOUND "" 0 1
+909.13 U player HEAL "" 22 1
+909.13 > your heal over time spell:8938
+909.58 U player WOUND "" 0 1
+911.58 U player WOUND "" 1 1
+912.16 U player HEAL "" 22 1
+912.16 > your heal over time spell:8938
+913.54 U player WOUND "" 1 1
+915.15 U player HEAL "" 22 1
+915.15 > your heal over time spell:8938
+915.55 U player WOUND "" 1 1
+917.37 U nameplate2 WOUND "" 4 1
+917.37 > held for a late swing
+917.55 U player WOUND "" 1 1
+917.74 > no late swing came: unplaced 4
+918.09 U player HEAL "" 22 1
+918.09 > your heal over time spell:8938
+919.55 U player WOUND "" 1 1
+919.92 U nameplate2 WOUND "" 4 4
+919.92 > unplaced
+921.15 U player HEAL CRITICAL 33 1
+921.15 > your heal over time spell:8938
+921.58 U player WOUND "" 1 1
+923.21 U nameplate2 WOUND "" 4 4
+923.21 > unplaced
+923.49 U player WOUND "" 0 1
+924.09 U player HEAL "" 22 1
+924.09 > your heal over time spell:8938
+925.65 U player WOUND "" 1 1
+925.69 U nameplate2 WOUND "" 5 4
+925.69 > unplaced
+927.15 U nameplate2 WOUND "" 4 4
+927.15 > unplaced
+927.65 U player DODGE "" 0 1
+929.09 U nameplate2 WOUND "" 5 4
+929.09 > unplaced
+929.49 U player WOUND "" 1 1
+931.50 U nameplate2 WOUND "" 5 4
+931.50 > unplaced
+931.57 U player WOUND "" 1 1
+933.66 U player WOUND "" 1 1
+933.95 U nameplate2 WOUND "" 4 4
+933.95 > unplaced
+935.65 U player WOUND "" 1 1
+936.36 U nameplate2 WOUND "" 5 4
+936.36 > unplaced
+937.59 U player WOUND "" 1 1
+938.79 U nameplate2 WOUND "" 5 4
+938.79 > unplaced
+939.64 U player DODGE "" 0 1
+941.60 U player WOUND "" 1 1
+943.59 U player WOUND "" 1 1
+945.61 U player WOUND "" 1 1
+947.61 U player DODGE "" 0 1
+949.66 U player WOUND "" 1 1
+951.54 U player WOUND "" 1 1
+953.62 U player WOUND "" 1 1
+955.68 U player DODGE "" 0 1
+957.64 U player WOUND "" 0 1
+957.87 U player HEAL "" 168 1
+957.87 > someone else's heal
+957.87 C player 8938 - true - false 21 true true
+959.69 U player MISS "" 0 1
+960.82 U player HEAL "" 22 1
+960.82 > your heal over time spell:8938
+961.67 U player WOUND "" 1 1
+963.69 U player WOUND "" 0 1
+963.86 U player HEAL "" 22 1
+963.86 > your heal over time spell:8938
+965.65 U player DODGE "" 0 1
+966.60 C player 8925 64 true true true 12 - -
+966.60 U target WOUND "" 22 64
+966.60 > cast spell:8925
+966.91 U player HEAL CRITICAL 33 1
+966.91 > your heal over time spell:8938
+967.64 U player WOUND "" 1 1
+969.58 U target WOUND "" 9 64
+969.58 > tick on beat spell:8925
+969.58 T -
+969.58 K Creature-0-6783-0-2-299-3264180919 spell:8925
+969.92 U player HEAL "" 22 1
+969.92 > your heal over time spell:8938
+969.94 T Creature-0-6783-0-2-299-3264180919
+970.14 KB Creature-0-6783-0-2-299-3264180919 spell:8925
+970.54 T -
+970.66 R-
+970.76 U player WOUND "" 1 1
+971.16 > settled healing spell:1430 19
+971.16 > settled healing spell:8938 30
+972.16 > settled healing spell:1430 19
+972.16 > settled healing spell:8938 30
+972.84 U player HEAL "" 22 1
+972.84 > your heal over time spell:8938
+973.66 > settled healing spell:1430 19
+973.66 > settled healing spell:8938 30
+975.66 > settled healing spell:1430 19
+975.66 > settled healing spell:8938 30
+975.89 U player HEAL "" 22 1
+975.89 > your heal over time spell:8938
+978.86 U player HEAL "" 22 1
+978.86 > your heal over time spell:8938
+1118.17 T Player-4613-00C6F64D
+1200.66 T -
+1227.21 U nameplate3 WOUND "" 5 4
+1227.21 > unplaced
+1230.82 U nameplate3 WOUND CRITICAL 15 32
+1230.82 > unplaced
+1233.75 U nameplate3 WOUND "" 10 32
+1233.75 > unplaced
+1242.91 T Player-4613-00C6F64D
+1248.94 T -
+1277.61 T Player-4613-00C6F64D
+1282.15 T -
+1394.38 U nameplate1 WOUND "" 20 1
+1394.38 > held for a late swing
+1394.75 > no late swing came: unplaced 20
+1395.63 U nameplate1 WOUND "" 9 2
+1395.63 > unplaced
+1397.33 U nameplate1 WOUND "" 21 1
+1397.33 > held for a late swing
+1397.71 > no late swing came: unplaced 21
+1401.57 U nameplate2 WOUND "" 15 2
+1401.57 > unplaced
+1402.23 U nameplate5 WOUND "" 20 1
+1402.23 > held for a late swing
+1402.60 > no late swing came: unplaced 20
+1404.23 U nameplate5 WOUND "" 20 1
+1404.23 > held for a late swing
+1404.60 > no late swing came: unplaced 20
+1413.08 U nameplate4 WOUND "" 19 1
+1413.08 > held for a late swing
+1413.41 U nameplate3 WOUND CRITICAL 9 64
+1413.41 > unplaced
+1413.46 > no late swing came: unplaced 19
+1414.59 U nameplate4 WOUND "" 19 2
+1414.59 > unplaced
+1917.73 U nameplate1 WOUND "" 14 32
+1917.73 > unplaced
+1922.73 U nameplate1 WOUND "" 2 1
+1922.73 > held for a late swing
+1923.13 > no late swing came: unplaced 2
+1924.36 U nameplate1 WOUND "" 2 1
+1924.36 > held for a late swing
+1924.76 > no late swing came: unplaced 2
+1925.89 U nameplate1 WOUND GLANCING 1 1
+1925.89 > held for a late swing
+1926.29 > no late swing came: unplaced 1
+1928.33 U nameplate1 WOUND "" 12 32
+1928.33 > unplaced
+1930.03 U nameplate1 WOUND "" 3 1
+1930.03 > held for a late swing
+1930.43 > no late swing came: unplaced 3
+1932.06 U nameplate1 WOUND "" 12 32
+1932.06 > unplaced
+2028.14 U nameplate5 WOUND "" 5 2
+2028.14 > unplaced
+2028.60 U nameplate5 WOUND "" 10 1
+2028.60 > held for a late swing
+2028.97 > no late swing came: unplaced 10
+2030.29 T Player-4619-0197D5C5
+2030.94 C player 5232 - - - false - - -
+2030.94 R+
+2031.67 R-
+2032.46 C player 467 - - - false - - -
+2033.89 U nameplate6 WOUND CRITICAL 9 2
+2033.89 > unplaced
+2033.89 U nameplate6 WOUND "" 3 8
+2033.89 > unplaced
+2034.29 U target WOUND "" 1 1
+2034.29 > held for a late swing
+2034.45 U nameplate6 WOUND "" 11 1
+2034.45 > held for a late swing
+2034.67 > no late swing came: unplaced 1
+2034.83 > no late swing came: unplaced 11
+2035.32 T Creature-0-6783-0-2-299-AABA560E99
+2035.55 S 1.9420001506805 0 main
+2035.55 R+
+2035.81 U target WOUND "" 9 1
+2035.81 > swing swing
+2036.82 T -
+2037.28 R-
+2043.21 T Player-4613-0197F23E
+2044.07 C player 5232 - - - false - - -
+2045.50 C player 467 - - - false - - -
+2046.35 T Player-4613-015CD022
+2046.96 C player 5232 - - - false - - -
+2048.48 C player 782 - - - false - - -
+2051.29 C player 1058 - false - false 12 true true
+2054.21 T -
+2054.33 U nameplate5 HEAL "" 12 1 other
+2054.33 > your heal over time on another spell:1058
+2056.41 U nameplate6 WOUND "" 17 2
+2056.41 > unplaced
+2057.33 U nameplate5 HEAL "" 12 1 other
+2057.33 > your heal over time on another spell:1058

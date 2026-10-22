@@ -11,7 +11,7 @@ local clock = 0
 function GetTime() return clock end
 local timers = {}
 C_Timer = {
-    After = function(d, fn) timers[#timers + 1] = { at = clock + d, fn = fn } end,
+    After = function(d, fn) timers[#timers + 1] = { at = clock + math.max(d, 0.001), fn = fn } end,
     NewTicker = function(d, fn) return { Cancel = function() end } end,
     NewTimer = function(d, fn) local t = { Cancel = function(self) self.dead = true end }
         timers[#timers + 1] = { at = clock + d, fn = function() if not t.dead then fn() end end }; return t end,

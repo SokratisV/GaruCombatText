@@ -19,7 +19,7 @@ tinsert, tremove = table.insert, table.remove
 local clock = 0
 function GetTime() return clock end
 local timers = {}
-C_Timer = { After = function(d, fn) timers[#timers + 1] = { at = clock + d, fn = fn } end }
+C_Timer = { After = function(d, fn) timers[#timers + 1] = { at = clock + math.max(d, 0.001), fn = fn } end }
 local function advance(to)
     while true do
         local idx, best

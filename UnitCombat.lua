@@ -1075,6 +1075,7 @@ end
 -- cast at that unit just before, or a HoT of yours on it ticking on its beat. One
 -- heal reported twice (on your target and on its plate) is counted once.
 local lastDone
+local matchHealOnOther   -- below: which heal of yours it was
 local OTHER_UNITS = { "^target$", "^focus$", "^pet$", "^party%d$", "^raid%d+$", "^nameplate%d+$" }
 local function healOnOther(unit, flag, amount, school)
     local known = false
@@ -1096,6 +1097,12 @@ local function healOnOther(unit, flag, amount, school)
     lastDone = { guid = guid, amount = amount, at = t }
     stats.healsOthers = (stats.healsOthers or 0) + 1
     local crit = (flag == "CRITICAL")
+    -- placed a frame later, once the cast it may come ahead of is known (as on you)
+    C_Timer.After(0, function() matchHealOnOther(guid, amount, school, crit, t) end)
+    return true
+end
+
+matchHealOnOther = function(guid, amount, school, crit, t)
     for _, h in ipairs(heals) do
         if not h.used and h.on == guid and t - h.at <= HEAL_WINDOW then
             h.used = true
@@ -1191,11 +1198,20 @@ local function onUnitCombat(unit, event, flag, amount, school)
             end
             if amount > 0 then
                 emit("taken", { amount = amount, school = school, crit = (flag == "CRITICAL") })
-            else
-                emit("dodged", { missType = (flag == "ABSORB" or flag == "BLOCK" or flag == "RESIST") and flag or "MISS" })
+            elseif flag == "BLOCK" or flag == "ABSORB" or flag == "RESIST" then   -- blocked or absorbed whole
+                emit("dodged", { missType = flag })
             end
+            -- a hit of nothing with no flag is no miss (a miss comes as its own event):
+            -- a weak mob's blows on you came as 0s between its 1s (/gct trace, 21 Oct 2026)
         elseif event == "HEAL" then
-            if amount > 0 then placeHealOnMe(amount, school, flag == "CRITICAL", t) end
+            -- A heal that lands as its cast completes is reported before the cast, in
+            -- the same frame (/gct trace, 21 Oct 2026: Regrowth's 174 and Healing
+            -- Touch's 193, each a moment ahead of its own cast): placed a frame later,
+            -- once every cast of that frame is known.
+            if amount > 0 then
+                local crit = (flag == "CRITICAL")
+                C_Timer.After(0, function() placeHealOnMe(amount, school, crit, t) end)
+            end
         elseif event == "ENERGIZE" then
             if amount > 0 then emit("energized", { amount = amount }) end
         elseif FEEDBACK[event] then
