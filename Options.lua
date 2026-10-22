@@ -405,6 +405,12 @@ local function definePages()
                       get = function() return ns.UC and ns.UC.Tracing and ns.UC.Tracing() or false end,
                       set = function(v) if ns.UC and ns.UC.SetTrace then ns.UC.SetTrace(v) end end },
                 } },
+                { title = "Profile", rows = {
+                    Button("Export settings", "Every setting, anchor and position as one string, to copy and import on another character or install. The same as /gct export.", "Export",
+                        function() ns.OpenProfile("export") end),
+                    Button("Import settings", "Paste a string from Export to put every setting, anchor and position back as they were. The same as /gct import.", "Import",
+                        function() ns.OpenProfile("import") end),
+                } },
                 { title = "Reset", rows = {
                     Button("Reset all settings", "Puts every setting on every page back to its default.", "Reset",
                         function()
@@ -1485,6 +1491,119 @@ local function BuildWindow()
     end)
     card:Hide()
     page.card = card
+end
+
+--------------------------------------------------------------------------
+-- 7. PROFILE: every setting as one string to copy out, or one pasted in
+--------------------------------------------------------------------------
+local profile
+local function BuildProfile()
+    local f = CreateFrame("Frame", "GaruCombatTextProfile", UIParent, "BackdropTemplate")
+    f:SetSize(480, 320)
+    f:SetPoint("CENTER", 0, 40)
+    f:SetFrameStrata("FULLSCREEN_DIALOG")
+    f:SetToplevel(true)
+    f:SetClampedToScreen(true)
+    f:EnableMouse(true)
+    f:SetMovable(true)
+    f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving)
+    f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 16,
+                    insets = { left = 4, right = 4, top = 4, bottom = 4 } })
+    f:SetBackdropColor(0.06, 0.055, 0.045, 0.97)
+    f:SetBackdropBorderColor(BORDER[1], BORDER[2], BORDER[3], 1)
+    f.title = Text(f, "GameFontNormalLarge")
+    f.title:SetPoint("TOPLEFT", 16, -14)
+    f.desc = Text(f, "GameFontHighlightSmall")
+    f.desc:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -6)
+    f.desc:SetPoint("RIGHT", -16, 0)
+    f.desc:SetSpacing(2)
+    local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
+    close:SetPoint("TOPRIGHT", -4, -4)
+
+    local box = CreateFrame("Frame", nil, f, "BackdropTemplate")
+    box:SetPoint("TOPLEFT", 16, -64)
+    box:SetPoint("BOTTOMRIGHT", -16, 48)
+    box:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    box:SetBackdropColor(0, 0, 0, 0.5)
+    box:SetBackdropBorderColor(BRONZE[1], BRONZE[2], BRONZE[3], 0.6)
+    local scroll = CreateFrame("ScrollFrame", nil, box)
+    scroll:SetPoint("TOPLEFT", 6, -6)
+    scroll:SetPoint("BOTTOMRIGHT", -6, 6)
+    local edit = CreateFrame("EditBox", nil, scroll)
+    edit:SetMultiLine(true)
+    edit:SetAutoFocus(false)
+    edit:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
+    edit:SetWidth(480 - 32 - 12)
+    edit:SetScript("OnEscapePressed", function() f:Hide() end)
+    -- the exported string stays as it is: a stray key press cannot spoil it
+    edit:SetScript("OnTextChanged", function(self, user)
+        if user and f.mode == "export" and f.text then self:SetText(f.text); self:HighlightText() end
+        if f.mode == "import" then f.status:SetText("") end
+    end)
+    scroll:SetScrollChild(edit)
+    scroll:EnableMouse(true)
+    scroll:SetScript("OnMouseDown", function() edit:SetFocus() end)
+    scroll:SetScript("OnMouseWheel", function(self, delta)
+        local max = self:GetVerticalScrollRange() or 0
+        self:SetVerticalScroll(math.max(0, math.min(max, (self:GetVerticalScroll() or 0) - delta * 30)))
+    end)
+    f.edit = edit
+
+    f.status = Text(f, "GameFontHighlightSmall")
+    f.status:SetPoint("BOTTOMLEFT", 16, 18)
+    f.status:SetPoint("RIGHT", -150, 0)
+    f.status:SetWordWrap(true)
+    f.action = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
+    f.action:SetSize(120, 22)
+    f.action:SetPoint("BOTTOMRIGHT", -16, 14)
+    f.action:SetScript("OnClick", function()
+        Sound("IG_MAINMENU_OPTION_CHECKBOX_ON")
+        if f.mode == "export" then
+            edit:SetFocus(); edit:HighlightText()
+            f.status:SetText("Selected: press Ctrl+C to copy it.")
+            f.status:SetTextColor(1, 0.82, 0)
+            return
+        end
+        local ok, why = ns.Profile.Import(edit:GetText())
+        if ok then
+            f.status:SetText("Imported: every setting and position is in place.")
+            f.status:SetTextColor(0.45, 0.9, 0.4)
+            edit:ClearFocus()
+        else
+            f.status:SetText(why)
+            f.status:SetTextColor(1, 0.42, 0.42)
+        end
+    end)
+    tinsert(UISpecialFrames, "GaruCombatTextProfile")
+    f:Hide()
+    return f
+end
+
+-- mode: "export" (the string, selected, to copy) or "import" (an empty box to paste into)
+function ns.OpenProfile(mode)
+    profile = profile or BuildProfile()
+    profile.mode = mode
+    profile.status:SetText("")
+    if mode == "export" then
+        profile.text = ns.Profile.Export()
+        profile.title:SetText("Export settings")
+        profile.desc:SetText("Every setting, anchor and position, as one string. Copy it with Ctrl+C, and import it on another character or install.")
+        profile.action:SetText("Select all")
+        profile.edit:SetText(profile.text)
+        profile:Show()
+        profile.edit:SetFocus()
+        profile.edit:HighlightText()
+    else
+        profile.text = nil
+        profile.title:SetText("Import settings")
+        profile.desc:SetText("Paste a profile string from Export (Ctrl+V), then Import. It replaces every setting, anchor and position at once.")
+        profile.action:SetText("Import")
+        profile.edit:SetText("")
+        profile:Show()
+        profile.edit:SetFocus()
+    end
 end
 
 function ns.ToggleOptions()

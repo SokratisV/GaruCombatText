@@ -98,6 +98,7 @@ Screenshots: drop images into docs/ and reference them here, e.g.
 | `/gct status` | Which data source is feeding the addon, and the summary's hold window. |
 | `/gct probe` | After a fight on Forever: how many hits came through readable, and how each was placed. |
 | `/gct trace` | Forever: start/stop recording every cast, swing and hit into the saved settings (written to disk on `/reload`). |
+| `/gct export` / `/gct import` | Copy every setting, anchor and position out as one string, or paste one in (also on the General page). |
 | `/gct reset` | Restore default settings. |
 
 ## Tests

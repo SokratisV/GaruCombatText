@@ -883,5 +883,80 @@ if not FOREVER then
     end)())
 end
 
+-- Profiles: every setting, anchor and position out as one string, and back in.
+do
+    local function deep(t) local c = {} for k, v in pairs(t) do c[k] = type(v) == "table" and deep(v) or v end return c end
+    local function flat(t, p, acc)
+        acc = acc or {}
+        for k, v in pairs(t) do
+            local key = p .. "." .. tostring(k)
+            if type(v) == "table" then flat(v, key, acc) else acc[key] = v end
+        end
+        return acc
+    end
+    local function differences(a, b)
+        local fa, fb, d = flat(a, ""), flat(b, ""), {}
+        for k, v in pairs(fa) do if fb[k] ~= v then d[#d + 1] = k end end
+        for k in pairs(fb) do if fa[k] == nil then d[#d + 1] = k end end
+        table.sort(d)
+        return d
+    end
+    local function settingsOnly(db)
+        local c = deep(db)
+        c.trace, c.weaponProcs = nil, nil
+        if c.general then c.general.optionsPage = nil end
+        return c
+    end
+    -- a few settings moved off their defaults first, positions included
+    ns.db.enemyText.point = { "TOPLEFT", 123, -45 }
+    ns.db.healText.fontSize, ns.db.doneText.enabled, ns.db.locked = 22, true, true
+    ns.db.combatTimer.point = { "CENTER", 7, -300 }
+    ns.db.takenText.barColor = { 0.1, 0.2, 0.3 }
+    local saved = settingsOnly(ns.db)
+    local okE, s = pcall(ns.Profile.Export)
+    check("export: one profile string", okE and type(s) == "string" and s:sub(1, 5) == "GCT1:", tostring(s):sub(1, 40))
+    -- everything changed, then the string put back
+    ns.db.enemyText.point = { "CENTER", 0, 0 }
+    ns.db.healText.fontSize, ns.db.doneText.enabled, ns.db.locked = 9, false, false
+    ns.db.actionsText.scope, ns.db.enemyText.radius = "target", 333
+    local okI, ok, why = pcall(ns.Profile.Import, s)
+    check("import: the string applies", okI and ok, tostring(why))
+    local d = differences(saved, settingsOnly(ns.db))
+    check("import: every setting and position back exactly as exported", #d == 0, table.concat(d, ", "))
+    -- bad strings: refused, and nothing changes
+    local before = settingsOnly(ns.db)
+    for _, bad in ipairs({ "", "hello", "GCT1:@@@@", "GCT1:" .. ("QUJD"):rep(3), s:sub(1, #s - 12) }) do
+        local okB, okb, whyb = pcall(ns.Profile.Import, bad)
+        check("import refuses a bad string (" .. bad:sub(1, 12) .. ")", okB and okb == false and type(whyb) == "string" and whyb ~= "",
+              okB and tostring(whyb) or tostring(okb))
+    end
+    check("a refused import changes nothing", #differences(before, settingsOnly(ns.db)) == 0)
+    -- another addon's, or a newer version's
+    local other = ns.Profile.Encode({ addon = "SomethingElse", version = 1, settings = {} })
+    check("import refuses another addon's profile", ns.Profile.Import(other) == false)
+    local newer = ns.Profile.Encode({ addon = "GaruCombatText", version = 2, settings = {} })
+    check("import refuses a newer version's profile", ns.Profile.Import(newer) == false)
+    -- wrong types and unknown keys dropped, missing ones from the defaults
+    local odd = ns.Profile.Encode({ addon = "GaruCombatText", version = 1, settings = {
+        enemyText = { fontSize = "huge", radius = 99, point = { "CENTER", "x", 5 } }, bogus = { x = 1 } } })
+    local okO = ns.Profile.Import(odd)
+    check("import keeps what is sound and fills the rest from the defaults",
+          okO and ns.db.enemyText.fontSize == ns.defaults.enemyText.fontSize and ns.db.enemyText.radius == 99
+          and ns.db.enemyText.point[2] == ns.defaults.enemyText.point[2] and ns.db.bogus == nil
+          and ns.db.healText.fontSize == ns.defaults.healText.fontSize,
+          tostring(ns.db.enemyText.fontSize) .. " " .. tostring(ns.db.enemyText.radius))
+    -- from the settings window
+    local win = rawget(_G, "GaruCombatTextOptions")
+    local okW, errW = pcall(ns.OpenProfile, "export")
+    local pf = rawget(_G, "GaruCombatTextProfile")
+    check("the export window shows the string", okW and pf and pf:IsShown() and pf.edit:GetText() == ns.Profile.Export(), errW)
+    pcall(ns.OpenProfile, "import")
+    pf.edit:SetText(s); pf.action.scripts.OnClick(pf.action)
+    check("the import window applies a pasted string", ns.db.enemyText.point[2] == 123, tostring(ns.db.enemyText.point[2]))
+    pf.edit:SetText("nonsense"); pf.action.scripts.OnClick(pf.action)
+    check("and says why a bad one is refused", (pf.status.text or ""):find("not a Garu Combat Text profile") ~= nil, tostring(pf.status.text))
+    pf:Hide()
+end
+
 print(("%s: %d passed, %d failed"):format(FOREVER and "Forever" or (BARE and "Classic, bare" or "Classic"), pass, fail))
 if fail > 0 then error("failures") end

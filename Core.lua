@@ -316,6 +316,11 @@ end
 local function initDB()
     GaruCombatTextDB = copyDefaults(ns.defaults, GaruCombatTextDB)
     ns.db = GaruCombatTextDB
+    ns.FinishSettings()
+end
+
+-- Settings read in (a login, an import): what has changed since they were saved.
+function ns.FinishSettings()
 
     -- Plain-text (float) only; severity scaling, crit emphasis and the sized box were
     -- all removed -- the feed is placed at a movable anchor point.
@@ -347,8 +352,16 @@ ns.groupFrames = {}
 function ns.ResetSettings()
     GaruCombatTextDB = copyDefaults(ns.defaults, {})
     ns.db = GaruCombatTextDB
-    -- every feed, not just two of them: Damage Received and Actions used to keep their
-    -- old look until the next reload
+    ns.FinishSettings()
+    ns.RefreshAll()
+end
+
+-- Redraw everything from ns.db, as it now is: after a reset or an import. Every feed,
+-- not just two of them: Damage Received and Actions used to keep their old look until
+-- the next reload. Counting every enemy or one target: a change starts afresh.
+function ns.RefreshAll()
+    if ns.EnemyScopeChanged then ns.EnemyScopeChanged() end
+    if ns.ActionsScopeChanged then ns.ActionsScopeChanged() end
     if ns.RefreshAnchors then ns.RefreshAnchors() end
     if ns.RefreshEnemyText then ns.RefreshEnemyText() end
     if ns.RefreshHealText then ns.RefreshHealText() end
@@ -357,4 +370,214 @@ function ns.ResetSettings()
     if ns.RefreshActionsText then ns.RefreshActionsText() end
     if ns.RefreshTimer then ns.RefreshTimer() end
     if ns.RefreshOptions then ns.RefreshOptions() end
+end
+
+--------------------------------------------------------------------------
+-- Profiles: every setting as one string, to copy to another character or install
+--------------------------------------------------------------------------
+-- "GCT1:" then base64 of the settings written out in a small format of our own:
+--   {key value key value ...}  strings as s<length>:<bytes>, numbers n<number>;,
+--   booleans T or F, tables nested the same way.
+-- Read back with a parser that accepts that and nothing else, never by running it
+-- as code. Everything a player sets goes in: every feed's settings, where its anchor
+-- sits (point, nudges, attach), the combat timer, the summary, the lock. Left out:
+-- the fight recorder's lines, what is on your weapon (it changes as you play), and
+-- which settings page was last open. On import every value is checked against the
+-- defaults' types, anything unknown is dropped, anything missing comes from the
+-- defaults, and the whole addon is redrawn from it at once.
+ns.Profile = {}
+local PROFILE_TAG = "GCT1:"
+local LEAVE_OUT = { trace = true, weaponProcs = true }
+local LEAVE_OUT_GENERAL = { optionsPage = true }
+
+local function serialize(v, out)
+    local t = type(v)
+    if t == "string" then out[#out + 1] = "s" .. #v .. ":" .. v
+    elseif t == "number" then out[#out + 1] = "n" .. string.format("%.17g", v) .. ";"
+    elseif t == "boolean" then out[#out + 1] = v and "T" or "F"
+    elseif t == "table" then
+        out[#out + 1] = "{"
+        local keys = {}
+        for k in pairs(v) do
+            if type(k) == "string" or type(k) == "number" then keys[#keys + 1] = k end
+        end
+        table.sort(keys, function(a, b)
+            if type(a) == type(b) then return a < b end
+            return type(a) == "number"
+        end)
+        for _, k in ipairs(keys) do
+            local x = v[k]
+            local tx = type(x)
+            if tx == "string" or tx == "number" or tx == "boolean" or tx == "table" then
+                serialize(k, out); serialize(x, out)
+            end
+        end
+        out[#out + 1] = "}"
+    end
+end
+
+local function parse(s)
+    local i, depth = 1, 0
+    local value
+    local function fail(why) error({ why = why }, 0) end
+    value = function()
+        local c = s:sub(i, i)
+        if c == "s" then
+            local len, colon = s:match("^(%d+)():", i + 1)
+            if not len then fail("bad text") end
+            len = tonumber(len)
+            local from = colon + 1
+            local str = s:sub(from, from + len - 1)
+            if #str ~= len then fail("cut short") end
+            i = from + len
+            return str
+        elseif c == "n" then
+            local num, after = s:match("^([%-%d%.eE+]+);()", i + 1)
+            local n = num and tonumber(num)
+            if not n or n ~= n or n == math.huge or n == -math.huge then fail("bad number") end
+            i = after
+            return n
+        elseif c == "T" or c == "F" then
+            i = i + 1
+            return c == "T"
+        elseif c == "{" then
+            depth = depth + 1
+            if depth > 8 then fail("nested too deep") end
+            i = i + 1
+            local t = {}
+            while s:sub(i, i) ~= "}" do
+                if i > #s then fail("cut short") end
+                local k = value()
+                if type(k) ~= "string" and type(k) ~= "number" then fail("bad key") end
+                t[k] = value()
+            end
+            i = i + 1
+            depth = depth - 1
+            return t
+        end
+        fail(c == "" and "cut short" or "unexpected character")
+    end
+    local ok, res = pcall(value)
+    if not ok then return nil, type(res) == "table" and res.why or tostring(res) end
+    if i <= #s then return nil, "extra text after the settings" end
+    return res
+end
+
+local B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+local B64_INDEX = {}
+for n = 1, 64 do B64_INDEX[B64:sub(n, n)] = n - 1 end
+
+local function b64encode(s)
+    local out = {}
+    for n = 1, #s, 3 do
+        local a, b, c = s:byte(n, n + 2)
+        local v = a * 65536 + (b or 0) * 256 + (c or 0)
+        local d1, d2 = math.floor(v / 262144) % 64, math.floor(v / 4096) % 64
+        local d3, d4 = math.floor(v / 64) % 64, v % 64
+        out[#out + 1] = B64:sub(d1 + 1, d1 + 1) .. B64:sub(d2 + 1, d2 + 1)
+            .. (b and B64:sub(d3 + 1, d3 + 1) or "=") .. (c and B64:sub(d4 + 1, d4 + 1) or "=")
+    end
+    return table.concat(out)
+end
+
+local function b64decode(s)
+    s = s:gsub("%s", "")
+    if #s == 0 or #s % 4 ~= 0 or s:find("[^%w%+/=]") then return nil end
+    local out = {}
+    for n = 1, #s, 4 do
+        local chunk = s:sub(n, n + 3)
+        local pad = select(2, chunk:gsub("=", ""))
+        if pad > 2 or (pad > 0 and n + 3 < #s) or chunk:sub(1, 4 - pad):find("=") then return nil end
+        local v = 0
+        for k = 1, 4 do
+            local ch = chunk:sub(k, k)
+            v = v * 64 + (ch == "=" and 0 or B64_INDEX[ch])
+        end
+        local bytes = string.char(math.floor(v / 65536) % 256, math.floor(v / 256) % 256, v % 256)
+        out[#out + 1] = bytes:sub(1, 3 - pad)
+    end
+    return table.concat(out)
+end
+
+-- What may be kept from an imported table: only the keys the defaults have, each of
+-- the same type; a list in the defaults (a point, a colour) must hold the same kinds.
+local function keepValid(src, def)
+    local out = {}
+    for k, d in pairs(def) do
+        local v = src[k]
+        if type(d) == "table" and type(v) == "table" then
+            if d[1] ~= nil then                       -- a list: { "CENTER", x, y }, { r, g, b }
+                local okList = true
+                for n = 1, #d do if type(v[n]) ~= type(d[n]) then okList = false end end
+                if okList then
+                    local copy = {}
+                    for n = 1, #d do copy[n] = v[n] end
+                    out[k] = copy
+                end
+            else
+                out[k] = keepValid(v, d)
+            end
+        elseif v ~= nil and type(v) == type(d) then
+            out[k] = v
+        end
+    end
+    return out
+end
+
+function ns.Profile.Export()
+    local copy = {}
+    for k, v in pairs(ns.db) do
+        if not LEAVE_OUT[k] then copy[k] = v end
+    end
+    if type(copy.general) == "table" then
+        local g = {}
+        for k, v in pairs(copy.general) do if not LEAVE_OUT_GENERAL[k] then g[k] = v end end
+        copy.general = g
+    end
+    return ns.Profile.Encode({ addon = ADDON, version = 1, settings = copy })
+end
+
+-- A table as a profile string (Export's last step; the tests build bad ones with it).
+function ns.Profile.Encode(t)
+    local out = {}
+    serialize(t, out)
+    return PROFILE_TAG .. b64encode(table.concat(out))
+end
+
+-- Read a profile string: the settings to apply, or nil and why not.
+function ns.Profile.Read(text)
+    if type(text) ~= "string" then return nil, "Nothing to import." end
+    text = text:gsub("^%s+", ""):gsub("%s+$", "")
+    if text == "" then return nil, "Paste a profile string first." end
+    if text:sub(1, #PROFILE_TAG) ~= PROFILE_TAG then
+        return nil, "That is not a Garu Combat Text profile: it should start with " .. PROFILE_TAG
+    end
+    if #text > 200000 then return nil, "That string is far too long to be a profile." end
+    local raw = b64decode(text:sub(#PROFILE_TAG + 1))
+    if not raw then return nil, "The profile string is damaged and did not decode. Copy it again, whole." end
+    local data, why = parse(raw)
+    if not data then return nil, "The profile string is damaged (" .. tostring(why) .. "). Copy it again, whole." end
+    if type(data) ~= "table" or data.addon ~= ADDON or type(data.settings) ~= "table" then
+        return nil, "That string is not a Garu Combat Text profile."
+    end
+    if type(data.version) ~= "number" or data.version > 1 then
+        return nil, "That profile was made by a newer version of Garu Combat Text. Update the addon first."
+    end
+    return keepValid(data.settings, ns.defaults)
+end
+
+-- Apply a profile string: true, or false and why not. A string that is no good
+-- changes nothing.
+function ns.Profile.Import(text)
+    local settings, why = ns.Profile.Read(text)
+    if not settings then return false, why end
+    local old = ns.db or {}
+    local page = old.general and old.general.optionsPage
+    GaruCombatTextDB = copyDefaults(ns.defaults, settings)
+    ns.db = GaruCombatTextDB
+    ns.db.trace, ns.db.weaponProcs = old.trace, old.weaponProcs
+    ns.db.general.optionsPage = page
+    ns.FinishSettings()
+    ns.RefreshAll()
+    return true
 end

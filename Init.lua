@@ -58,6 +58,8 @@ SlashCmdList.GARUCOMBATTEXT = function(msg)
         if ns.UseUnitCombat and ns.UC.PrintProbe then ns.UC.PrintProbe()
         elseif ns.PrintProbe then ns.PrintProbe()
         else print("|cff66ccffGaru Combat Text|r: nothing to probe on this client.") end
+    elseif msg == "export" or msg == "import" then
+        if ns.OpenProfile then ns.OpenProfile(msg) end
     elseif msg == "reset" then
         if ns.ResetSettings then ns.ResetSettings() end
         print("|cff66ccffGaru Combat Text|r: settings reset to defaults")
