@@ -113,6 +113,12 @@ python -m pip install --target tests/.lupa lupa
 python -I tests/run.py
 ```
 
+## Languages
+
+English, German, French, Spanish (Spain and Latin America), Brazilian Portuguese,
+Italian, Russian, Korean, and Chinese (Simplified and Traditional), following the game
+client's language. Spell, school and avoid names come from the client itself.
+
 ## License
 
 [MIT](LICENSE).

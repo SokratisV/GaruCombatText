@@ -115,6 +115,8 @@ MUTANTS = [
     ("Core.lua", "if type(data) ~= \"table\" or data.addon ~= ADDON or type(data.settings) ~= \"table\" then",
      "if type(data) ~= \"table\" or type(data.settings) ~= \"table\" then",
      "another addon's profile string is imported"),
+    ("Locales/deDE.lua".replace("/", os.sep), 'if GetLocale() ~= "deDE" then return end', "do return end",
+     "a German client sees no German"),
     ("Meter.lua", "if flourish then t.flashT = 0 end", "",
      "a crit no longer flourishes"),
     ("Meter.lua", "t.pop, t.popLen = (cfg.pop ~= false) and 1.45 or 1, POP_LEN", "t.pop, t.popLen = 1.45, POP_LEN",
@@ -147,7 +149,7 @@ MUTANTS = [
      "settings that do not apply are shown anyway"),
     ("Options.lua", "if label:lower():find(needle, 1, true) then hits[#hits + 1] = row end",
      "hits[#hits + 1] = row", "search shows every setting, whatever is typed"),
-    ("Options.lua", 'cardText = val(p.title) .. " is off."', "cardText = nil",
+    ("Options.lua", 'cardText = L["%s is off."]:format(val(p.title))', "cardText = nil",
      "a feed that is off still shows all its settings"),
     ("Options.lua", "for _, k in ipairs(LOOK) do dst[k] = src[k] end", "",
      "Copy to copies nothing"),
@@ -289,6 +291,9 @@ def suites(files):
         ok, out = run_lua(test_source("load_test.lua"), ORDER=order, FILES=files,
                           FOREVER=(client == "forever"), BARE=(client == "bare"))
         results.append(("load " + client, ok, out))
+    for locale in ("deDE", "zhCN"):   # another language: its words, and English where it has none
+        ok, out = run_lua(test_source("load_test.lua"), ORDER=order, FILES=files, FOREVER=True, LOCALE=locale)
+        results.append(("load " + locale, ok, out))
     return results
 
 

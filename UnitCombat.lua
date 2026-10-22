@@ -41,6 +41,9 @@ ns.UseUnitCombat = (not ns.CombatLogLive) and not FORCE_SUMMARY
 
 ns.UC = {}
 local UC = ns.UC
+-- the addon's words in the client's language (Locales); as they are where there is none
+local L = ns.L or setmetatable({}, { __index = function(_, k) return k end })
+local function melee() return ns.MeleeName and ns.MeleeName() or "Melee" end
 if not ns.UseUnitCombat then return end
 
 --------------------------------------------------------------------------
@@ -86,8 +89,8 @@ local MAX             = 24    -- of each list
 
 local PHYSICAL = 1
 local SCHOOLS = { physical = 1, holy = 2, fire = 4, nature = 8, frost = 16, shadow = 32, arcane = 64 }
-UC.SCHOOL_NAMES = { [1] = "Physical", [2] = "Holy", [4] = "Fire", [8] = "Nature",
-                    [16] = "Frost", [32] = "Shadow", [64] = "Arcane" }
+-- in the client's language (Core.lua)
+UC.SCHOOL_NAMES = setmetatable({}, { __index = function(_, school) return ns.SchoolName and ns.SchoolName(school) end })
 UC.SCHOOL_ICONS = {
     [1]  = "Interface\\ICONS\\INV_Sword_04",
     [2]  = "Interface\\ICONS\\Spell_Holy_HolyBolt",
@@ -747,7 +750,7 @@ end
 
 local function spellRecord(spell, rec, unit)
     rec.key   = "spell:" .. spell
-    rec.label = ns.SpellName(spell) or ("Spell " .. spell)
+    rec.label = ns.SpellName(spell) or (L["Spell"] .. " " .. spell)
     rec.icon  = ns.SpellTexture(spell)
     rec.pet   = (unit == "pet")
     return rec
@@ -813,7 +816,7 @@ placeSwing = function(rec, hand)
         local spell = rangedSpell()
         spellRecord(spell, rec, "player")
     else
-        rec.key, rec.label, rec.icon, rec.pet = "swing", "Melee", MELEE_ICON, false
+        rec.key, rec.label, rec.icon, rec.pet = "swing", melee(), MELEE_ICON, false
     end
     out(rec)
 end
@@ -975,8 +978,8 @@ local function placeOnTarget(rec, t, key, unit)
     if physical and not isMiss and t - petLast >= PET_GAP and petAttacking(unit) then
         petLast = t
         rule("pet")
-        rec.key, rec.label, rec.icon, rec.pet = "pet:swing", UnitName("pet") or "Pet", MELEE_ICON, true
-        if not str(rec.label) then rec.label = "Pet" end
+        rec.key, rec.label, rec.icon, rec.pet = "pet:swing", UnitName("pet") or L["Pet"], MELEE_ICON, true
+        if not str(rec.label) then rec.label = L["Pet"] end
         return out(rec)
     end
 
@@ -1051,7 +1054,7 @@ local function placeHealOnMe(amount, school, crit, t)
     end
     rule("someone else's heal")
     note(">", "someone else's heal")
-    rec.key, rec.label, rec.icon = "heal:other", "Healing", "Interface\\ICONS\\Spell_Holy_Heal"
+    rec.key, rec.label, rec.icon = "heal:other", L["Healing"], "Interface\\ICONS\\Spell_Holy_Heal"
     emit("healed", rec)
 end
 
@@ -1309,11 +1312,11 @@ ns.On("PLAYER_TARGET_CHANGED", function()
 end)
 
 local function keyLabel(key)
-    if key == "swing" then return "Melee", MELEE_ICON, PHYSICAL end
+    if key == "swing" then return melee(), MELEE_ICON, PHYSICAL end
     local spell = tonumber(key:match("^spell:(%d+)$"))
     if not spell then return key, nil, nil end
     local f = factCache[spell]
-    return ns.SpellName(spell) or ("Spell " .. spell), ns.SpellTexture(spell),
+    return ns.SpellName(spell) or (L["Spell"] .. " " .. spell), ns.SpellTexture(spell),
            (f and (f.school or f.procSchool)) or learnedSchool[spell]
 end
 

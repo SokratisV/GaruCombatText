@@ -1,4 +1,5 @@
 local ADDON, ns = ...
+local L = ns.L
 
 -- Damage Received (by type): the cumulative damage YOU take this fight from ALL enemies,
 -- combined per attack type -- all melee together, each incoming spell together, each
@@ -33,20 +34,23 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local key, label, amount, school, crit, iconTex
     if sub == "SWING_DAMAGE" then
         amount, school, crit = info[12], info[14], info[18]
-        key, label, iconTex = "swing", "Melee", MELEE_ICON
+        key, label, iconTex = "swing", ns.MeleeName(), MELEE_ICON
     elseif sub == "SPELL_DAMAGE" or sub == "RANGE_DAMAGE"
         or sub == "SPELL_PERIODIC_DAMAGE" or sub == "SPELL_BUILDING_DAMAGE"
         or sub == "DAMAGE_SHIELD" then   -- an enemy's damage shield, when you strike it
         local spellId, spellName = info[12], info[13]
         amount, school, crit = info[15], info[17], info[21]
         key   = "spell:" .. tostring(spellId or spellName or "?")
-        label = spellName or "Spell"
+        label = spellName or L["Spell"]
         iconTex = ns.SpellTexture(spellId)
     elseif sub == "ENVIRONMENTAL_DAMAGE" then
         local etype = info[12]
         amount, school = info[13], info[15]
         key   = "env:" .. tostring(etype or "?")
-        label = etype and (etype:sub(1, 1) .. etype:sub(2):lower()) or "Environment"
+        -- Blizzard's own word for it (Falling, Drowning, Lava...), in the client's language
+        local word = etype and _G["ACTION_ENVIRONMENTAL_DAMAGE_" .. tostring(etype)]
+        label = (type(word) == "string" and word ~= "" and word)
+            or (etype and (etype:sub(1, 1) .. etype:sub(2):lower())) or L["Environment"]
     else
         return
     end
@@ -71,7 +75,7 @@ if ns.UseUnitCombat then
         local name = r.school and ns.UC.SCHOOL_NAMES[r.school]
         local key = "school:" .. tostring(r.school or 0)
         local icon = r.school and ns.UC.SCHOOL_ICONS[r.school] or MELEE_ICON
-        meter:Bump(frame, key, name or (r.school and "Mixed" or "Damage"), r.amount, r.school,
+        meter:Bump(frame, key, name or (r.school and L["Mixed"] or L["Damage"]), r.amount, r.school,
                    r.crit and true or false, icon)
     end)
 end
@@ -141,7 +145,7 @@ function ns.TakenTextTest(dt)
     local src = TEST_SOURCES[math.random(1, #TEST_SOURCES)]
     local amt = math.random(50, 900)
     if math.random() < 0.15 then amt = amt * 3 end
-    meter:Bump(f, "test:" .. src.label, src.label, amt, src.school, math.random() < 0.2, src.icon)
+    meter:Bump(f, "test:" .. src.label, ns.SchoolName(src.school) or src.label, amt, src.school, math.random() < 0.2, src.icon)
 end
 
 function ns.ClearTakenText()

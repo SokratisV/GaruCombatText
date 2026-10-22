@@ -198,6 +198,34 @@ function ns.FormatNumber(v)
 end
 ns.test = { combat = false }   -- set true via /gct test to preview
 
+-- Names the client already has in its own language: Blizzard's for the schools, the
+-- kinds of avoid, Melee and Mana. English where a client lacks one.
+local function blizz(name, fallback)
+    local v = _G[name]
+    if type(v) == "string" and v ~= "" then return v end
+    return fallback
+end
+local SCHOOL_WORD = { [1] = "PHYSICAL", [2] = "HOLY", [4] = "FIRE", [8] = "NATURE", [16] = "FROST",
+                      [32] = "SHADOW", [64] = "ARCANE" }
+function ns.SchoolName(school)
+    local w = SCHOOL_WORD[school]
+    if not w then return nil end
+    return blizz("STRING_SCHOOL_" .. w, w:sub(1, 1) .. w:sub(2):lower())
+end
+-- DODGE, PARRY, BLOCK, MISS, RESIST, IMMUNE, EVADE, DEFLECT, ABSORB, REFLECT
+function ns.AvoidName(m)
+    if type(m) ~= "string" or m == "" then return "" end
+    return blizz(m, m:sub(1, 1) .. m:sub(2):lower())
+end
+function ns.MeleeName() return blizz("MELEE", "Melee") end
+function ns.ManaName() return blizz("MANA", "Mana") end
+-- A made-up row's name for the previews: its spell's, by ID, in the client's language.
+function ns.SampleName(key, fallback)
+    if key == "swing" then return ns.MeleeName() end
+    local id = type(key) == "string" and tonumber(key:match("^spell:(%d+)$") or key:match("^mana:(%d+)$"))
+    return (id and ns.SpellName and ns.SpellName(id)) or fallback
+end
+
 -- Shared icons for the miss/avoid count rows (Actions).
 ns.AVOID_ICON = {
     DODGE   = "Interface\\ICONS\\Ability_Rogue_Sprint",
@@ -546,22 +574,22 @@ end
 
 -- Read a profile string: the settings to apply, or nil and why not.
 function ns.Profile.Read(text)
-    if type(text) ~= "string" then return nil, "Nothing to import." end
+    local L = ns.L
+    if type(text) ~= "string" then return nil, L["Paste a profile string first."] end
     text = text:gsub("^%s+", ""):gsub("%s+$", "")
-    if text == "" then return nil, "Paste a profile string first." end
+    if text == "" then return nil, L["Paste a profile string first."] end
     if text:sub(1, #PROFILE_TAG) ~= PROFILE_TAG then
-        return nil, "That is not a Garu Combat Text profile: it should start with " .. PROFILE_TAG
+        return nil, L["That is not a Garu Combat Text profile: it should start with %s"]:format(PROFILE_TAG)
     end
-    if #text > 200000 then return nil, "That string is far too long to be a profile." end
+    if #text > 200000 then return nil, L["That string is far too long to be a profile."] end
     local raw = b64decode(text:sub(#PROFILE_TAG + 1))
-    if not raw then return nil, "The profile string is damaged and did not decode. Copy it again, whole." end
-    local data, why = parse(raw)
-    if not data then return nil, "The profile string is damaged (" .. tostring(why) .. "). Copy it again, whole." end
+    local data = raw and parse(raw)
+    if not data then return nil, L["The profile string is damaged. Copy it again, whole."] end
     if type(data) ~= "table" or data.addon ~= ADDON or type(data.settings) ~= "table" then
-        return nil, "That string is not a Garu Combat Text profile."
+        return nil, L["That string is not a Garu Combat Text profile."]
     end
     if type(data.version) ~= "number" or data.version > 1 then
-        return nil, "That profile was made by a newer version of Garu Combat Text. Update the addon first."
+        return nil, L["That profile was made by a newer version of Garu Combat Text. Update the addon first."]
     end
     return keepValid(data.settings, ns.defaults)
 end

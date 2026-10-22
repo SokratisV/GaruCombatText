@@ -1,6 +1,26 @@
 ## Interface: 16001, 20505
 ## Title: |cff66ccffGaru Combat Text|r
 ## Notes: Damage dealt & taken and healing received, per spell, live. On WoW Forever, where the combat log is gone, your hits are worked out from your casts and swings (/gct).
+## Title-deDE: |cff66ccffGaru Combat Text|r
+## Notes-deDE: Verursachter und erlittener Schaden sowie erhaltene Heilung, pro Zauber, live. Auf WoW Forever, wo das Kampflog fehlt, werden deine Treffer aus deinen Zaubern und Schlägen ermittelt (/gct).
+## Title-esES: |cff66ccffGaru Combat Text|r
+## Notes-esES: Daño infligido y recibido y sanación recibida, por hechizo, en directo. En WoW Forever, sin registro de combate, tus golpes se deducen de tus hechizos y golpes de arma (/gct).
+## Title-esMX: |cff66ccffGaru Combat Text|r
+## Notes-esMX: Daño infligido y recibido y sanación recibida, por hechizo, en directo. En WoW Forever, sin registro de combate, tus golpes se deducen de tus hechizos y golpes de arma (/gct).
+## Title-frFR: |cff66ccffGaru Combat Text|r
+## Notes-frFR: Dégâts infligés et subis et soins reçus, par sort, en direct. Sur WoW Forever, sans journal de combat, vos coups sont déduits de vos sorts et coups d’arme (/gct).
+## Title-itIT: |cff66ccffGaru Combat Text|r
+## Notes-itIT: Danni inflitti e subiti e cure ricevute, per incantesimo, in diretta. Su WoW Forever, senza registro di combattimento, i tuoi colpi sono ricavati da incantesimi e colpi d'arma (/gct).
+## Title-koKR: |cff66ccffGaru Combat Text|r
+## Notes-koKR: 주문별로 준 피해와 받은 피해, 받은 치유를 실시간으로 보여 줍니다. 전투 기록이 없는 WoW Forever에서는 주문과 무기 공격으로 내 타격을 추정합니다 (/gct).
+## Title-ptBR: |cff66ccffGaru Combat Text|r
+## Notes-ptBR: Dano causado e recebido e cura recebida, por feitiço, ao vivo. No WoW Forever, sem registro de combate, seus golpes são deduzidos dos seus feitiços e golpes de arma (/gct).
+## Title-ruRU: |cff66ccffGaru Combat Text|r
+## Notes-ruRU: Нанесённый и полученный урон и полученное исцеление по заклинаниям в реальном времени. В WoW Forever, где нет журнала боя, ваши удары определяются по заклинаниям и взмахам оружия (/gct).
+## Title-zhCN: |cff66ccffGaru Combat Text|r
+## Notes-zhCN: 按法术实时显示造成和受到的伤害以及受到的治疗。在没有战斗记录的 WoW Forever 上，根据你的法术和武器攻击推断你的命中（/gct）。
+## Title-zhTW: |cff66ccffGaru Combat Text|r
+## Notes-zhTW: 依法術即時顯示造成和受到的傷害以及受到的治療。在沒有戰鬥紀錄的 WoW Forever 上，依你的法術和武器攻擊推算你的命中（/gct）。
 ## Author: Sokratis
 ## Version: 2.2.0
 ## SavedVariables: GaruCombatTextDB
@@ -8,6 +28,17 @@
 ## X-License: MIT
 ## X-Curse-Project-ID: 1567453
 
+Locales\Locale.lua
+Locales\deDE.lua
+Locales\esES.lua
+Locales\esMX.lua
+Locales\frFR.lua
+Locales\itIT.lua
+Locales\koKR.lua
+Locales\ptBR.lua
+Locales\ruRU.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
 Core.lua
 UnitCombat.lua
 DamageMeter.lua

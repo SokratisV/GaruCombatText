@@ -24,7 +24,7 @@ tf.text:SetShadowColor(0, 0, 0, 1); tf.text:SetShadowOffset(1, -1)
 tf.bg = tf:CreateTexture(nil, "BACKGROUND")
 tf.bg:SetAllPoints(tf); tf.bg:SetColorTexture(0.10, 0.45, 0.75, 0.25); tf.bg:Hide()
 tf.label = tf:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-tf.label:SetPoint("BOTTOM", tf, "TOP", 0, 2); tf.label:SetText("Combat Timer"); tf.label:Hide()
+tf.label:SetPoint("BOTTOM", tf, "TOP", 0, 2); tf.label:SetText(ns.L["Combat Timer"]); tf.label:Hide()
 
 tf:SetScript("OnDragStart", function(self)
     if not ns.db.locked and cfg().attach == "free" then self:StartMoving() end
@@ -72,7 +72,7 @@ tf:SetScript("OnUpdate", function(self, dt)
     if not c then return end
     local dur = (c.enabled and ns.CombatDuration) and ns.CombatDuration() or nil
     if dur then
-        self.text:SetText("Combat " .. fmtDur(dur))
+        self.text:SetText(ns.L["Combat %s"]:format(fmtDur(dur)))
         self.text:SetTextColor(0.95, 0.85, 0.45)
     else
         self.text:SetText("")

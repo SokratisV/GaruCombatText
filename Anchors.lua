@@ -78,11 +78,11 @@ local function makeAnchor(key, label, unit)
     return f
 end
 
-makeAnchor("enemyText", "Damage Dealt", "target")
-makeAnchor("healText", "Healing Received", "player")
-makeAnchor("doneText", "Healing Done", "player")
-makeAnchor("takenText", "Damage Received", "player")
-makeAnchor("actionsText", "Actions", "target")
+makeAnchor("enemyText", ns.L["Damage Dealt"], "target")
+makeAnchor("healText", ns.L["Healing Received"], "player")
+makeAnchor("doneText", ns.L["Healing Done"], "player")
+makeAnchor("takenText", ns.L["Damage Received"], "player")
+makeAnchor("actionsText", ns.L["Actions"], "target")
 ns.frames.target    = anchors.enemyText   -- EnemyText anchors + routes target damage here
 ns.healHostFrame    = anchors.healText    -- HealText anchors here
 ns.doneHostFrame    = anchors.doneText    -- Healing Done (HealText.lua) anchors here

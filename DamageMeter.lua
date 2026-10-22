@@ -91,32 +91,37 @@ function DM.IsUsable()
 end
 
 function ns.PrintStatus()
-    print("|cff66ccffGaru Combat Text|r: reading from "
-        .. (ns.UseUnitCombat and "UNIT_COMBAT (live; your hits worked out from your casts and swings)"
-            or ns.UseDamageMeter and "C_DamageMeter (post-fight summaries)" or "the combat log (live)"))
+    local L = ns.L
+    local P = "|cff66ccffGaru Combat Text|r: "
     if ns.UseUnitCombat then
-        print("   /gct probe after a fight shows how much was readable and placed as yours.")
+        print(P .. L["reading the hits live, your own worked out from your casts and swings."])
+        print("   " .. L["/gct probe after a fight shows how much was readable and placed as yours."])
+    elseif ns.UseDamageMeter then
+        print(P .. L["reading Blizzard's damage meter, once each fight is over."])
+    else
+        print(P .. L["reading the combat log, live."])
     end
     if ns.UseDamageMeter then
-        print("   meter available: " .. tostring(DM.IsUsable())
-            .. "  |  last fight: " .. (DM.SessionSeconds() and (math.floor(DM.SessionSeconds()) .. "s") or "none"))
-        print("   This client hides damage numbers during a fight, so the feeds fill in")
-        print("   once it ends. Actions (dodge/parry/miss) has no data source at all here,")
-        print("   and Healing reports what you cast, not what landed on you.")
+        local secs = DM.SessionSeconds()
+        print("   " .. (DM.IsUsable() and L["The damage meter is available."] or L["The damage meter is not available."])
+            .. " " .. (secs and L["Last fight: %d s."]:format(math.floor(secs)) or L["No fight yet."]))
+        print("   " .. L["This client hides damage numbers during a fight, so the feeds fill in once it ends. Actions (dodge, parry, miss) has no data source here, and Healing reports what you cast, not what landed on you."])
         local s = ns.db and ns.db.summary
-        print("   summary: " .. (DM.Shown() and "on screen now" or "waiting for a target")
-            .. "  |  holds for " .. tostring(s and s.holdSecs or 15) .. "s"
-            .. ((s and s.requireDead ~= false) and " once you select something that died"
-                                               or " once you select anything"))
+        local hold = s and s.holdSecs or 15
+        local state = DM.Shown() and L["The summary is on screen now."] or L["The summary is waiting for a target."]
+        local rule = (s and s.requireDead ~= false)
+            and L["It holds for %d s once you select something that died."]:format(hold)
+            or L["It holds for %d s once you select anything."]:format(hold)
+        print("   " .. state .. " " .. rule)
     end
 end
 
 local labelCache = {}
 local function spellLabel(spellID)
-    if not spellID or spellID == 0 then return "Melee" end
+    if not spellID or spellID == 0 then return ns.MeleeName() end
     local cached = labelCache[spellID]
     if cached then return cached end
-    local name = ns.SpellName(spellID) or ("Spell " .. spellID)
+    local name = ns.SpellName(spellID) or (ns.L["Spell"] .. " " .. spellID)
     labelCache[spellID] = name
     return name
 end

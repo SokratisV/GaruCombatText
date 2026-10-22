@@ -1,4 +1,5 @@
 local ADDON, ns = ...
+local L = ns.L
 
 -- "Damage Stream" (Apex-Legends style): the cumulative damage YOU deal to your
 -- target, one ever-growing number/row per damage source (melee, each spell,
@@ -100,7 +101,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
         if cost <= 0 then return end
         if everyEnemy() then meter:Fresh() end
         meter:BumpMana(frame, "spell:" .. tostring(spellId or spellName or "?"),
-                       spellName or "Spell", cost, info[14],
+                       spellName or L["Spell"], cost, info[14],
                        ns.SpellTexture(spellId))
         return
     end
@@ -108,14 +109,14 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local key, label, amount, school, crit, iconTex
     if sub == "SWING_DAMAGE" then
         amount, school, crit = info[12], info[14], info[18]
-        key, label, iconTex = "swing", "Melee", MELEE_ICON
+        key, label, iconTex = "swing", ns.MeleeName(), MELEE_ICON
     elseif sub == "SPELL_DAMAGE" or sub == "RANGE_DAMAGE"
         or sub == "SPELL_PERIODIC_DAMAGE" or sub == "SPELL_BUILDING_DAMAGE"
         or sub == "DAMAGE_SHIELD" then   -- Thorns, Retribution Aura, Lightning Shield
         local spellId, spellName = info[12], info[13]
         amount, school, crit = info[15], info[17], info[21]
         key   = "spell:" .. tostring(spellId or spellName or "?")
-        label = spellName or "Spell"
+        label = spellName or L["Spell"]
         iconTex = ns.SpellTexture(spellId)
     else
         return
@@ -198,7 +199,7 @@ if ns.UseUnitCombat then
         elseif not UnitExists("target") then
             return
         end
-        meter:BumpMana(frame, "spell:" .. c.spell, c.label or "Spell", cost, c.school, ns.SpellTexture(c.spell))
+        meter:BumpMana(frame, "spell:" .. c.spell, c.label or L["Spell"], cost, c.school, ns.SpellTexture(c.spell))
     end)
 end
 
@@ -268,7 +269,7 @@ function ns.EnemyTextTest(dt)
     local src = TEST_SOURCES[math.random(1, #TEST_SOURCES)]
     local amt = math.random(80, 1400)
     if math.random() < 0.15 then amt = amt * 3 end
-    meter:Bump(f, src.key, src.label, amt, src.school, math.random() < 0.2, src.icon)
+    meter:Bump(f, src.key, ns.SampleName(src.key, src.label), amt, src.school, math.random() < 0.2, src.icon)
     if math.random() < 0.06 then meter:MarkKill(f, nil, src.key) end   -- now and then, a kill
     if ns.db.enemyText.showMana and src.key ~= "swing" then
         local trackers = meter:Trackers(f)

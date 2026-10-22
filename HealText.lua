@@ -1,4 +1,5 @@
 local ADDON, ns = ...   -- own namespace, shared across the addon's files
+local L = ns.L
 
 -- "Healing Received" meter on the player frame: effective healing you've received,
 -- one line/row per healing spell, from ANY source (your own heals, other players,
@@ -55,7 +56,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
         local cost = ns.Meter.SpellManaCost(spellId)
         if cost <= 0 then return end
         meter:BumpMana(pf, "spell:" .. tostring(spellId or spellName or "?"),
-                       spellName or "Heal", cost, info[14], icon(spellId))
+                       spellName or L["Heal"], cost, info[14], icon(spellId))
         return
     end
 
@@ -66,7 +67,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
         local eff = (tonumber(amount) or 0) - (tonumber(overheal) or 0)
         if eff <= 0 or eff < (cfg.threshold or 0) then return end
         meter:Bump(pf, "spell:" .. tostring(spellId or spellName or "?"),
-                   spellName or "Heal", eff, spellSchool, crit and true or false, icon(spellId))
+                   spellName or L["Heal"], eff, spellSchool, crit and true or false, icon(spellId))
 
     elseif cfg.includeMana and (sub == "SPELL_ENERGIZE" or sub == "SPELL_PERIODIC_ENERGIZE") then
         local spellId, spellName, spellSchool = info[12], info[13], info[14]
@@ -83,7 +84,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
         local gain = amount - over                 -- effective mana gained
         if gain <= 0 or gain < (cfg.threshold or 0) then return end
         meter:Bump(pf, "mana:" .. tostring(spellId or spellName or "?"),
-                   spellName or "Mana", gain, spellSchool, false, icon(spellId))
+                   spellName or ns.ManaName(), gain, spellSchool, false, icon(spellId))
     end
 end)
 end
@@ -118,7 +119,7 @@ if ns.UseUnitCombat then
         if r.amount < (cfg.threshold or 0) then return end
         local pf = playerFrame()
         if not pf then return end
-        meter:Bump(pf, "mana:gain", "Mana", r.amount, nil, false, "Interface\\ICONS\\INV_Potion_76")
+        meter:Bump(pf, "mana:gain", ns.ManaName(), r.amount, nil, false, "Interface\\ICONS\\INV_Potion_76")
     end)
 end
 
@@ -195,12 +196,12 @@ function ns.HealTextTest(dt)
     if cfg.includeMana and math.random() < 0.25 then src = TEST_MANA end
     local amt = math.random(60, 900)
     if math.random() < 0.15 then amt = amt * 2 end
-    meter:Bump(pf, src.key, src.label, amt, src.school, math.random() < 0.2,
+    meter:Bump(pf, src.key, ns.SampleName(src.key, src.label), amt, src.school, math.random() < 0.2,
                ns.SpellTexture(tonumber(src.key:match("%d+"))))
     -- feed mana so the healing/mana value has something to divide by in preview
     local wantMana = cfg.showMana or cfg.valueMode == "permana" or cfg.valueMode == "both" or cfg.valueMode == "mana"
     if wantMana and src.key:sub(1, 5) == "spell" then
-        meter:BumpMana(pf, src.key, src.label, math.random(40, 220), src.school,
+        meter:BumpMana(pf, src.key, ns.SampleName(src.key, src.label), math.random(40, 220), src.school,
                        ns.SpellTexture(tonumber(src.key:match("%d+"))))
     end
 end
@@ -280,7 +281,7 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
     local amount, overheal, _, crit = info[15], info[16], info[17], info[18]
     local eff = (tonumber(amount) or 0) - (tonumber(overheal) or 0)
     if eff <= 0 or eff < (cfg.threshold or 0) then return end
-    doneMeter:Bump(f, "spell:" .. tostring(spellId or spellName or "?"), spellName or "Heal", eff,
+    doneMeter:Bump(f, "spell:" .. tostring(spellId or spellName or "?"), spellName or L["Heal"], eff,
                    spellSchool, crit and true or false, ns.SpellTexture(spellId))
 end)
 end
@@ -327,7 +328,7 @@ function ns.DoneTextTest(dt)
     if not f or not f:IsShown() then return end
     local src = DONE_TEST[math.random(1, #DONE_TEST)]
     local amt = math.random(80, 700)
-    doneMeter:Bump(f, src.key, src.label, amt, src.school, math.random() < 0.2,
+    doneMeter:Bump(f, src.key, ns.SampleName(src.key, src.label), amt, src.school, math.random() < 0.2,
                    ns.SpellTexture(tonumber(src.key:match("%d+"))))
 end
 

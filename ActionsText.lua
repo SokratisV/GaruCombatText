@@ -17,7 +17,7 @@ if not ns.SummaryMode then ns.Meter.AddScope(meter, "actionsText") end
 function ns.ActionsScopeChanged() if meter.ScopeChanged then meter:ScopeChanged() end end
 
 -- Flags first, GUIDs only as a fallback: see the note above ns.SameGUID in Core.
-local function pretty(m) return m:sub(1, 1) .. m:sub(2):lower() end
+local function pretty(m) return ns.AvoidName(m) end   -- in the client's language
 
 -- An attack on you that you avoided, onto the feed: every enemy's counting the fight,
 -- your target's only when it came from your target (when that is known: the combat
@@ -56,7 +56,7 @@ if ns.UseUnitCombat then
         if not frame then return end
         if everyEnemy() then meter:Fresh() elseif r.onTarget == false then return end
         local m = r.missType
-        meter:Bump(frame, "miss:" .. m, m:sub(1, 1) .. m:sub(2):lower(), 1, 1, false, ns.AVOID_ICON[m])
+        meter:Bump(frame, "miss:" .. m, pretty(m), 1, 1, false, ns.AVOID_ICON[m])
     end)
     ns.UC.Subscribe("dodged", function(r)
         if everyEnemy() or UnitExists("target") then youAvoided(r.missType) end
@@ -97,9 +97,9 @@ ns.On("COMBAT_LOG_EVENT_UNFILTERED", function()
 
     local missType = (sub == "SWING_MISSED") and info[12] or info[15]
     if not missType then return end
-    local pretty = missType:sub(1, 1) .. missType:sub(2):lower()
+    local name = pretty(missType)
     if everyEnemy() then meter:Fresh() end
-    meter:Bump(frame, "miss:" .. missType, pretty, 1, 1, false, ns.AVOID_ICON[missType])
+    meter:Bump(frame, "miss:" .. missType, name, 1, 1, false, ns.AVOID_ICON[missType])
 end)
 end
 
@@ -125,7 +125,7 @@ function ns.ActionsTextTest(dt)
         return
     end
     local m = TEST[math.random(1, #TEST)]
-    meter:Bump(f, "miss:" .. m, m:sub(1, 1) .. m:sub(2):lower(), 1, 1, false, ns.AVOID_ICON[m])
+    meter:Bump(f, "miss:" .. m, pretty(m), 1, 1, false, ns.AVOID_ICON[m])
 end
 
 function ns.ClearActionsText()

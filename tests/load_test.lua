@@ -241,7 +241,7 @@ SECRET = setmetatable({}, { __tostring = function() return "<secret>" end })
 function issecretvalue(v) return v == SECRET end
 if FOREVER then C_DamageMeter = {} end
 Enum = { PlayerSwingType = { MainHand = 0, OffHand = 1, Ranged = 2 } }
-function GetLocale() return "enUS" end
+function GetLocale() return LOCALE or "enUS" end
 function InCombatLockdown() return false end
 local target = "Creature-A"
 plates = {}   -- other enemies' nameplates: token -> GUID
@@ -356,6 +356,37 @@ fire("PLAYER_ENTERING_WORLD")
 check("db exists", type(ns.db) == "table")
 check("anchors exist", ns.frames and ns.frames.target and ns.takenHostFrame and ns.healHostFrame
       and ns.actionsHostFrame and true or false)
+
+-- Another language: its words in place, English for anything it lacks, and the
+-- settings window opening on every page without an error. The rest of this test
+-- reads English labels, so it stops here.
+if LOCALE and LOCALE ~= "enUS" then
+    local L = ns.L
+    check(LOCALE .. ": the feeds' names are translated", L["Damage Dealt"] ~= "Damage Dealt" and L["Damage Dealt"] ~= nil,
+          tostring(L["Damage Dealt"]))
+    check(LOCALE .. ": a key it lacks shows in English", L["A key no language has"] == "A key no language has")
+    check(LOCALE .. ": format strings keep their placeholder", (L["Combat %s"]):format("1:23"):find("1:23", 1, true) ~= nil)
+    local ok, err = pcall(SlashCmdList.GARUCOMBATTEXT, "")
+    check(LOCALE .. ": the settings window opens", ok and rawget(_G, "GaruCombatTextOptions") ~= nil, err)
+    local pages, problems = 0, {}
+    for _, f in ipairs(frames) do
+        if rawget(f, "dot") and rawget(f, "selected") and f.scripts.OnClick then
+            pages = pages + 1
+            local okc, errc = pcall(f.scripts.OnClick, f)
+            if not okc then problems[#problems + 1] = tostring(errc) end
+            advance(clock + 0.01)
+        end
+    end
+    check(LOCALE .. ": every page draws", pages == 7 and #problems == 0, pages .. " pages; " .. table.concat(problems, "; "))
+    check(LOCALE .. ": a row's name is in the language", (function()
+        for _, f in ipairs(frames) do
+            if rawget(f, "row") and f:IsShown() and f.label and f.label.text == L["Reset all settings"] then return true end
+        end
+    end)() == true)
+    print(("%s %s: %d passed, %d failed"):format(FOREVER and "Forever" or "Classic", LOCALE, pass, fail))
+    if fail > 0 then error("failures") end
+    return
+end
 
 check("the defaults count every enemy", ns.db.enemyText.scope == "all" and ns.db.actionsText.scope == "all",
       tostring(ns.db.enemyText.scope) .. " / " .. tostring(ns.db.actionsText.scope))

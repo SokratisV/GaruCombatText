@@ -56,7 +56,7 @@ ns.Meter.SCHOOL_COLOR = SCHOOL_COLOR
 local function fmtDuration(sec)
     sec = math.floor((sec or 0) + 0.5)
     if sec >= 60 then return string.format("%d:%02d", math.floor(sec / 60), sec % 60) end
-    return sec .. "s"
+    return ns.L["%s s"]:format(sec)
 end
 
 --------------------------------------------------------------------------
@@ -929,7 +929,7 @@ local function update(M, s, dt)
             local n  = math.min(#list, cfg.maxLines or #list)
             local up = (cfg.growth ~= "DOWN")
             s.timeFS:SetFont(ns.Font(ns.db.general.font), math.max(8, (cfg.fontSize or 14) - 2), "OUTLINE")
-            s.timeFS:SetText("Combat " .. fmtDuration(endT - s.combatStart))
+            s.timeFS:SetText(ns.L["Combat %s"]:format(fmtDuration(endT - s.combatStart)))
             s.timeFS:SetTextColor(0.95, 0.85, 0.45)
             s.timeFS:ClearAllPoints()
             s.timeFS:SetPoint("CENTER", s.container, "CENTER", 0,

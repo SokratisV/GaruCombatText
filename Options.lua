@@ -1,4 +1,5 @@
 local ADDON, ns = ...
+local L = ns.L
 
 -- The settings window (/gct), in the style of FlareUI by Malkkav (MIT): the pages in
 -- a list on the left, the page's settings in the middle under headings that fold,
@@ -31,28 +32,28 @@ local function RAc() if ns.RefreshActionsText then ns.RefreshActionsText() end e
 local function RA() if ns.RefreshAnchors then ns.RefreshAnchors() end end
 local function RT() if ns.RefreshTimer then ns.RefreshTimer() end end
 
-local ATTACH = { { value = "free", text = "Free (movable)" }, { value = "player", text = "Player frame" },
-                 { value = "target", text = "Target frame" } }
-local TIMER_ATTACH = { { value = "free", text = "Free (movable)" }, { value = "enemy", text = "Damage Dealt" },
-                       { value = "taken", text = "Damage Received" }, { value = "actions", text = "Actions" },
-                       { value = "heal", text = "Healing" }, { value = "done", text = "Healing Done" } }
-local UPDOWN = { { value = "UP", text = "Up" }, { value = "DOWN", text = "Down" } }
-local ALIGN  = { { value = "LEFT", text = "Left" }, { value = "CENTER", text = "Centre" }, { value = "RIGHT", text = "Right" } }
-local LAYOUT = { { value = "stack", text = "Stacked" }, { value = "radial", text = "Radial (arc)" } }
-local FACING = { { value = 90, text = "Up" }, { value = 270, text = "Down" }, { value = 0, text = "Right" }, { value = 180, text = "Left" } }
-local SCOPE  = { { value = "target", text = "Your target" }, { value = "all", text = "Every enemy" } }
-local SORT   = { { value = "amount", text = "Biggest first" }, { value = "lowest", text = "Smallest first" },
-                 { value = "recent", text = "Most recent" } }
-local SIDE   = { { value = "LEFT", text = "Left" }, { value = "RIGHT", text = "Right" } }
-local STACKDIR = { { value = "vertical", text = "Vertical" }, { value = "horizontal", text = "Horizontal" } }
-local SIDEWAYS = { { value = "LEFT", text = "Left" }, { value = "CENTER", text = "Centre" }, { value = "RIGHT", text = "Right" } }
+local ATTACH = { { value = "free", text = L["Free (movable)"] }, { value = "player", text = L["Player frame"] },
+                 { value = "target", text = L["Target frame"] } }
+local TIMER_ATTACH = { { value = "free", text = L["Free (movable)"] }, { value = "enemy", text = L["Damage Dealt"] },
+                       { value = "taken", text = L["Damage Received"] }, { value = "actions", text = L["Actions"] },
+                       { value = "heal", text = L["Healing"] }, { value = "done", text = L["Healing Done"] } }
+local UPDOWN = { { value = "UP", text = L["Up"] }, { value = "DOWN", text = L["Down"] } }
+local ALIGN  = { { value = "LEFT", text = L["Left"] }, { value = "CENTER", text = L["Centre"] }, { value = "RIGHT", text = L["Right"] } }
+local LAYOUT = { { value = "stack", text = L["Stacked"] }, { value = "radial", text = L["Radial (arc)"] } }
+local FACING = { { value = 90, text = L["Up"] }, { value = 270, text = L["Down"] }, { value = 0, text = L["Right"] }, { value = 180, text = L["Left"] } }
+local SCOPE  = { { value = "target", text = L["Your target"] }, { value = "all", text = L["Every enemy"] } }
+local SORT   = { { value = "amount", text = L["Biggest first"] }, { value = "lowest", text = L["Smallest first"] },
+                 { value = "recent", text = L["Most recent"] } }
+local SIDE   = { { value = "LEFT", text = L["Left"] }, { value = "RIGHT", text = L["Right"] } }
+local STACKDIR = { { value = "vertical", text = L["Vertical"] }, { value = "horizontal", text = L["Horizontal"] } }
+local SIDEWAYS = { { value = "LEFT", text = L["Left"] }, { value = "CENTER", text = L["Centre"] }, { value = "RIGHT", text = L["Right"] } }
 
 local function val(x) if type(x) == "function" then return x() end return x end
 local function Sound(kit)
     local id = SOUNDKIT and SOUNDKIT[kit]
     if id and PlaySound then pcall(PlaySound, id) end
 end
-local function seconds(v) return v .. " s" end
+local function seconds(v) return L["%s s"]:format(v) end
 local function degrees(v) return v .. "\194\176" end   -- the degree sign, in UTF-8
 
 --------------------------------------------------------------------------
@@ -142,62 +143,62 @@ local function FeedPage(o)
     local function laid() refresh(); RT() end
 
     local text = {
-        Slider(db, "fontSize", "Font size", "The size of the numbers.", 8, 40, 1),
-        Slider(db, "maxLines", o.rowsLabel or "Rows shown", "How many rows the feed shows at most. The rest wait until one of these goes.", 1, 12, 1, laid),
-        Choice(db, "sortMode", "Order", "Biggest first keeps the largest total at the anchor; Most recent puts whatever last changed there.", SORT),
+        Slider(db, "fontSize", L["Font size"], L["The size of the numbers."], 8, 40, 1),
+        Slider(db, "maxLines", o.rowsLabel or L["Rows shown"], L["How many rows the feed shows at most. The rest wait until one of these goes."], 1, 12, 1, laid),
+        Choice(db, "sortMode", L["Order"], L["Biggest first keeps the largest total at the anchor; Most recent puts whatever last changed there."], SORT),
     }
     for _, r in ipairs(o.text or {}) do text[#text + 1] = r end
 
     local sections = {
-        { title = "Position", rows = {
-            Choice(db, "attach", "Attach to", "Free gives the feed its own marker: unlock the anchors to drag it, or use the two sliders below. Pinned to the Player or Target frame, it follows that frame instead.", ATTACH, moved),
-            PointSlider(db, "x", "Free position X", "Left and right, from the centre of the screen.", -1500, 1500, RA, { vis = free }),
-            PointSlider(db, "y", "Free position Y", "Up and down, from the centre of the screen.", -1000, 1000, RA, { vis = free }),
-            Slider(db, "xOffset", "Nudge X", "A small shift left or right from the anchor, wherever the anchor is.", -150, 150, 1, refresh),
-            Slider(db, "yOffset", "Nudge Y", "A small shift up or down from the anchor.", -150, 150, 1, refresh),
+        { title = L["Position"], rows = {
+            Choice(db, "attach", L["Attach to"], L["Free gives the feed its own marker: unlock the anchors to drag it, or use the two sliders below. Pinned to the Player or Target frame, it follows that frame instead."], ATTACH, moved),
+            PointSlider(db, "x", L["Free position X"], L["Left and right, from the centre of the screen."], -1500, 1500, RA, { vis = free }),
+            PointSlider(db, "y", L["Free position Y"], L["Up and down, from the centre of the screen."], -1000, 1000, RA, { vis = free }),
+            Slider(db, "xOffset", L["Nudge X"], L["A small shift left or right from the anchor, wherever the anchor is."], -150, 150, 1, refresh),
+            Slider(db, "yOffset", L["Nudge Y"], L["A small shift up or down from the anchor."], -150, 150, 1, refresh),
         } },
-        { title = "Layout", rows = {
-            Choice(db, "layout", "Layout", "Stacked puts the rows one under another. Radial spreads them along an arc around the anchor.", LAYOUT, laid),
-            Choice(db, "stackDir", "Direction", "Vertical puts the rows one under another; Horizontal puts them side by side in a line.", STACKDIR, laid, { vis = stack }),
-            Choice(db, "growth", "Grow", "Which way new rows are added.", UPDOWN, laid, { vis = upright }),
-            Choice(db, "growthH", "Grow", "Which way the line runs from the anchor: left, right, or out both ways with the line centred on it.", SIDEWAYS, laid, { vis = sideways }),
-            Choice(db, "align", "Alignment", "Which edge of the rows lines up with the anchor.", ALIGN, refresh, { vis = column }),
-            Slider(db, "lineSpacing", "Line spacing", "The space between rows, in pixels.", 8, 60, 1, laid, { vis = column }),
-            Slider(db, "lineSpacing", "Space between", "The gap between one row and the next, in pixels.", 0, 60, 1, laid, { vis = sideways }),
-            Slider(db, "radius", "Arc radius", "How far from the anchor the arc runs, in pixels.", 20, 400, 2, nil, { vis = radial }),
-            Slider(db, "arc", "Arc span", "How much of a circle the arc covers.", 20, 360, 5, nil, { vis = radial, fmt = degrees }),
-            Choice(db, "arcAngle", "Arc facing", "Which way the arc opens from the anchor.", FACING, nil, { vis = radial }),
-            Toggle(db, "arcFixed", "Fixed slots", "Each row keeps its own place on the arc, rather than the rows spreading out to fill it.", nil, { vis = radial }),
+        { title = L["Layout"], rows = {
+            Choice(db, "layout", L["Layout"], L["Stacked puts the rows one under another. Radial spreads them along an arc around the anchor."], LAYOUT, laid),
+            Choice(db, "stackDir", L["Direction"], L["Vertical puts the rows one under another; Horizontal puts them side by side in a line."], STACKDIR, laid, { vis = stack }),
+            Choice(db, "growth", L["Grow"], L["Which way new rows are added."], UPDOWN, laid, { vis = upright }),
+            Choice(db, "growthH", L["Grow"], L["Which way the line runs from the anchor: left, right, or out both ways with the line centred on it."], SIDEWAYS, laid, { vis = sideways }),
+            Choice(db, "align", L["Alignment"], L["Which edge of the rows lines up with the anchor."], ALIGN, refresh, { vis = column }),
+            Slider(db, "lineSpacing", L["Line spacing"], L["The space between rows, in pixels."], 8, 60, 1, laid, { vis = column }),
+            Slider(db, "lineSpacing", L["Space between"], L["The gap between one row and the next, in pixels."], 0, 60, 1, laid, { vis = sideways }),
+            Slider(db, "radius", L["Arc radius"], L["How far from the anchor the arc runs, in pixels."], 20, 400, 2, nil, { vis = radial }),
+            Slider(db, "arc", L["Arc span"], L["How much of a circle the arc covers."], 20, 360, 5, nil, { vis = radial, fmt = degrees }),
+            Choice(db, "arcAngle", L["Arc facing"], L["Which way the arc opens from the anchor."], FACING, nil, { vis = radial }),
+            Toggle(db, "arcFixed", L["Fixed slots"], L["Each row keeps its own place on the arc, rather than the rows spreading out to fill it."], nil, { vis = radial }),
         } },
-        { title = "Text", rows = text },
+        { title = L["Text"], rows = text },
     }
     -- what a hit looks like as it lands (Meter.lua); Actions, which only counts, has the jump alone
     if o.effects then
         local half = { half = true }
         local fx = {
-            Toggle(db, "pop", "Pop on each hit", "Each hit makes its number jump for a moment. Crits jump further when Crit flourish is on.", nil, half),
-            Toggle(db, "roll", "Rolling totals", "A total counts up to its new value instead of jumping to it.", nil, half),
-            Toggle(db, "splash", "Hit splashes", "Each hit floats off its row as +N for a moment, while the total grows.", nil, half),
-            Toggle(db, "critFlash", "Crit flourish", "Critical hits only: the number jumps much further, flashes gold, and a star bursts behind its icon.", nil, half),
+            Toggle(db, "pop", L["Pop on each hit"], L["Each hit makes its number jump for a moment. Crits jump further when Crit flourish is on."], nil, half),
+            Toggle(db, "roll", L["Rolling totals"], L["A total counts up to its new value instead of jumping to it."], nil, half),
+            Toggle(db, "splash", L["Hit splashes"], L["Each hit floats off its row as +N for a moment, while the total grows."], nil, half),
+            Toggle(db, "critFlash", L["Crit flourish"], L["Critical hits only: the number jumps much further, flashes gold, and a star bursts behind its icon."], nil, half),
         }
         if o.killMark then
-            fx[#fx + 1] = Toggle(db, "killMark", "Killing blow mark", "A skull on the row whose attack killed the enemy, with a count once it has killed more than one.", nil, half)
+            fx[#fx + 1] = Toggle(db, "killMark", L["Killing blow mark"], L["A skull on the row whose attack killed the enemy, with a count once it has killed more than one."], nil, half)
         end
-        fx[#fx + 1] = Choice(db, "splashSide", "Splash side", "Which side of the number a hit floats off.", SIDE, nil,
+        fx[#fx + 1] = Choice(db, "splashSide", L["Splash side"], L["Which side of the number a hit floats off."], SIDE, nil,
             { vis = function() return cfg().splash end })
-        sections[#sections + 1] = { title = "Effects", rows = fx }
+        sections[#sections + 1] = { title = L["Effects"], rows = fx }
     elseif o.popOnly then
-        sections[#sections + 1] = { title = "Effects", rows = {
-            Toggle(db, "pop", "Pop on each count", "Each dodge, parry or resist makes its count jump for a moment."),
+        sections[#sections + 1] = { title = L["Effects"], rows = {
+            Toggle(db, "pop", L["Pop on each count"], L["Each dodge, parry or resist makes its count jump for a moment."]),
         } }
     end
-    if o.counting then sections[#sections + 1] = { title = "Counting", rows = o.counting } end
+    if o.counting then sections[#sections + 1] = { title = L["Counting"], rows = o.counting } end
     return { key = o.key, title = o.title, desc = o.desc, enabledDb = db, onToggle = refresh,
              banner = o.banner, unavailable = o.unavailable, sections = sections, copy = true }
 end
 
-local SUMMARY_SHORT = "Post-fight summary on this client"
-local SUMMARY_LONG = "This client hides every number while a fight is in progress and releases them when it ends, so the feeds fill in afterwards: select something that died to see the fight. Several kills in one pull each show the whole pull; the client reports no per-enemy breakdown. The hold window is on the General page."
+local SUMMARY_SHORT = L["Post-fight summary on this client"]
+local SUMMARY_LONG = L["This client hides every number while a fight is in progress and releases them when it ends, so the feeds fill in afterwards: select something that died to see the fight. Several kills in one pull each show the whole pull; the client reports no per-enemy breakdown. The hold window is on the General page."]
 
 local pages, pageByKey
 
@@ -206,213 +207,225 @@ local function definePages()
     -- Count: your target or every enemy (Damage Dealt and Actions)
     local function perTarget(db) return function() return not ns.SummaryMode and ns.db[db].scope ~= "all" end end
     local function everyEnemy(db) return function() return not ns.SummaryMode and ns.db[db].scope == "all" end end
-    local PLATES = " On this client, hits on enemies other than your target are only reported on their nameplates, so those need to be shown (Interface options, Nameplates: Enemy)."
-    local function scopeDesc(what)
-        return "Your target: " .. what .. " for whichever enemy you have selected, each keeping its own totals. Every enemy: one set of totals for the whole fight, whoever you hit, held for a while after it and cleared by the next fight's first hit."
-            .. (ns.UseUnitCombat and PLATES or "")
+    -- whole sentences, joined with a space: no sentence is built from pieces
+    local function join(...)
+        local parts = {}
+        for n = 1, select("#", ...) do
+            local s = select(n, ...)
+            if s and s ~= "" then parts[#parts + 1] = s end
+        end
+        return table.concat(parts, " ")
+    end
+    local PLATES = L["On this client, hits on enemies other than your target are only reported on their nameplates, so those need to be shown (Interface options, Nameplates: Enemy)."]
+    local SCOPE_DESC = {
+        damage = L["Your target: the damage for whichever enemy you have selected, each keeping its own totals. Every enemy: one set of totals for the whole fight, whoever you hit, held for a while after it and cleared by the next fight's first hit."],
+        avoided = L["Your target: what was avoided for whichever enemy you have selected, each keeping its own counts. Every enemy: one set of counts for the whole fight, whoever you hit, held for a while after it and cleared by the next fight's first hit."],
+    }
+    local function scopeDesc(kind)
+        return join(SCOPE_DESC[kind], ns.UseUnitCombat and PLATES or nil)
     end
     local function half(row) row.half = true return row end
 
     pages = {
         FeedPage({
             key = "heal", db = "healText", refresh = RH, effects = true,
-            title = function() return ns.SummaryMode and "Healing Cast" or "Healing Received" end,
-            desc = "Healing that lands on you, one row per spell, from anyone. Out of combat it shows a rolling window of the last few seconds; in a fight it keeps every heal, and holds the lot for a moment after.",
+            title = function() return ns.SummaryMode and L["Healing Cast"] or L["Healing Received"] end,
+            desc = L["Healing that lands on you, one row per spell, from anyone. Out of combat it shows a rolling window of the last few seconds; in a fight it keeps every heal, and holds the lot for a moment after."],
             banner = function()
                 if ns.UseUnitCombat then
-                    return "Your own heals by spell; everyone else's on one line",
-                        "The game reports every heal that lands on you, but not whose it was. Your own are placed on their spell by matching your casts; anyone else's share one Healing line."
+                    return L["Your own heals by spell; everyone else's on one line"],
+                        L["The game reports every heal that lands on you, but not whose it was. Your own are placed on their spell by matching your casts; anyone else's share one Healing line."]
                 elseif ns.SummaryMode then
-                    return "Healing you cast, not received",
-                        "This client's only healing meter is kept by the caster and never says who a heal landed on, so this feed shows the healing you cast. Heal yourself and it is the same number; heal someone else and it is not. " .. SUMMARY_LONG
+                    return L["Healing you cast, not received"],
+                        join(L["This client's only healing meter is kept by the caster and never says who a heal landed on, so this feed shows the healing you cast. Heal yourself and it is the same number; heal someone else and it is not."], SUMMARY_LONG)
                 end
             end,
-            rowsLabel = "Rows shown",
+            rowsLabel = L["Rows shown"],
             text = {
-                half(Toggle("healText", "showLabel", "Spell names", "The spell's name beside its number.")),
-                half(Toggle("healText", "showIcon", "Spell icons", "The spell's icon beside its number.")),
-                half(Toggle("healText", "schoolColors", "School colours", "Colours each row by its spell school.")),
+                half(Toggle("healText", "showLabel", L["Spell names"], L["The spell's name beside its number."])),
+                half(Toggle("healText", "showIcon", L["Spell icons"], L["The spell's icon beside its number."])),
+                half(Toggle("healText", "schoolColors", L["School colours"], L["Colours each row by its spell school."])),
             },
             counting = {
-                half(Toggle("healText", "showMana", "Mana spent", "Puts the mana each of your heals cost on its line.")),
-                half(Toggle("healText", "includeMana", "Mana gained", "Counts mana you gain (Innervate, Mana Tide, potions) as rows of their own.")),
-                Slider("healText", "threshold", "Ignore heals below", "Heals smaller than this are left out.", 0, 5000, 25),
-                Slider("healText", "windowSecs", "Rolling window", "Out of combat, how far back the feed looks.", 1, 30, 1, nil, { vis = notSummary, fmt = seconds }),
-                Slider("healText", "holdSecs", "Hold after combat", "How long the whole fight's healing stays up once combat ends, before the rolling window takes over again.", 0, 60, 1, nil, { vis = notSummary, fmt = seconds }),
+                half(Toggle("healText", "showMana", L["Mana spent"], L["Puts the mana each of your heals cost on its line."])),
+                half(Toggle("healText", "includeMana", L["Mana gained"], L["Counts mana you gain (Innervate, Mana Tide, potions) as rows of their own."])),
+                Slider("healText", "threshold", L["Ignore heals below"], L["Heals smaller than this are left out."], 0, 5000, 25),
+                Slider("healText", "windowSecs", L["Rolling window"], L["Out of combat, how far back the feed looks."], 1, 30, 1, nil, { vis = notSummary, fmt = seconds }),
+                Slider("healText", "holdSecs", L["Hold after combat"], L["How long the whole fight's healing stays up once combat ends, before the rolling window takes over again."], 0, 60, 1, nil, { vis = notSummary, fmt = seconds }),
             },
         }),
         FeedPage({
             key = "done", db = "doneText", refresh = RD, effects = true,
-            title = "Healing Done",
-            desc = "The healing you cast this fight, on anyone, one row per spell. Held for a while once the fight ends, cleared when the next one starts.",
+            title = L["Healing Done"],
+            desc = L["The healing you cast this fight, on anyone, one row per spell. Held for a while once the fight ends, cleared when the next one starts."],
             banner = function()
                 if ns.UseUnitCombat then
-                    return "Live where the game reports the heal; exact after the fight",
-                        "The game reports a heal where it lands, but not whose it was. Yours are matched to your casts on you, your target, and anyone else the game reports a heal on, so healing a group member you have not targeted may only show once the fight ends. Then every number is set to Blizzard's damage meter's, so the totals end exact. Whether the live numbers include overhealing is not yet known: if they do, they drop to the meter's when the fight ends."
+                    return L["Live where the game reports the heal; exact after the fight"],
+                        L["The game reports a heal where it lands, but not whose it was. Yours are matched to your casts on you, your target, and anyone else the game reports a heal on, so healing a group member you have not targeted may only show once the fight ends. Then every number is set to Blizzard's damage meter's, so the totals end exact. Whether the live numbers include overhealing is not yet known: if they do, they drop to the meter's when the fight ends."]
                 end
             end,
             unavailable = function()
                 if ns.SummaryMode then
-                    return "On this client the Healing Received feed already shows the healing you cast, once each fight is over."
+                    return L["On this client the Healing Received feed already shows the healing you cast, once each fight is over."]
                 end
             end,
-            rowsLabel = "Spells shown",
+            rowsLabel = L["Spells shown"],
             text = {
-                half(Toggle("doneText", "showLabel", "Spell names", "The spell's name beside its number.")),
-                half(Toggle("doneText", "showIcon", "Spell icons", "The spell's icon beside its number.")),
-                half(Toggle("doneText", "schoolColors", "School colours", "Colours each row by its spell school.")),
+                half(Toggle("doneText", "showLabel", L["Spell names"], L["The spell's name beside its number."])),
+                half(Toggle("doneText", "showIcon", L["Spell icons"], L["The spell's icon beside its number."])),
+                half(Toggle("doneText", "schoolColors", L["School colours"], L["Colours each row by its spell school."])),
             },
             counting = {
-                Toggle("doneText", "includePet", "Pet", "Counts your pet's healing too.", nil, { vis = function() return ns.CombatLogLive end }),
-                Slider("doneText", "threshold", "Ignore heals below", "Heals smaller than this are left out.", 0, 5000, 25),
-                Slider("doneText", "holdSecs", "Hold after combat", "How long the fight's healing stays up once combat ends, before it fades.", 0, 60, 1, nil, { fmt = seconds }),
+                Toggle("doneText", "includePet", L["Pet"], L["Counts your pet's healing too."], nil, { vis = function() return ns.CombatLogLive end }),
+                Slider("doneText", "threshold", L["Ignore heals below"], L["Heals smaller than this are left out."], 0, 5000, 25),
+                Slider("doneText", "holdSecs", L["Hold after combat"], L["How long the fight's healing stays up once combat ends, before it fades."], 0, 60, 1, nil, { fmt = seconds }),
             },
         }),
         FeedPage({
             key = "taken", db = "takenText", refresh = RK, effects = true,
-            title = "Damage Received",
+            title = L["Damage Received"],
             desc = function()
-                return ns.UseUnitCombat and "The damage you take this fight from every enemy together, one row per school."
-                    or "The damage you take this fight from every enemy together, one row per kind of attack: all melee on one, each spell on its own."
+                return ns.UseUnitCombat and L["The damage you take this fight from every enemy together, one row per school."]
+                    or L["The damage you take this fight from every enemy together, one row per kind of attack: all melee on one, each spell on its own."]
             end,
             banner = function()
                 if ns.UseUnitCombat then
-                    return "Grouped by school on this client",
-                        "The game says how hard you were hit and in which school, but not by what, so the rows are Physical, Fire, Shadow and the rest rather than one per attacking spell."
+                    return L["Grouped by school on this client"],
+                        L["The game says how hard you were hit and in which school, but not by what, so the rows are Physical, Fire, Shadow and the rest rather than one per attacking spell."]
                 elseif ns.SummaryMode then return SUMMARY_SHORT, SUMMARY_LONG end
             end,
             text = {
-                half(Toggle("takenText", "showLabel", "Names", "The attack's name, or its school, beside its number.")),
-                half(Toggle("takenText", "showIcon", "Icons", "An icon beside each number.")),
-                half(Toggle("takenText", "schoolColors", "School colours", "Colours each row by its school.")),
+                half(Toggle("takenText", "showLabel", L["Names"], L["The attack's name, or its school, beside its number."])),
+                half(Toggle("takenText", "showIcon", L["Icons"], L["An icon beside each number."])),
+                half(Toggle("takenText", "schoolColors", L["School colours"], L["Colours each row by its school."])),
             },
             counting = {
-                Slider("takenText", "threshold", "Ignore hits below", "Hits smaller than this are left out.", 0, 3000, 25),
-                Slider("takenText", "holdSecs", "Hold after combat", "How long the feed stays up once combat ends.", 0, 60, 1, nil, { vis = notSummary, fmt = seconds }),
+                Slider("takenText", "threshold", L["Ignore hits below"], L["Hits smaller than this are left out."], 0, 3000, 25),
+                Slider("takenText", "holdSecs", L["Hold after combat"], L["How long the feed stays up once combat ends."], 0, 60, 1, nil, { vis = notSummary, fmt = seconds }),
             },
         }),
         FeedPage({
             key = "dealt", db = "enemyText", refresh = RE, effects = true, killMark = true,
-            title = "Damage Dealt",
+            title = L["Damage Dealt"],
             desc = function()
                 if ns.db.enemyText.scope == "all" then
-                    return "The damage you deal to every enemy this fight, one row per source: melee, each spell, wand, pet."
+                    return L["The damage you deal to every enemy this fight, one row per source: melee, each spell, wand, pet."]
                 end
-                return "The damage you deal to your target, one row per source: melee, each spell, wand, pet. Each target keeps its own totals, and they come back when you select it again."
+                return L["The damage you deal to your target, one row per source: melee, each spell, wand, pet. Each target keeps its own totals, and they come back when you select it again."]
             end,
             banner = function()
                 if ns.UseUnitCombat then
-                    return "Worked out from your casts and swings",
-                        "The combat log is gone on this client, so each hit on your target is matched to your casts and swings by timing and school. Solo that is close to exact; in a group, a teammate's hit of the same school landing just after your cast can be counted as yours. The blow that kills is never reported, so it is added from Blizzard's damage meter once the fight ends. /gct probe shows how a fight was placed."
+                    return L["Worked out from your casts and swings"],
+                        L["The combat log is gone on this client, so each hit on your target is matched to your casts and swings by timing and school. Solo that is close to exact; in a group, a teammate's hit of the same school landing just after your cast can be counted as yours. The blow that kills is never reported, so it is added from Blizzard's damage meter once the fight ends. /gct probe shows how a fight was placed."]
                 elseif ns.SummaryMode then return SUMMARY_SHORT, SUMMARY_LONG end
             end,
-            rowsLabel = "Sources shown",
+            rowsLabel = L["Sources shown"],
             text = {
-                half(Toggle("enemyText", "showLabel", "Names", "The source's name beside its number.")),
-                half(Toggle("enemyText", "showIcon", "Icons", "The spell's icon beside its number.")),
-                half(Toggle("enemyText", "schoolColors", "School colours", "Colours each row by its damage school.")),
+                half(Toggle("enemyText", "showLabel", L["Names"], L["The source's name beside its number."])),
+                half(Toggle("enemyText", "showIcon", L["Icons"], L["The spell's icon beside its number."])),
+                half(Toggle("enemyText", "schoolColors", L["School colours"], L["Colours each row by its damage school."])),
             },
             counting = {
-                Choice("enemyText", "scope", "Count", function() return scopeDesc("the damage") .. (ns.UseUnitCombat and " Once the fight is over, every number is set to Blizzard's damage meter's, so they end exact." or "") end,
+                Choice("enemyText", "scope", L["Count"], function() return join(scopeDesc("damage"), ns.UseUnitCombat and L["Once the fight is over, every number is set to Blizzard's damage meter's, so they end exact."] or nil) end,
                     SCOPE, function() ns.EnemyScopeChanged(); RE(); RT() end, { vis = notSummary }),
-                half(Toggle("enemyText", "includePet", "Pet and totems", "Counts your pet's and totems' damage too.")),
-                half(Toggle("enemyText", "showMana", "Mana spent", "Puts the mana each spell cost on its line.")),
-                Toggle("enemyText", "persist", "Remember each target", "Each target keeps its totals while you look at another, and they come back when you select it again.", RE, { vis = perTarget("enemyText") }),
-                Slider("enemyText", "holdSecs", "Hold after combat", "How long the fight's totals stay up once combat ends, before they fade.", 0, 60, 1, nil, { vis = everyEnemy("enemyText"), fmt = seconds }),
-                Slider("enemyText", "threshold", "Ignore hits below", "Hits smaller than this are left out.", 0, 3000, 25),
+                half(Toggle("enemyText", "includePet", L["Pet and totems"], L["Counts your pet's and totems' damage too."])),
+                half(Toggle("enemyText", "showMana", L["Mana spent"], L["Puts the mana each spell cost on its line."])),
+                Toggle("enemyText", "persist", L["Remember each target"], L["Each target keeps its totals while you look at another, and they come back when you select it again."], RE, { vis = perTarget("enemyText") }),
+                Slider("enemyText", "holdSecs", L["Hold after combat"], L["How long the fight's totals stay up once combat ends, before they fade."], 0, 60, 1, nil, { vis = everyEnemy("enemyText"), fmt = seconds }),
+                Slider("enemyText", "threshold", L["Ignore hits below"], L["Hits smaller than this are left out."], 0, 3000, 25),
             },
         }),
         FeedPage({
             key = "actions", db = "actionsText", refresh = RAc, popOnly = true,
-            title = "Actions",
+            title = L["Actions"],
             desc = function()
-                local both = ns.db.actionsText.showIncoming and " In green, how often you avoided theirs." or ""
+                local both = ns.db.actionsText.showIncoming and L["In green, how often you avoided theirs."] or nil
                 if ns.db.actionsText.scope == "all" then
-                    return "In red, how often every enemy avoided your attacks this fight: dodges, parries, blocks, misses, resists." .. both
+                    return join(L["In red, how often every enemy avoided your attacks this fight: dodges, parries, blocks, misses, resists."], both)
                 end
-                return "In red, how often your target avoided your attacks this fight: dodges, parries, blocks, misses, resists." .. both .. " Each target keeps its own count."
+                return join(L["In red, how often your target avoided your attacks this fight: dodges, parries, blocks, misses, resists."], both, L["Each target keeps its own count."])
             end,
             banner = function()
                 if ns.UseUnitCombat then
-                    return "Worked out from your swings and casts",
-                        "Your target's dodges, parries and resists are reported, but not whose attack they avoided, so each is matched to your swings and casts by timing, as Damage Dealt is."
+                    return L["Worked out from your swings and casts"],
+                        L["Your target's dodges, parries and resists are reported, but not whose attack they avoided, so each is matched to your swings and casts by timing, as Damage Dealt is."]
                 end
             end,
             unavailable = function()
                 if not ns.ActionsAvailable then
-                    return "Not available on this client. Dodges, parries and misses are combat-log facts, and the damage meter that replaced the combat log here counts damage, not misses."
+                    return L["Not available on this client. Dodges, parries and misses are combat-log facts, and the damage meter that replaced the combat log here counts damage, not misses."]
                 end
             end,
-            rowsLabel = "Rows shown",
+            rowsLabel = L["Rows shown"],
             text = {
-                half(Toggle("actionsText", "showLabel", "Names", "The kind of avoid beside its count (Dodge x4).")),
-                half(Toggle("actionsText", "showIcon", "Icons", "An icon beside each count.")),
+                half(Toggle("actionsText", "showLabel", L["Names"], L["The kind of avoid beside its count (Dodge x4)."])),
+                half(Toggle("actionsText", "showIcon", L["Icons"], L["An icon beside each count."])),
             },
             counting = {
-                Choice("actionsText", "scope", "Count", function() return scopeDesc("what was avoided") end,
+                Choice("actionsText", "scope", L["Count"], function() return scopeDesc("avoided") end,
                     SCOPE, function() ns.ActionsScopeChanged(); RAc() end, { vis = notSummary }),
-                Toggle("actionsText", "showIncoming", "Attacks you avoided", function()
-                    return "Counts your own dodges, parries and blocks, and the attacks that missed you, in green beside the red of yours that were avoided."
-                        .. (ns.UseUnitCombat and " On this client the game does not say who attacked you, so counting your target, they go on whichever target you have." or "")
+                Toggle("actionsText", "showIncoming", L["Attacks you avoided"], function()
+                    return join(L["Counts your own dodges, parries and blocks, and the attacks that missed you, in green beside the red of yours that were avoided."],
+                        ns.UseUnitCombat and L["On this client the game does not say who attacked you, so counting your target, they go on whichever target you have."] or nil)
                 end, RAc),
-                half(Toggle("actionsText", "includePet", "Pet and totems", "Counts what your target avoided of your pet's and totems' attacks too.")),
-                half(Toggle("actionsText", "persist", "Remember each target", "Each target keeps its count while you look at another.", RAc, { vis = perTarget("actionsText") })),
-                Slider("actionsText", "holdSecs", "Hold after combat", "How long the fight's count stays up once combat ends, before it fades.", 0, 60, 1, nil, { vis = everyEnemy("actionsText"), fmt = seconds }),
+                half(Toggle("actionsText", "includePet", L["Pet and totems"], L["Counts what your target avoided of your pet's and totems' attacks too."])),
+                half(Toggle("actionsText", "persist", L["Remember each target"], L["Each target keeps its count while you look at another."], RAc, { vis = perTarget("actionsText") })),
+                Slider("actionsText", "holdSecs", L["Hold after combat"], L["How long the fight's count stays up once combat ends, before it fades."], 0, 60, 1, nil, { vis = everyEnemy("actionsText"), fmt = seconds }),
             },
         }),
         {
-            key = "timer", title = "Combat Timer", enabledDb = "combatTimer", onToggle = RT,
-            desc = "How long you have been fighting your current target, as Combat M:SS.",
+            key = "timer", title = L["Combat Timer"], enabledDb = "combatTimer", onToggle = RT,
+            desc = L["How long you have been fighting your current target, as Combat M:SS."],
             sections = {
-                { title = "Position", rows = {
-                    Choice("combatTimer", "attach", "Attach to", "Free gives the timer its own marker. Attached to a feed, it sits just past that feed's rows, wherever they grow.", TIMER_ATTACH, RT),
-                    PointSlider("combatTimer", "x", "Free position X", "Left and right, from the centre of the screen.", -1500, 1500, RT,
+                { title = L["Position"], rows = {
+                    Choice("combatTimer", "attach", L["Attach to"], L["Free gives the timer its own marker. Attached to a feed, it sits just past that feed's rows, wherever they grow."], TIMER_ATTACH, RT),
+                    PointSlider("combatTimer", "x", L["Free position X"], L["Left and right, from the centre of the screen."], -1500, 1500, RT,
                         { vis = function() return ns.db.combatTimer.attach == "free" end }),
-                    PointSlider("combatTimer", "y", "Free position Y", "Up and down, from the centre of the screen.", -1000, 1000, RT,
+                    PointSlider("combatTimer", "y", L["Free position Y"], L["Up and down, from the centre of the screen."], -1000, 1000, RT,
                         { vis = function() return ns.db.combatTimer.attach == "free" end }),
-                    Slider("combatTimer", "xOffset", "Nudge X", "A small shift left or right.", -200, 200, 1, RT),
-                    Slider("combatTimer", "yOffset", "Nudge Y", "A small shift up or down.", -200, 200, 1, RT),
+                    Slider("combatTimer", "xOffset", L["Nudge X"], L["A small shift left or right."], -200, 200, 1, RT),
+                    Slider("combatTimer", "yOffset", L["Nudge Y"], L["A small shift up or down."], -200, 200, 1, RT),
                 } },
-                { title = "Text", rows = {
-                    Slider("combatTimer", "fontSize", "Font size", "The size of the timer.", 8, 40, 1, RT),
+                { title = L["Text"], rows = {
+                    Slider("combatTimer", "fontSize", L["Font size"], L["The size of the timer."], 8, 40, 1, RT),
                 } },
             },
         },
         {
-            key = "general", title = "General",
+            key = "general", title = L["General"],
             desc = function()
                 if ns.UseUnitCombat then
-                    return "On WoW Forever: hits are read live from the game and matched to your casts and swings."
+                    return L["On WoW Forever: hits are read live from the game and matched to your casts and swings."]
                 elseif ns.SummaryMode then
-                    return "On WoW Forever: each fight is summarised from Blizzard's damage meter once it ends."
+                    return L["On WoW Forever: each fight is summarised from Blizzard's damage meter once it ends."]
                 end
-                return "Every feed reads the combat log as it happens."
+                return L["Every feed reads the combat log as it happens."]
             end,
             sections = {
-                { title = "Blizzard", rows = {
-                    Toggle("enemyText", "hideBlizzardFCT", "Hide Blizzard's damage numbers", "Turns off the numbers Blizzard floats over the target, so only these feeds show your damage.", RE),
+                { title = L["Blizzard"], rows = {
+                    Toggle("enemyText", "hideBlizzardFCT", L["Hide Blizzard's damage numbers"], L["Turns off the numbers Blizzard floats over the target, so only these feeds show your damage."], RE),
                 } },
-                { title = "Post-fight summary", vis = function() return ns.SummaryMode end, rows = {
-                    Slider("summary", "holdSecs", "Keep on screen", "How long a target's summary stays reachable once you first look at it. The window runs per target.", 3, 120, 1, nil, { fmt = seconds }),
-                    Slider("summary", "fadeTime", "Fade out over", "The end of that window, spent dimming out.", 0, 5, 0.1, nil, { fmt = seconds }),
-                    Toggle("summary", "requireDead", "Only for something that died", "Off, the summary shows on anything you select once the fight is over, not only on corpses."),
+                { title = L["Post-fight summary"], vis = function() return ns.SummaryMode end, rows = {
+                    Slider("summary", "holdSecs", L["Keep on screen"], L["How long a target's summary stays reachable once you first look at it. The window runs per target."], 3, 120, 1, nil, { fmt = seconds }),
+                    Slider("summary", "fadeTime", L["Fade out over"], L["The end of that window, spent dimming out."], 0, 5, 0.1, nil, { fmt = seconds }),
+                    Toggle("summary", "requireDead", L["Only for something that died"], L["Off, the summary shows on anything you select once the fight is over, not only on corpses."]),
                 } },
-                { title = "Tools", vis = function() return ns.UseUnitCombat end, rows = {
-                    Button("Last fight, placed", "Prints how many hits on your target came through readable, and how each was placed as yours. The same as /gct probe.", "Probe",
+                { title = L["Tools"], vis = function() return ns.UseUnitCombat end, rows = {
+                    Button(L["Last fight, placed"], L["Prints how many hits on your target came through readable, and how each was placed as yours. The same as /gct probe."], L["Probe"],
                         function() if ns.UC and ns.UC.PrintProbe then ns.UC.PrintProbe() end end),
-                    { kind = "toggle", label = "Record fights",
-                      desc = "Records every cast, swing and hit, and what was made of each, into the saved settings, where a /reload writes them to disk. For working out a fight that was placed wrong. The same as /gct trace.",
+                    { kind = "toggle", label = L["Record fights"],
+                      desc = L["Records every cast, swing and hit, and what was made of each, into the saved settings, where a /reload writes them to disk. For working out a fight that was placed wrong. The same as /gct trace."],
                       get = function() return ns.UC and ns.UC.Tracing and ns.UC.Tracing() or false end,
                       set = function(v) if ns.UC and ns.UC.SetTrace then ns.UC.SetTrace(v) end end },
                 } },
-                { title = "Profile", rows = {
-                    Button("Export settings", "Every setting, anchor and position as one string, to copy and import on another character or install. The same as /gct export.", "Export",
+                { title = L["Profile"], rows = {
+                    Button(L["Export settings"], L["Every setting, anchor and position as one string, to copy and import on another character or install. The same as /gct export."], L["Export"],
                         function() ns.OpenProfile("export") end),
-                    Button("Import settings", "Paste a string from Export to put every setting, anchor and position back as they were. The same as /gct import.", "Import",
+                    Button(L["Import settings"], L["Paste a string from Export to put every setting, anchor and position back as they were. The same as /gct import."], L["Import"],
                         function() ns.OpenProfile("import") end),
                 } },
-                { title = "Reset", rows = {
-                    Button("Reset all settings", "Puts every setting on every page back to its default.", "Reset",
+                { title = L["Reset"], rows = {
+                    Button(L["Reset all settings"], L["Puts every setting on every page back to its default."], L["Reset"],
                         function()
                             if StaticPopup_Show then
                                 StaticPopup_Show("GARUCOMBATTEXT_RESET")
@@ -430,16 +443,16 @@ end
 
 if StaticPopupDialogs then
     StaticPopupDialogs["GARUCOMBATTEXT_RESET"] = {
-        text = "Reset every Garu Combat Text setting to its default?",
-        button1 = YES or "Yes", button2 = NO or "No",
+        text = L["Reset every Garu Combat Text setting to its default?"],
+        button1 = YES or L["Yes"], button2 = NO or L["No"],
         OnAccept = function() if ns.ResetSettings then ns.ResetSettings() end end,
         timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
     }
 end
 
 local NAV = {
-    { label = "Feeds", keys = { "heal", "done", "taken", "dealt", "actions" } },
-    { label = "Extras", keys = { "timer" } },
+    { label = L["Feeds"], keys = { "heal", "done", "taken", "dealt", "actions" } },
+    { label = L["Extras"], keys = { "timer" } },
     { keys = { "general" }, gap = true },
 }
 
@@ -486,16 +499,16 @@ local function ShowInfo(title, desc, tip)
     if not preview.title then return end
     preview.title:SetText(title or "")
     preview.desc:SetText(desc or "")
-    preview.tip:SetText(tip and ("|cffffd100Tip:|r " .. tip) or "")
+    preview.tip:SetText(tip and ("|cffffd100" .. L["Tip:"] .. "|r " .. tip) or "")
 end
 
 local function ShowPageInfo()
     if searchText ~= "" then
-        ShowInfo("Search", "Settings from every page whose name holds what you typed.", "Clear the box to go back to the page.")
+        ShowInfo(L["Search"], L["Settings from every page whose name holds what you typed."], L["Clear the box to go back to the page."])
         return
     end
     local p = pageByKey and pageByKey[current]
-    if p then ShowInfo(val(p.title), val(p.desc), "Hover any setting to see what it does.") end
+    if p then ShowInfo(val(p.title), val(p.desc), L["Hover any setting to see what it does."]) end
 end
 
 --------------------------------------------------------------------------
@@ -538,14 +551,23 @@ local function sampleIcon(sm)
 end
 
 -- One made-up hit on a sample row; a crit now and then, a kill on Damage Dealt.
+-- A sample row's name, in the client's language: its spell's, its school's, Blizzard's
+-- word for the avoid, or the addon's own.
+local function sampleLabel(sm)
+    if sm.count then return ns.AvoidName(sm.icon) end
+    if sm.key == "heal:other" then return L["Healing"] end
+    if sm.key:find("^school:") then return ns.SchoolName(sm.school) or sm.label end
+    return ns.SampleName(sm.key, sm.label)
+end
+
 local function previewHit(sm, first)
     if sm.count then
-        pv.meter:Bump(pv.host, sm.key, sm.label, 1, 1, false, sampleIcon(sm))
+        pv.meter:Bump(pv.host, sm.key, sampleLabel(sm), 1, 1, false, sampleIcon(sm))
         return
     end
     local crit = (not first) and math.random() < 0.35
     local amount = math.floor(sm.base * (0.8 + math.random() * 0.4) * (crit and 2 or 1))
-    pv.meter:Bump(pv.host, sm.key, sm.label, amount, sm.school, crit, sampleIcon(sm))
+    pv.meter:Bump(pv.host, sm.key, sampleLabel(sm), amount, sm.school, crit, sampleIcon(sm))
 end
 
 -- Where the anchor sits in the box, and how small the feed is drawn to fit.
@@ -618,7 +640,7 @@ local function BuildPreview(right)
     top:SetPoint("TOPLEFT"); top:SetPoint("TOPRIGHT")
     local label = Text(box, "GameFontDisableSmall")
     label:SetPoint("TOPLEFT", 6, -5)
-    label:SetText("Preview")
+    label:SetText(L["Preview"])
     pv.box = box
     pv.host = CreateFrame("Frame", nil, box)
     pv.host:SetSize(1, 1)
@@ -683,6 +705,13 @@ local function NewRow(parent, kind)
     f.crumb:SetPoint("BOTTOMLEFT", f.label, "TOPLEFT", 0, 1)
     f.kind = kind
     Build[kind](f)
+    -- the name stops short of its control: a longer one (German, Russian) is cut
+    -- with an ellipsis rather than running under it
+    local edge = f.leftmost or f.check or f.slider or f.button
+    if edge then
+        f.label:SetPoint("RIGHT", edge, "LEFT", -6, 0)
+        f.label:SetWordWrap(false)
+    end
     return f
 end
 
@@ -756,6 +785,7 @@ Build.choice = function(f)
         Forward(stepper.Dropdown, f); Forward(stepper.IncrementButton, f); Forward(stepper.DecrementButton, f)
         SetupMenu(stepper.Dropdown, f)
         f.dropdown = stepper.Dropdown
+        f.leftmost = stepper.DecrementButton
         f:SetHeight(ROW_H + 6)
         return
     end
@@ -769,6 +799,7 @@ Build.choice = function(f)
             Forward(dd, f)
             SetupMenu(dd, f)
             f.dropdown = dd
+            f.leftmost = dd
             return
         end
     end
@@ -788,6 +819,7 @@ Build.choice = function(f)
         end
     end)
     f.legacy = dd
+    f.leftmost = dd
     f:SetHeight(ROW_H + 6)
 end
 Fill.choice = function(f, row)
@@ -1018,8 +1050,9 @@ end
 
 local function UpdateHeaderButtons()
     if not frame then return end
-    frame.lock:SetText(ns.db.locked and "Unlock anchors" or "Lock anchors")
-    frame.preview:SetText(ns.test.combat and "Stop preview" or "Preview")
+    frame.lock:SetText(ns.db.locked and L["Unlock anchors"] or L["Lock anchors"])
+    frame.preview:SetText(ns.test.combat and L["Stop preview"] or L["Preview"])
+    FitButton(frame.lock, 120); FitButton(frame.preview, 120)
 end
 
 function Panel.Refresh()
@@ -1034,7 +1067,7 @@ function Panel.Refresh()
     page.copy:SetShown(not searching and p.copy == true and pageEnabled(p))
     if searching then
         page.switch:Hide()
-        page.title:SetText("Search")
+        page.title:SetText(L["Search"])
         page.title:ClearAllPoints()
         page.title:SetPoint("LEFT", page.switch, "LEFT", 4, 0)
     else
@@ -1067,7 +1100,7 @@ function Panel.Refresh()
         cardText = p.unavailable and p.unavailable()
         page.card.button:SetShown(not cardText and not pageEnabled(p))
         if not cardText and not pageEnabled(p) then
-            cardText = val(p.title) .. " is off."
+            cardText = L["%s is off."]:format(val(p.title))
         end
     end
     page.card:SetShown(cardText ~= nil)
@@ -1145,9 +1178,11 @@ local function CopyTo(src, targets)
         names[#names + 1] = val(t.title)
     end
     RA(); RT()
-    ShowInfo("Copied", ("%s's settings are now on %s%s%s."):format(val(src.title),
-        table.concat(names, ", "), opts.copyPosition and ", with its position" or "",
-        opts.copyMirror and ", mirrored" or ""))
+    local line = L["%s's settings are now on %s."]:format(val(src.title), table.concat(names, ", "))
+    if opts.copyPosition and opts.copyMirror then line = line .. " " .. L["Its position came too, mirrored to the other side."]
+    elseif opts.copyPosition then line = line .. " " .. L["Its position came too."]
+    elseif opts.copyMirror then line = line .. " " .. L["Mirrored left to right."] end
+    ShowInfo(L["Copied"], line)
     Changed()
 end
 
@@ -1157,7 +1192,7 @@ local function OpenCopyMenu(button)
     local others = {}
     for _, p in ipairs(pages) do if p.copy and p ~= src then others[#others + 1] = p end end
     local opts = ns.db.general
-    local title = "Copy " .. val(src.title) .. " to"
+    local title = L["Copy %s to"]:format(val(src.title))
     local function toggle(key)
         opts[key] = not opts[key]
         return MenuResponse and MenuResponse.Refresh   -- keep the menu open
@@ -1169,11 +1204,11 @@ local function OpenCopyMenu(button)
             for _, p in ipairs(others) do
                 root:CreateButton(val(p.title), function() CopyTo(src, { p }) end)
             end
-            root:CreateButton("All other feeds", function() CopyTo(src, others) end)
+            root:CreateButton(L["All other feeds"], function() CopyTo(src, others) end)
             root:CreateDivider()
-            root:CreateCheckbox("Position too", function() return opts.copyPosition == true end,
+            root:CreateCheckbox(L["Position too"], function() return opts.copyPosition == true end,
                 function() return toggle("copyPosition") end)
-            root:CreateCheckbox("Mirror left to right", function() return opts.copyMirror == true end,
+            root:CreateCheckbox(L["Mirror left to right"], function() return opts.copyMirror == true end,
                 function() return toggle("copyMirror") end)
         end)
         return
@@ -1193,10 +1228,10 @@ local function OpenCopyMenu(button)
             add(b)
         end
         local all = UIDropDownMenu_CreateInfo()
-        all.text, all.notCheckable = "All other feeds", true
+        all.text, all.notCheckable = L["All other feeds"], true
         all.func = function() CloseDropDownMenus(); CopyTo(src, others) end
         add(all)
-        for _, c in ipairs({ { "Position too", "copyPosition" }, { "Mirror left to right", "copyMirror" } }) do
+        for _, c in ipairs({ { L["Position too"], "copyPosition" }, { L["Mirror left to right"], "copyMirror" } }) do
             local box = UIDropDownMenu_CreateInfo()
             box.text, box.isNotRadio, box.keepShownOnClick = c[1], true, true
             box.checked = opts[c[2]] == true
@@ -1243,6 +1278,13 @@ local function AttachScrollLine(scroll, parent)
     scroll:HookScript("OnScrollRangeChanged", line.Update)
     scroll:HookScript("OnSizeChanged", line.Update)
     return line
+end
+
+-- A button as wide as its words need, and never narrower than `min`.
+local function FitButton(b, min)
+    local fs = b.GetFontString and b:GetFontString()
+    local w = fs and fs.GetStringWidth and fs:GetStringWidth()
+    if type(w) == "number" then b:SetWidth(math.max(min or 100, w + 28)) end
 end
 
 local function HeaderButton(parent, onClick)
@@ -1292,7 +1334,7 @@ local function BuildWindow()
     -- header: name, version, the two things you reach for most, close
     local title = Text(frame, "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", PAD + 4, -12)
-    title:SetText("Garu Combat Text")
+    title:SetText(L["Garu Combat Text"])
     local version = Text(frame, "GameFontDisableSmall")
     version:SetPoint("LEFT", title, "RIGHT", 8, -1)
     local meta = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
@@ -1358,7 +1400,7 @@ local function BuildWindow()
     if not okSearch then search = CreateFrame("EditBox", nil, left, "InputBoxTemplate"); search:SetAutoFocus(false) end
     search:SetSize(LEFT_W - 2 * PAD - 4, 22)
     search:SetPoint("BOTTOMLEFT", PAD + 4, PAD - 2)
-    if search.Instructions then search.Instructions:SetText("Search settings") end
+    if search.Instructions then search.Instructions:SetText(L["Search settings"]) end
     search:HookScript("OnTextChanged", function(self)
         searchText = strtrim(self:GetText() or "")
         page.scroll:SetVerticalScroll(0)
@@ -1429,11 +1471,12 @@ local function BuildWindow()
     local copy = CreateFrame("Button", nil, header, "UIPanelButtonTemplate")
     copy:SetSize(100, 22)
     copy:SetPoint("TOPRIGHT", 0, -2)
-    copy:SetText("Copy to\226\128\166")
+    copy:SetText(L["Copy to\226\128\166"])
+    FitButton(copy, 100)
     copy:SetScript("OnClick", function(self) Sound("IG_MAINMENU_OPTION_CHECKBOX_ON"); OpenCopyMenu(self) end)
     copy:SetScript("OnEnter", function()
-        ShowInfo("Copy to\226\128\166", "Puts this feed's layout and text settings onto another feed, or onto all of them. What each feed counts (thresholds, pets, mana) is left alone.",
-            "Position too moves the other feed to this one's spot; with Mirror left to right it goes to the opposite side instead, so the two sit as a pair.")
+        ShowInfo(L["Copy to\226\128\166"], L["Puts this feed's layout and text settings onto another feed, or onto all of them. What each feed counts (thresholds, pets, mana) is left alone."],
+            L["Position too moves the other feed to this one's spot; with Mirror left to right it goes to the opposite side instead, so the two sit as a pair."])
     end)
     copy:SetScript("OnLeave", ShowPageInfo)
     page.copy = copy
@@ -1463,7 +1506,7 @@ local function BuildWindow()
     page.scrollLine = AttachScrollLine(scroll, middle)
     page.empty = Text(middle, "GameFontDisable")
     page.empty:SetPoint("TOP", scroll, "TOP", 0, -20)
-    page.empty:SetText("No setting by that name.")
+    page.empty:SetText(L["No setting by that name."])
     page.empty:Hide()
 
     -- shown instead of the sections when the page has nothing to set
@@ -1478,7 +1521,7 @@ local function BuildWindow()
     card.button = CreateFrame("Button", nil, card, "UIPanelButtonTemplate")
     card.button:SetSize(120, 24)
     card.button:SetPoint("TOP", card.text, "BOTTOM", 0, -14)
-    card.button:SetText("Turn on")
+    card.button:SetText(L["Turn on"])
     card.button:SetScript("OnClick", function()
         local p = pageByKey[current]
         if p and p.enabledDb then
@@ -1562,13 +1605,13 @@ local function BuildProfile()
         Sound("IG_MAINMENU_OPTION_CHECKBOX_ON")
         if f.mode == "export" then
             edit:SetFocus(); edit:HighlightText()
-            f.status:SetText("Selected: press Ctrl+C to copy it.")
+            f.status:SetText(L["Selected: press Ctrl+C to copy it."])
             f.status:SetTextColor(1, 0.82, 0)
             return
         end
         local ok, why = ns.Profile.Import(edit:GetText())
         if ok then
-            f.status:SetText("Imported: every setting and position is in place.")
+            f.status:SetText(L["Imported: every setting and position is in place."])
             f.status:SetTextColor(0.45, 0.9, 0.4)
             edit:ClearFocus()
         else
@@ -1588,18 +1631,20 @@ function ns.OpenProfile(mode)
     profile.status:SetText("")
     if mode == "export" then
         profile.text = ns.Profile.Export()
-        profile.title:SetText("Export settings")
-        profile.desc:SetText("Every setting, anchor and position, as one string. Copy it with Ctrl+C, and import it on another character or install.")
-        profile.action:SetText("Select all")
+        profile.title:SetText(L["Export settings"])
+        profile.desc:SetText(L["Every setting, anchor and position, as one string. Copy it with Ctrl+C, and import it on another character or install."])
+        profile.action:SetText(L["Select all"])
+        FitButton(profile.action, 120)
         profile.edit:SetText(profile.text)
         profile:Show()
         profile.edit:SetFocus()
         profile.edit:HighlightText()
     else
         profile.text = nil
-        profile.title:SetText("Import settings")
-        profile.desc:SetText("Paste a profile string from Export (Ctrl+V), then Import. It replaces every setting, anchor and position at once.")
-        profile.action:SetText("Import")
+        profile.title:SetText(L["Import settings"])
+        profile.desc:SetText(L["Paste a profile string from Export (Ctrl+V), then Import. It replaces every setting, anchor and position at once."])
+        profile.action:SetText(L["Import"])
+        FitButton(profile.action, 120)
         profile.edit:SetText("")
         profile:Show()
         profile.edit:SetFocus()
