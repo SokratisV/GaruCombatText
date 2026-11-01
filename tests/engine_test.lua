@@ -706,6 +706,82 @@ ns.db.doneText = nil
 advance(930)
 for i = #got, 1, -1 do if got[i].kind == "settled" or got[i].kind == "settledAll" then table.remove(got, i) end end
 
+-- 14f. FCT 0.8-0.12's findings, in GCT's own code.
+DESC[1823] = "Claw the enemy, causing 110% normal damage plus 126. Awards 1 combo point."
+DESC[23881] = "Instantly attack the target causing damage equal to 45% of your Attack Power."
+DESC[5221] = "Shred the target, causing 155% damage plus 180 to the target."
+DESC[22568] = "Finishing move that causes damage per combo point and converts each extra point of energy into additional damage."
+DESC[19434] = "An aimed shot that increases ranged damage by 166."
+DESC[1822] = "Rake the target for 19 damage and an additional 102 damage over 9 sec. Awards 1 combo point."
+DESC[5143] = "Launches Arcane Missiles at the enemy, causing 36 Arcane damage each second for 5 sec."
+DESC[3599] = "Summons a Searing Totem with 1 health at the feet of the caster for 30 sec that repeatedly attacks an enemy within 20 yards for 9 to 11 Fire damage."
+DESC[8071] = "Summons a Stoneskin Totem with 5 health at the feet of the caster that reduces melee damage taken by friendly party members by 4. Lasts 2 min."
+DESC[774] = "Heals the target for 32 over 12 sec."
+local grouped = false
+function IsInGroup() return grouped end
+function UnitDamage() return 40, 60, 0, 0 end
+class = "DRUID"
+retarget(1000, "Creature-F1")
+-- 1. a strike the parser used to read as no damage
+cast(1001, 1823); hit(1001.3, 140, 1)
+expect("Claw's hit is Claw's, not Melee's", 1001.31, "dealt", key("spell:1823", 140))
+cast(1003, 1822); hit(1003.2, 19, 1)
+expect("Rake's hit at once is Rake's", 1003.21, "dealt", key("spell:1822", 19))
+-- 2. two HoTs on you: each tick to the one whose beat it keeps
+retarget(1010, "Creature-F2")
+cast(1010, 8936); onMe(1010.1, "HEAL", 100, 8)            -- Regrowth: its heal at once
+expect("Regrowth's heal", 1010.11, "healed", key("spell:8936", 100))
+cast(1011, 774)                                           -- then Rejuvenation
+onMe(1013, "HEAL", 14, 8)
+expect("Regrowth's tick on its beat (1010 + 3)", 1013.01, "healed", key("spell:8936", 14))
+onMe(1014, "HEAL", 9, 8)
+expect("Rejuvenation's tick on its own beat (1011 + 3), not Regrowth's", 1014.01, "healed", key("spell:774", 9))
+-- 3. a proc named by its cooldown event, before or after its hit in the frame
+retarget(1020, "Creature-F3")
+advance(1021); fire("SPELL_UPDATE_COOLDOWN", 12721); hit(1021, 22, 1)
+expect("Deep Wound, named before its hit", 1021.01, "dealt", key("spell:12721", 22))
+hit(1024, 22, 1); fire("SPELL_UPDATE_COOLDOWN", 12721)
+expect("Deep Wound, named just after its hit", 1024.01, "dealt", key("spell:12721", 22))
+cast(1026, 686); fire("SPELL_UPDATE_COOLDOWN", 686); hit(1026.05, 77, 4)
+nothing("a spell you just cast names only its own cast", 1027)
+-- 4. Windfury: named in the swing's frame, its extra blows a moment later
+swing(1030); fire("SPELL_UPDATE_COOLDOWN", 25504)
+hit(1030.48, 50, 1); expect("the swing's own blow", 1030.49, "dealt", key("swing", 50))
+hit(1030.55, 51, 1); expect("an extra attack", 1030.56, "dealt", key("spell:25504", 51))
+hit(1030.6, 52, 1); expect("the second extra attack", 1030.61, "dealt", key("spell:25504", 52))
+hit(1030.7, 53, 1); nothing("no third", 1031.2)
+-- 5. a totem's bolts on its beat, as your pet's
+retarget(1040, "Creature-F4")
+cast(1040, 8071); cast(1040.5, 3599)
+hit(1041.5, 10, 4); expect("the totem's first bolt", 1041.51, "dealt", function(r)
+    return r.key == "spell:3599" and r.pet == true, tostring(r.key) .. " pet=" .. tostring(r.pet) end)
+hit(1043.7, 10, 4); expect("its second, 2.2 s on", 1043.71, "dealt", key("spell:3599", 10))
+hit(1045.9, 11, 4); expect("its third, on the beat", 1045.91, "dealt", key("spell:3599", 11))
+hit(1046.5, 9, 4); nothing("a Fire hit off its beat is someone else's", 1047)
+-- 6. in a group: a swing takes only a hit of its size
+ns.UC.ReadWeaponDamage()
+grouped = true
+retarget(1050, "Creature-F5")
+swing(1050); hit(1050.5, 150, 1)
+nothing("in a group, a hit far bigger than your weapon is not your swing", 1051)
+swing(1052); hit(1052.5, 50, 1)
+expect("in a group, a hit your size is", 1052.51, "dealt", key("swing", 50))
+grouped = false
+swing(1054); hit(1054.5, 150, 1)
+expect("alone, any hit stays your swing's", 1054.51, "dealt", key("swing", 150))
+-- 7. Blizzard's damage meter as a witness, alone
+hit(1060, 33, 1); fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", 0)
+expect("a blow nothing explained, with the meter's update in its frame: yours", 1060.01, "dealt", key("swing", 33))
+cast(1062, 686); hit(1062, 77, 4); fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", 0)
+expect("...under the cast of yours in that frame", 1062.01, "dealt", key("spell:686", 77))
+hit(1063, 55, 4); fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", 0)
+nothing("a Shadow hit with no cast of yours in its frame: nothing to name it by", 1063.5)
+grouped = true
+hit(1064, 33, 1); fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", 0)
+nothing("in a group, a teammate's hit brings the update too: not taken", 1065)
+grouped = false
+advance(1070)
+
 -- 13. What descriptions say.
 local function facts(name, id, want)
     local f = ns.UC.Facts(id) or {}
@@ -735,6 +811,16 @@ facts("Instant Poison", 8679, { weaponProc = "poison", procSchool = 8 })
 facts("Deadly Poison only ticks", 2823, { weaponProc = "poison", procSchool = nil })
 facts("Frost Oil", 3595, { weaponProc = "oil", procSchool = 16 })
 facts("Fiery Weapon", 13898, { weaponProc = "enchant", procSchool = 4 })
+facts("Claw: a Physical strike", 1823, { damages = true, school = 1, direct = true })
+facts("Bloodthirst: a Physical strike", 23881, { damages = true, school = 1, direct = true })
+facts("Shred", 5221, { damages = true, school = 1, direct = true })
+facts("Ferocious Bite", 22568, { damages = true, school = 1, direct = true })
+facts("Aimed Shot", 19434, { damages = true, school = 1, direct = true })
+facts("Rake: at once and ticks", 1822, { direct = true, ticks = true })
+facts("Arcane Missiles: ticks each second", 5143, { school = 64, ticks = true, direct = false, period = 1 })
+facts("Searing Totem: a guardian, never a hit of its own", 3599, { direct = false, school = 4 })
+facts("Stoneskin Totem: no guardian", 8071, { summon = nil })
+facts("Rejuvenation: a HoT", 774, { heals = true, hot = true, direct = false })
 
 print(("%d passed, %d failed"):format(pass, fail))
 if fail > 0 then error("failures") end

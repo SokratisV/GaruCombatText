@@ -44,6 +44,10 @@ placed.
 
 The approach and its timing windows come from **Forever Combat Text** by Tarolg
 (MIT License, Copyright (c) 2026 Tarolg), which measured them in real fights.
+Later findings from its 0.8–0.12 releases are put to use in GCT's own code: procs named by
+the cooldown update in their hit's frame (Windfury's extra attacks too), the damage meter's
+update as a witness when you're alone, totems on their own beat, two HoTs told apart by
+their tick timing, and in a group a swing kept to a size your weapon can hit.
 
 On the Classic clients nothing changes: the combat log is still there and every feed reads
 it directly, exactly as before.

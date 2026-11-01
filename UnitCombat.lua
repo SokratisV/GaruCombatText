@@ -157,9 +157,49 @@ local function weaponProc(lower)
     if lower:find("imbue", 1, true) and lower:find("weapon", 1, true) then return "imbue", schoolAtOnce(lower) end
 end
 
+-- A weapon strike says its damage without a school: "weapon damage", "increases
+-- melee damage by 11" (Heroic Strike), "causing damage equal to 45% of your Attack
+-- Power" (Bloodthirst), "110% normal damage plus 126" (Claw), "155% damage plus 180"
+-- (Shred), "damage per combo point" (Ferocious Bite), "increases ranged damage by
+-- 166" (Aimed Shot), "ranged damage plus 295". All Physical, all at once. Read as no
+-- damage before, so their hits went to Melee or to no one (wordings FCT 0.8.1
+-- found; GCT's own parser had the same gap).
+local STRIKE_WORDS = { "weapon damage", "melee damage", "ranged damage plus", "normal damage", "damage per combo point" }
+local STRIKE_PATTERNS = { "damage equal to %d+%%", "increases ranged damage by %d", "%d%% damage plus" }
+local function strikes(lower)
+    for _, w in ipairs(STRIKE_WORDS) do if lower:find(w, 1, true) then return true end end
+    for _, p in ipairs(STRIKE_PATTERNS) do if lower:find(p) then return true end end
+    return false
+end
+
+-- A totem or a creature you call that attacks for you: "Summons a Searing Totem ...
+-- for 30 sec that repeatedly attacks an enemy ... for 9 to 11 Fire damage", "Magma
+-- Totem ... causes 22 Fire damage to creatures within 8 yards every 2 seconds", a hawk
+-- that attacks your enemies. Its hits are the guardian's, on a beat of its own, for
+-- as long as it stays (placeOnTarget, step 3c); the summon itself never hits.
+local function summons(lower)
+    if not (lower:find("^summons ") or lower:find(" summons an? ")) then return nil end
+    local school
+    for word in lower:gmatch("(%a+) damage") do
+        if SCHOOLS[word] then school = SCHOOLS[word] break end
+    end
+    -- no school said, but it attacks enemies (a hawk): its blows are Physical
+    if not school and lower:find("attack") and lower:find("enem") then school = PHYSICAL end
+    if not school then return nil end   -- a totem that only helps (Stoneskin) or a pet
+    local secs = tonumber(lower:match("for (%d+) sec")) or tonumber(lower:match("lasts (%d+) sec"))
+        or (tonumber(lower:match("lasts (%d+) min")) or 1) * 60
+    return { school = school, duration = secs }
+end
+
 local function parse(text)
     local lower = text:lower()
     local f = {}
+    local guardian = summons(lower)
+    if guardian then
+        f.summon = guardian
+        f.damages, f.school, f.direct, f.ticks = true, guardian.school, false, false
+        return f
+    end
     -- What it puts on your weapon, it does through your swings: it never hits at
     -- its own cast. Read before anything else (an oil's text says no "damage").
     local proc, procSchool = weaponProc(lower)
@@ -181,6 +221,7 @@ local function parse(text)
         f.direct = (not f.hot) or lower:find("and another", 1, true) ~= nil
             or lower:find("additional", 1, true) ~= nil
         f.duration = tonumber(lower:match("over (%d+) sec"))
+        f.period = tonumber(lower:match("every (%d+%.?%d*) sec"))
         return f
     end
 
@@ -190,8 +231,7 @@ local function parse(text)
     for word in lower:gmatch("(%a+) damage") do
         if SCHOOLS[word] then damages = true break end
     end
-    if not damages and (lower:find("%d damage") or lower:find("weapon damage", 1, true)
-        or lower:find("melee damage", 1, true) or lower:find("health every", 1, true)
+    if not damages and (lower:find("%d damage") or strikes(lower) or lower:find("health every", 1, true)
         or lower:find("drains", 1, true)) then
         damages = true
     end
@@ -209,15 +249,31 @@ local function parse(text)
             local rest = lower:sub(last + 1)
             local stop = math.min(rest:find("damage", 1, true) or #rest + 1, rest:find("%.") or #rest + 1)
             local after = rest:sub(1, stop - 1)
-            if after:find("^ over") or after:find("every", 1, true) then f.ticks = true
-            else f.direct = true end
+            if after:find("^ over") or after:find("every", 1, true) or after:find("each second", 1, true) then
+                f.ticks = true
+            else
+                f.direct = true
+            end
         end
         at = last + 1
     end
+    -- An amount with no school: "Rake the target for 19 damage and an additional 102
+    -- damage over 9 sec" hits at once and ticks; Rend's "15 damage over 9 sec" ticks.
+    for after in lower:gmatch("%d+ damage([^%.]*)") do
+        if after:find("^ over") or after:find("^ every") or after:find("^ each second") then
+            f.ticks = true
+        else
+            f.direct = true
+        end
+    end
     if lower:find("every %d") or lower:find("%d+ damage over %d") then f.ticks = true end
-    if not f.school and (lower:find("weapon damage", 1, true) or lower:find("melee damage", 1, true)) then
+    if not f.school and strikes(lower) then
         f.school, f.direct = PHYSICAL, true
     end
+    -- How often it ticks, when it says: "every 2 sec", "each second" (Arcane
+    -- Missiles, a channel of missiles)
+    f.period = tonumber(lower:match("every (%d+%.?%d*) sec"))
+        or ((lower:find("each second", 1, true) or lower:find("every second", 1, true)) and 1) or nil
     f.duration = tonumber(lower:match("over (%d+) sec")) or tonumber(lower:match("for (%d+) sec"))
     -- Hits more than its target: "all enemies within 10 yards" (Arcane Explosion),
     -- "nearby enemies" (Swipe, Thunder Clap), "enemies in a cone" (Cone of Cold),
@@ -321,6 +377,9 @@ stats = newStats()
 --                                        then proc:<kind> for a seal, poison, oil...
 --   W <kind> <spell> <school>            a weapon proc source of yours, applied
 --   C <unit> <spell> auto                Auto Shot / Shoot: left to its swing
+--   G <spell> <school> <duration>        a guardian of yours (a totem) went down
+--   PC <spell> [swing]                   SPELL_UPDATE_COOLDOWN named a spell you didn't
+--                                        cast: a proc ("swing": in a swing's frame)
 --   S <arg1> <arg2> <hand>               PLAYER_SWING, its payload as it came
 --   U <unit> <event> <flag> <amount> <school> [dying]       a UNIT_COMBAT report;
 --                                        "dying": on the plate of the target that just cleared;
@@ -380,6 +439,9 @@ end
 --------------------------------------------------------------------------
 local casts, dots, swings, heals, hots, held = {}, {}, {}, {}, {}, {}
 local swingMoments = {}   -- your melee swings, kept a while for the procs they carry
+local guardians = {}      -- totems and creatures you called, while they stay out
+local castAt = {}         -- [spell] = when you last cast it (its cooldown event is no proc)
+local lastCast            -- { spell, at }: your newest cast
 local petLast = 0
 local epoch = 0
 
@@ -416,6 +478,7 @@ local function tidy(t)
     end)
     trim(heals, function(h) return not h.used and t - h.at <= HEAL_WINDOW end)
     trim(hots, function(h) return t <= h.to end)
+    trim(guardians, function(g) return t <= g.ends + 0.5 end)
 end
 
 local playerClass
@@ -496,6 +559,7 @@ local function onCast(unit, spell)
     local t = now()
     tidy(t)
     stats.casts = stats.casts + 1
+    if unit == "player" then castAt[spell], lastCast = t, { spell = spell, at = t } end
 
     local f = UC.Facts(spell)
     local helpful = (f and f.helpful)
@@ -529,8 +593,16 @@ local function onCast(unit, spell)
                 if hots[i].spell == spell and hots[i].on == on then table.remove(hots, i) end
             end
             hots[#hots + 1] = { spell = spell, from = t, to = t + (f.duration or 15) + DOT_SLACK, cast = cast,
-                                on = on, lastBy = {} }
+                                on = on, lastBy = {}, period = f.period }
         end
+    end
+
+    -- A totem or creature you called: its hits come for as long as it stays.
+    if unit == "player" and f and f.summon then
+        for i = #guardians, 1, -1 do if guardians[i].spell == spell then table.remove(guardians, i) end end
+        guardians[#guardians + 1] = { spell = spell, at = t, ends = t + f.summon.duration + 1,
+                                      school = f.summon.school, lastBy = {} }
+        note("G", spell, f.summon.school, f.summon.duration)
     end
 
     -- Something that might hurt your target: anything not known to be harmless.
@@ -548,7 +620,7 @@ local function onCast(unit, spell)
             -- Its beat: measured in an earlier fight, else Classic's usual 3 s as a
             -- guess until two ticks have been seen. A wrong guess (Agony's 2 s)
             -- only costs the DoT its priority; it never makes a hit its tick.
-            local known = periods[spell]
+            local known = periods[spell] or f.period
             dots[#dots + 1] = { spell = spell, unit = unit, school = school, key = key, from = t,
                                 to = t + (f.duration or DOT_FALLBACK) + DOT_SLACK,
                                 period = known or 3, guessed = (known == nil),
@@ -834,6 +906,160 @@ local AREA_MOMENT = 0.3
 -- swing (FCT 0.6.8, a warlock's staff). Not yet seen here for a seal or a poison.
 local PROC_MOMENT = 0.25
 
+--------------------------------------------------------------------------
+-- Procs named by the game (findings of FCT 0.8.1 to 0.11.2, our own code)
+--------------------------------------------------------------------------
+-- When a proc or passive of yours deals damage -- a seal's hit, Ignite, Deep Wound,
+-- Touch of the Grave, a Consecration tick, Windfury -- the game sends
+-- SPELL_UPDATE_COOLDOWN with that spell's ID, for your own spells only, in the
+-- hit's frame or one before (FCT counted 33 of 33 Deep Wound ticks, 4 of 4 Ignites).
+-- A spell you just cast is left out: its own cast sends one too. A hit nothing else
+-- explains takes the proc named in its moment. Windfury's extra blows come later:
+-- its event lands in the swing's frame, and the extra attacks' hits 0.4 to 0.6 s
+-- after (FCT 0.10.4), so a Physical hit nothing explains, up to EXTRA_LATE after a
+-- swing whose frame named a proc, is one of those.
+local PROC_NAME_BEFORE = 0.07     -- the event may come this much before its hit
+local PROC_CAST_GAP    = 1.5      -- a spell cast this recently names its own cast
+local EXTRA_EARLY, EXTRA_LATE, EXTRA_MAX = 0.1, 1.0, 2
+local procNames = {}              -- { spell, at, used, swing, extras }
+
+local function freshProc(t, early, late, wantExtra)
+    for _, p in ipairs(procNames) do
+        local since = t - p.at
+        if since >= early and since <= late then
+            if wantExtra then
+                if p.swing and (p.extras or 0) < EXTRA_MAX then return p end
+            elseif not p.used then
+                return p
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------
+-- Guardians: totems and creatures you called (findings of FCT 0.10.4)
+--------------------------------------------------------------------------
+-- A hit nothing of yours explains, of the guardian's school, while it is out: its,
+-- when it keeps the guardian's beat -- the first one, then a gap of a second or more
+-- (its attack's interval, learned from the hits: a Searing Totem's bolts 2.2 s
+-- apart), then that gap again, or two or three of it (a blow not reported). Shown as
+-- your pet's, as Blizzard counts them.
+-- The beat is the guardian's, not each enemy's: a Searing Totem attacks one enemy at a
+-- time, so a bolt on another enemy still keeps its rhythm; a Magma Totem's pulse hits
+-- every enemy near it in one moment, each once.
+local GUARDIAN_MIN_GAP, GUARDIAN_SLACK, GUARDIAN_PULSE = 1.0, 0.2, 0.05
+local function guardianHit(t, key, school, isMiss)
+    for _, g in ipairs(guardians) do
+        if t >= g.at + 0.2 and t <= g.ends and (isMiss or sameSchool(g.school, school)) then
+            local fits = false
+            if not g.last then
+                fits = true                                   -- its first attack
+            elseif t - g.last <= GUARDIAN_PULSE then
+                fits = g.lastBy[key] ~= g.last                -- the same pulse, another enemy
+            else
+                local gap = t - g.last
+                if gap >= GUARDIAN_MIN_GAP then
+                    if not g.gap then
+                        g.gap, fits = gap, true
+                    else
+                        for k = 1, 3 do
+                            if math.abs(gap - k * g.gap) <= GUARDIAN_SLACK * k then fits = true break end
+                        end
+                    end
+                end
+            end
+            if fits then
+                if not g.last or t - g.last > GUARDIAN_PULSE then g.last = t end
+                g.lastBy[key] = g.last
+                return g
+            end
+        end
+    end
+end
+
+--------------------------------------------------------------------------
+-- In a group: is a hit the size of a swing of yours? (findings of FCT 0.10.0-0.11.4)
+--------------------------------------------------------------------------
+-- Among other players' hits, a swing of yours takes only a hit of its size: at most
+-- the hand's top damage (twice for a crit, with room for a buff), at least a quarter
+-- of its low (armor and glancing blows took swings to half of it), and, once three
+-- of its swings have landed on that enemy lately, within half to twice their middle.
+-- The game hides your weapon damage in combat, so it is read out of combat and kept.
+-- Alone, every hit stays as before: a shield on the enemy can absorb most of a blow.
+local DAMAGE_ROOM, DAMAGE_FLOOR = 1.25, 0.25
+local DEALT_TIME, DEALT_MIN, DEALT_HIGH, DEALT_LOW, DEALT_KEEP = 12, 3, 2, 0.5, 16
+local weaponDamage                -- { main = { low, high }, off = { low, high } }
+local dealt = {}                  -- [key .. hand] = { { amount, at } ... } of your swings
+function UC.ReadWeaponDamage()
+    if not UnitDamage then return end
+    local ok, low, high, offLow, offHigh = pcall(UnitDamage, "player")
+    if not ok or not (num(low) and num(high)) then return end   -- hidden in combat: keep the last
+    weaponDamage = { main = { low, high } }
+    if num(offLow) and num(offHigh) and offHigh > 0 then weaponDamage.off = { offLow, offHigh } end
+end
+local function crowded() return yes(IsInGroup and IsInGroup()) end
+local function swingFits(rec, hand, key, t)
+    if hand == "ranged" or not rec.amount or not crowded() then return true end
+    local amount = rec.crit and rec.amount / 2 or rec.amount
+    local w = weaponDamage and weaponDamage[hand]
+    if w then
+        if amount > w[2] * DAMAGE_ROOM or amount < w[1] * DAMAGE_FLOOR then return false end
+    end
+    local list = dealt[key .. hand]
+    if list then
+        local recent = {}
+        for _, d in ipairs(list) do if t - d.at <= DEALT_TIME then recent[#recent + 1] = d.amount end end
+        if #recent >= DEALT_MIN then
+            table.sort(recent)
+            local mid = recent[math.floor((#recent + 1) / 2)]
+            if amount > mid * DEALT_HIGH or amount < mid * DEALT_LOW then return false end
+        end
+    end
+    return true
+end
+local function noteSwing(rec, hand, key, t)
+    if hand == "ranged" or not rec.amount or not key then return end
+    local k = key .. hand
+    dealt[k] = dealt[k] or {}
+    local list = dealt[k]
+    list[#list + 1] = { amount = rec.crit and rec.amount / 2 or rec.amount, at = t }
+    while #list > DEALT_KEEP do table.remove(list, 1) end
+end
+
+--------------------------------------------------------------------------
+-- Hits left unplaced, for a moment: the game may yet say whose
+--------------------------------------------------------------------------
+-- A proc's cooldown event, or Blizzard's damage meter updating, can come after its
+-- hit in the same frame. A hit nothing explained stays claimable that long.
+local CLAIM_WINDOW = 0.05
+local unplacedRecent = {}         -- { rec, at, key, unit, physical }
+local frameHits = { at = -1, n = 0 }   -- how many enemy hits this frame
+local function remember(rec, t, key, unit, physical)
+    unplacedRecent[#unplacedRecent + 1] = { rec = rec, at = t, key = key, unit = unit, physical = physical }
+    while unplacedRecent[1] and (t - unplacedRecent[1].at > 1 or #unplacedRecent > 12) do
+        table.remove(unplacedRecent, 1)
+    end
+end
+-- The newest hit still claimable at t, nil when none: held for a late swing, or
+-- left unplaced. `test(entry)` may refuse one.
+local function claimable(t, test)
+    for i = #held, 1, -1 do
+        local h = held[i]
+        if not h.done and not h.shield and math.abs(t - h.at) <= CLAIM_WINDOW and (not test or test(h)) then
+            return h, "held"
+        end
+    end
+    for i = #unplacedRecent, 1, -1 do
+        local u = unplacedRecent[i]
+        if not u.claimed and math.abs(t - u.at) <= CLAIM_WINDOW and (not test or test(u)) then
+            return u, "unplaced"
+        end
+    end
+end
+local function claim(entry, how)
+    if how == "held" then entry.done = true else entry.claimed = true; stats.unplaced = stats.unplaced - 1 end
+end
+
 -- Whose hit this was, on your target or (for an every-enemy feed) another enemy's
 -- nameplate. key: the unit's key, which casts and DoTs remember; unit: its token.
 local function placeOnTarget(rec, t, key, unit)
@@ -886,9 +1112,11 @@ local function placeOnTarget(rec, t, key, unit)
         for _, s in ipairs(swings) do
             local window = (s.hand == "ranged") and RANGED_WINDOW or SWING_WINDOW
             -- a swing is aimed at one unit: only a hit on that one is its
-            if not s.used and s.key == key and t - s.at <= window and (physical or s.hand == "ranged") then
+            if not s.used and s.key == key and t - s.at <= window and (physical or s.hand == "ranged")
+                and swingFits(rec, s.hand, key, t) then
                 s.used = true
                 rule("swing")
+                noteSwing(rec, s.hand, key, t)
                 placeSwing(rec, s.hand)
                 return true
             end
@@ -898,6 +1126,17 @@ local function placeOnTarget(rec, t, key, unit)
         if trySwing() or tryCast() then return end
     else
         if tryCast() then return end
+    end
+
+    -- 2a. A proc or passive of yours the game named in this moment (its cooldown
+    --     event): Ignite, Deep Wound, a seal's hit, Touch of the Grave, a resisted proc.
+    if not swingFirst then
+        local p = freshProc(t, -0.02, PROC_NAME_BEFORE)
+        if p then
+            p.used = true
+            rule("proc named")
+            return out(spellRecord(p.spell, rec, "player"))
+        end
     end
 
     -- 2b. A proc of what is on your weapon, riding on a melee swing of yours at this
@@ -937,6 +1176,17 @@ local function placeOnTarget(rec, t, key, unit)
         end
     end
 
+    -- 3c. A totem of yours (a Searing Totem's bolt, a Magma Totem's pulse), on its beat.
+    if not physical then
+        local g = guardianHit(t, key, school, isMiss)
+        if g then
+            rule("guardian")
+            spellRecord(g.spell, rec, "player")
+            rec.pet = true
+            return out(rec)
+        end
+    end
+
     -- 3b. Your damage shield, on the unit that struck you: in the moment a melee hit
     --     landed on you, or -- the order of the two is not fixed -- in a moment's
     --     wait for that hit (claimShield, below).
@@ -973,6 +1223,17 @@ local function placeOnTarget(rec, t, key, unit)
     -- 4. A weapon swing.
     if not swingFirst and trySwing() then return end
 
+    -- 4b. An extra attack a proc of yours gave a swing (Windfury): named in the swing's
+    --     frame, its blows land a moment later with no swing of their own.
+    if physical and not isMiss then
+        local p = freshProc(t, EXTRA_EARLY, EXTRA_LATE, true)
+        if p then
+            p.extras = (p.extras or 0) + 1
+            rule("extra attack")
+            return out(spellRecord(p.spell, rec, "player"))
+        end
+    end
+
     -- 5. Your pet, if it is on this unit (its swings are not reported, so at most
     --    one hit a second).
     if physical and not isMiss and t - petLast >= PET_GAP and petAttacking(unit) then
@@ -981,6 +1242,17 @@ local function placeOnTarget(rec, t, key, unit)
         rec.key, rec.label, rec.icon, rec.pet = "pet:swing", UnitName("pet") or L["Pet"], MELEE_ICON, true
         if not str(rec.label) then rec.label = L["Pet"] end
         return out(rec)
+    end
+
+    -- 5b. A creature you called that strikes (a hawk), on its beat.
+    if physical then
+        local g = guardianHit(t, key, school, isMiss)
+        if g then
+            rule("guardian")
+            spellRecord(g.spell, rec, "player")
+            rec.pet = true
+            return out(rec)
+        end
     end
 
     -- 6. Physical, unexplained: wait a moment in case its swing is reported late.
@@ -998,9 +1270,11 @@ local function placeOnTarget(rec, t, key, unit)
         return
     end
 
-    -- 7. Someone else's.
+    -- 7. Someone else's -- unless, in a moment, the game says otherwise (a proc's
+    --    cooldown event or the damage meter updating, later in this frame).
     stats.unplaced = stats.unplaced + 1
     note(">", "unplaced")
+    remember(rec, t, key, unit, physical)
 end
 
 --------------------------------------------------------------------------
@@ -1026,6 +1300,33 @@ local function hotTick(h, guid, t)
     end
 end
 
+-- Which HoT of yours a tick on `guid` is, when several are running there (a druid's
+-- Regrowth and Rejuvenation): the one whose beat -- every few seconds from its own
+-- cast, as its text says or 3 s -- falls closest to this moment. Taking simply the
+-- first that could tick swapped them, and a tick went to someone else for it (FCT
+-- 0.11.1 saw a druid's ticks on a tank lose their spell 63 times of 70). With no beat
+-- close enough, the first that could tick, as before. `ours(h)`: a HoT on that unit.
+local HOT_BEAT_SLACK = 0.35
+local function pickHot(guid, t, ours)
+    local best, bestGap
+    for _, h in ipairs(hots) do
+        local last = h.lastBy[guid]
+        if ours(h) and t - h.from >= 0.8 and (not last or t - last >= TICK_GAP) then
+            local period = h.period or 3
+            local k = math.floor((t - h.from) / period + 0.5)
+            local gap = (k >= 1) and math.abs(t - (h.from + k * period)) or 99
+            if gap <= HOT_BEAT_SLACK and (not bestGap or gap < bestGap) then best, bestGap = h, gap end
+        end
+    end
+    if best then
+        best.lastBy[guid] = t
+        return best
+    end
+    for _, h in ipairs(hots) do
+        if ours(h) and hotTick(h, guid, t) then return h end
+    end
+end
+
 local function placeHealOnMe(amount, school, crit, t)
     local rec = { amount = amount, school = school, crit = crit }
     local me = myGUID()
@@ -1047,11 +1348,8 @@ local function placeHealOnMe(amount, school, crit, t)
             end
         end
     end
-    for _, h in ipairs(hots) do
-        if (h.on == nil or h.on == me) and hotTick(h, me or "player", t) then
-            return mine(h.spell, h.cast, "your heal over time")
-        end
-    end
+    local hot = pickHot(me or "player", t, function(h) return h.on == nil or h.on == me end)
+    if hot then return mine(hot.spell, hot.cast, "your heal over time") end
     rule("someone else's heal")
     note(">", "someone else's heal")
     rec.key, rec.label, rec.icon = "heal:other", L["Healing"], "Interface\\ICONS\\Spell_Holy_Heal"
@@ -1115,13 +1413,12 @@ matchHealOnOther = function(guid, amount, school, crit, t)
             return true
         end
     end
-    for _, h in ipairs(hots) do
-        if h.on == guid and hotTick(h, guid, t) then
-            rule("your heal over time on another")
-            note(">", "your heal over time on another", "spell:" .. h.spell)
-            healDone(h.spell, amount, school, crit, guid)
-            return true
-        end
+    local h = pickHot(guid, t, function(x) return x.on == guid end)
+    if h then
+        rule("your heal over time on another")
+        note(">", "your heal over time on another", "spell:" .. h.spell)
+        healDone(h.spell, amount, school, crit, guid)
+        return true
     end
     note(">", "someone else's heal on another")
     return true
@@ -1129,6 +1426,11 @@ end
 
 local function onUnitCombat(unit, event, flag, amount, school)
     if not str(unit) or not str(event) then return end
+    -- how many enemy hits this frame, wherever reported (the meter's witness needs one)
+    if event == "WOUND" and unit ~= "player" and unit ~= "pet" then
+        local t0 = now()
+        if frameHits.at == t0 then frameHits.n = frameHits.n + 1 else frameHits.at, frameHits.n = t0, 1 end
+    end
     if event == "HEAL" and unit ~= "player" then
         if unit == "target" and yes(UnitIsUnit("target", "player")) then return end   -- reported on you too
         if healOnOther(unit, str(flag) and flag or "", amount, school) then return end
@@ -1265,6 +1567,63 @@ local function onUnitCombat(unit, event, flag, amount, school)
 end
 
 ns.On("UNIT_COMBAT", function(_, ...) onUnitCombat(...) end)
+
+-- Your weapons' damage, read out of combat (the game hides it in one).
+ns.On("PLAYER_EQUIPMENT_CHANGED", function() if not inCombat then UC.ReadWeaponDamage() end end)
+
+-- A proc or passive of yours named by its cooldown event (see "Procs named by the
+-- game", above). One in a swing's frame may be an extra attack's (Windfury); any
+-- other names a hit in its moment, even one that came a moment before it.
+ns.On("SPELL_UPDATE_COOLDOWN", function(_, spell)
+    if not num(spell) or spell <= 0 then return end
+    local t = now()
+    if castAt[spell] and t - castAt[spell] <= PROC_CAST_GAP then return end   -- your own cast's
+    while procNames[1] and (t - procNames[1].at > 1.5 or #procNames > 16) do table.remove(procNames, 1) end
+    local p = { spell = spell, at = t }
+    for _, m in ipairs(swingMoments) do
+        if math.abs(m.at - t) <= 0.002 then p.swing = true break end
+    end
+    procNames[#procNames + 1] = p
+    note("PC", spell, p.swing and "swing" or nil)
+    -- a hit already left unplaced in this moment: this names it
+    local entry, how = claimable(t, function(e)
+        local r = e.rec
+        if r.missType and SWING_MISSES[r.missType] then return false end
+        return not (p.swing and e.physical)   -- a swing's frame: its blows come later
+    end)
+    if entry then
+        claim(entry, how)
+        p.used = true
+        rule("proc named")
+        out(spellRecord(spell, entry.rec, "player"))
+    end
+end)
+
+-- Blizzard's damage meter as a witness (FCT 0.10.15's finding): its update comes for
+-- every hit of yours, at most once a frame, even while its numbers are hidden, and
+-- never for a player outside your group. Alone, a frame with one enemy hit, which
+-- nothing placed, and the meter's update is yours: under a cast of yours in that
+-- frame, else, Physical, a swing's. In a group your teammates' hits bring it too.
+if C_DamageMeter then
+    ns.On("DAMAGE_METER_COMBAT_SESSION_UPDATED", function(_, meterType)
+        local t = now()
+        if crowded() then return end
+        local done = Enum and Enum.DamageMeterType and Enum.DamageMeterType.DamageDone
+        if num(meterType) and done and meterType ~= done then return end
+        if frameHits.at ~= t or frameHits.n ~= 1 then return end
+        local entry, how = claimable(t, function(e) return e.at == t and not e.rec.missType end)
+        if not entry then return end
+        local spell = lastCast and lastCast.at == t and lastCast.spell
+        if not spell and not entry.physical then return end
+        claim(entry, how)
+        rule("meter witness")
+        if spell then
+            out(spellRecord(spell, entry.rec, "player"))
+        else
+            placeSwing(entry.rec, "main")
+        end
+    end)
+end
 ns.On("UNIT_SPELLCAST_SUCCEEDED", function(_, unit, _, spell) onCast(unit, spell) end)
 -- The swing's payload is recorded as it came, both arguments: which one carries
 -- the swing type was taken from FCT rather than seen here.
@@ -1272,6 +1631,13 @@ ns.On("PLAYER_SWING", function(_, a, swingType)
     local hand = num(swingType) and hands()[swingType] or nil
     note("S", a, swingType, hand)
     onSwing(swingType)
+    -- a proc named a moment before, in this swing's frame: an extra attack's (Windfury)
+    if hand and hand ~= "ranged" then
+        local t = now()
+        for _, p in ipairs(procNames) do
+            if math.abs(p.at - t) <= 0.002 and not p.used then p.swing = true end
+        end
+    end
     if hand then blow(swingKey(hand)) end
 end)
 
@@ -1477,12 +1843,16 @@ end
 -- 2026: a Thorns hit that killed, after a reload mid-fight, was left out).
 ns.On("PLAYER_ENTERING_WORLD", function()
     inCombat = yes(UnitAffectingCombat("player")) or (InCombatLockdown and InCombatLockdown()) or false
-    if not inCombat then lastRead.damage, lastRead.healing = readMeter(), readMeter("healing") end
+    if not inCombat then
+        lastRead.damage, lastRead.healing = readMeter(), readMeter("healing")
+        UC.ReadWeaponDamage()
+    end
 end)
 
 ns.On("PLAYER_REGEN_ENABLED", function()
     note("R-")
     inCombat = false
+    UC.ReadWeaponDamage()
     local fight = fightNo
     for _, delay in ipairs(SETTLE_AT) do
         C_Timer.After(delay, function() settle(fight) end)
