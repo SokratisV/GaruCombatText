@@ -717,9 +717,13 @@ DESC[5143] = "Launches Arcane Missiles at the enemy, causing 36 Arcane damage ea
 DESC[3599] = "Summons a Searing Totem with 1 health at the feet of the caster for 30 sec that repeatedly attacks an enemy within 20 yards for 9 to 11 Fire damage."
 DESC[8071] = "Summons a Stoneskin Totem with 5 health at the feet of the caster that reduces melee damage taken by friendly party members by 4. Lasts 2 min."
 DESC[774] = "Heals the target for 32 over 12 sec."
+DESC[12536] = "Your next damage spell costs no mana."   -- Clearcasting
 local grouped = false
 function IsInGroup() return grouped end
-function UnitDamage() return 40, 60, 0, 0 end
+local weapon = { 40, 60 }                                -- nil: hidden, as in combat
+function UnitDamage() if weapon then return weapon[1], weapon[2], 0, 0 end end
+local shape = 0
+function GetShapeshiftFormID() return shape end
 class = "DRUID"
 retarget(1000, "Creature-F1")
 -- 1. a strike the parser used to read as no damage
@@ -744,6 +748,10 @@ hit(1024, 22, 1); fire("SPELL_UPDATE_COOLDOWN", 12721)
 expect("Deep Wound, named just after its hit", 1024.01, "dealt", key("spell:12721", 22))
 cast(1026, 686); fire("SPELL_UPDATE_COOLDOWN", 686); hit(1026.05, 77, 4)
 nothing("a spell you just cast names only its own cast", 1027)
+advance(1028); fire("SPELL_UPDATE_COOLDOWN", 12536); fire("SPELL_UPDATE_COOLDOWN", 12721); hit(1028, 23, 1)
+expect("a buff and a damage named in one moment: the damage's", 1028.01, "dealt", key("spell:12721", 23))
+hit(1029, 24, 1); fire("SPELL_UPDATE_COOLDOWN", 12536); fire("SPELL_UPDATE_COOLDOWN", 12721)
+expect("...and the same when both come after the hit", 1029.01, "dealt", key("spell:12721", 24))
 -- 4. Windfury: named in the swing's frame, its extra blows a moment later
 swing(1030); fire("SPELL_UPDATE_COOLDOWN", 25504)
 hit(1030.48, 50, 1); expect("the swing's own blow", 1030.49, "dealt", key("swing", 50))
@@ -766,9 +774,26 @@ swing(1050); hit(1050.5, 150, 1)
 nothing("in a group, a hit far bigger than your weapon is not your swing", 1051)
 swing(1052); hit(1052.5, 50, 1)
 expect("in a group, a hit your size is", 1052.51, "dealt", key("swing", 50))
+swing(1052.6); hit(1052.7, 52, 1); expect("a second staff swing", 1052.71, "dealt", key("swing", 52))
+swing(1052.8); hit(1052.9, 48, 1); expect("a third: its size is known now", 1052.91, "dealt", key("swing", 48))
+weapon = nil; shape = 1; fire("UPDATE_SHAPESHIFT_FORM")                -- Cat Form, in a fight
+swing(1053); hit(1053.3, 150, 1)
+expect("in Cat Form, a claw's swing is not held to the staff's size", 1053.31, "dealt", key("swing", 150))
+shape = 17; fire("UPDATE_SHAPESHIFT_FORM")                             -- a warrior's stance
+swing(1053.5); hit(1053.7, 150, 1)
+nothing("a stance swings the same weapon: still too big", 1053.9)
+shape = 0; fire("PLAYER_EQUIPMENT_CHANGED")                            -- another weapon, in a fight
+swing(1054.5); hit(1054.8, 150, 1)
+expect("a new weapon's swing is not held to the old one's size", 1054.81, "dealt", key("swing", 150))
+weapon = { 40, 60 }; ns.UC.ReadWeaponDamage()
+weapon, shape = { 72, 96 }, 1; fire("UPDATE_SHAPESHIFT_FORM")          -- Cat Form read, out of combat
+weapon, shape = nil, 0; fire("UPDATE_SHAPESHIFT_FORM")                 -- back to caster form, in a fight
+swing(1055); hit(1055.3, 100, 1)
+nothing("the caster form keeps the staff's own size, not the claws'", 1055.5)
+weapon = { 40, 60 }
 grouped = false
-swing(1054); hit(1054.5, 150, 1)
-expect("alone, any hit stays your swing's", 1054.51, "dealt", key("swing", 150))
+swing(1056); hit(1056.5, 150, 1)
+expect("alone, any hit stays your swing's", 1056.51, "dealt", key("swing", 150))
 -- 7. Blizzard's damage meter as a witness, alone
 hit(1060, 33, 1); fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", 0)
 expect("a blow nothing explained, with the meter's update in its frame: yours", 1060.01, "dealt", key("swing", 33))

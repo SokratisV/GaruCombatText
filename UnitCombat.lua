@@ -923,17 +923,27 @@ local PROC_CAST_GAP    = 1.5      -- a spell cast this recently names its own ca
 local EXTRA_EARLY, EXTRA_LATE, EXTRA_MAX = 0.1, 1.0, 2
 local procNames = {}              -- { spell, at, used, swing, extras }
 
+-- Two named in one moment: the one whose text says it deals damage before a buff's
+-- (FCT 0.12.3: each Flamestrike tick's frame named the tick's spell, then
+-- Clearcasting's). A buff's names a hit only when nothing else in its moment does.
+local function harmless(spell)
+    local f = UC.Facts(spell)
+    return f ~= nil and f.damages == false
+end
 local function freshProc(t, early, late, wantExtra)
+    local first
     for _, p in ipairs(procNames) do
         local since = t - p.at
         if since >= early and since <= late then
             if wantExtra then
                 if p.swing and (p.extras or 0) < EXTRA_MAX then return p end
             elseif not p.used then
-                return p
+                if not harmless(p.spell) then return p end
+                first = first or p
             end
         end
     end
+    return first
 end
 
 --------------------------------------------------------------------------
@@ -986,26 +996,39 @@ end
 -- of its swings have landed on that enemy lately, within half to twice their middle.
 -- The game hides your weapon damage in combat, so it is read out of combat and kept.
 -- Alone, every hit stays as before: a shield on the enemy can absorb most of a blow.
+-- Each druid form swings its own attack (FCT 0.12.2: Cat Form's claws for 72-96 where
+-- the staff's read 20-30), so each form keeps its own reading and its own recent
+-- swings; a form not read yet checks no size. A warrior's stances share one weapon.
 local DAMAGE_ROOM, DAMAGE_FLOOR = 1.25, 0.25
 local DEALT_TIME, DEALT_MIN, DEALT_HIGH, DEALT_LOW, DEALT_KEEP = 12, 3, 2, 0.5, 16
-local weaponDamage                -- { main = { low, high }, off = { low, high } }
-local dealt = {}                  -- [key .. hand] = { { amount, at } ... } of your swings
-function UC.ReadWeaponDamage()
+local STANCES = { [17] = true, [18] = true, [19] = true }   -- Battle, Defensive, Berserker
+local weaponDamage = {}           -- [form] = { main = { low, high }, off = { low, high } }
+local dealt = {}                  -- [key .. hand .. form] = { { amount, at } ... } of your swings
+local function form()
+    local id = GetShapeshiftFormID and GetShapeshiftFormID()
+    if num(id) and id > 0 and not STANCES[id] then return id end
+    return 0
+end
+local function swingsOf(key, hand) return key .. hand .. form() end
+function UC.ReadWeaponDamage(changed)
+    if changed then wipe(weaponDamage); wipe(dealt) end   -- other weapons: what each form knew is old
     if not UnitDamage then return end
     local ok, low, high, offLow, offHigh = pcall(UnitDamage, "player")
     if not ok or not (num(low) and num(high)) then return end   -- hidden in combat: keep the last
-    weaponDamage = { main = { low, high } }
-    if num(offLow) and num(offHigh) and offHigh > 0 then weaponDamage.off = { offLow, offHigh } end
+    local w = { main = { low, high } }
+    if num(offLow) and num(offHigh) and offHigh > 0 then w.off = { offLow, offHigh } end
+    weaponDamage[form()] = w
 end
 local function crowded() return yes(IsInGroup and IsInGroup()) end
 local function swingFits(rec, hand, key, t)
     if hand == "ranged" or not rec.amount or not crowded() then return true end
     local amount = rec.crit and rec.amount / 2 or rec.amount
-    local w = weaponDamage and weaponDamage[hand]
+    local w = weaponDamage[form()]
+    w = w and w[hand]
     if w then
         if amount > w[2] * DAMAGE_ROOM or amount < w[1] * DAMAGE_FLOOR then return false end
     end
-    local list = dealt[key .. hand]
+    local list = dealt[swingsOf(key, hand)]
     if list then
         local recent = {}
         for _, d in ipairs(list) do if t - d.at <= DEALT_TIME then recent[#recent + 1] = d.amount end end
@@ -1019,7 +1042,7 @@ local function swingFits(rec, hand, key, t)
 end
 local function noteSwing(rec, hand, key, t)
     if hand == "ranged" or not rec.amount or not key then return end
-    local k = key .. hand
+    local k = swingsOf(key, hand)
     dealt[k] = dealt[k] or {}
     local list = dealt[k]
     list[#list + 1] = { amount = rec.crit and rec.amount / 2 or rec.amount, at = t }
@@ -1569,7 +1592,9 @@ end
 ns.On("UNIT_COMBAT", function(_, ...) onUnitCombat(...) end)
 
 -- Your weapons' damage, read out of combat (the game hides it in one).
-ns.On("PLAYER_EQUIPMENT_CHANGED", function() if not inCombat then UC.ReadWeaponDamage() end end)
+ns.On("PLAYER_EQUIPMENT_CHANGED", function() UC.ReadWeaponDamage(true) end)
+-- A new form's own, while it can be read; in a fight it keeps what it read before.
+ns.On("UPDATE_SHAPESHIFT_FORM", function() UC.ReadWeaponDamage() end)
 
 -- A proc or passive of yours named by its cooldown event (see "Procs named by the
 -- game", above). One in a swing's frame may be an extra attack's (Windfury); any
@@ -1585,7 +1610,9 @@ ns.On("SPELL_UPDATE_COOLDOWN", function(_, spell)
     end
     procNames[#procNames + 1] = p
     note("PC", spell, p.swing and "swing" or nil)
-    -- a hit already left unplaced in this moment: this names it
+    -- a hit already left unplaced in this moment: this names it, unless this is a
+    -- buff's, which may yet be followed by the damage's own
+    if harmless(spell) then return end
     local entry, how = claimable(t, function(e)
         local r = e.rec
         if r.missType and SWING_MISSES[r.missType] then return false end
