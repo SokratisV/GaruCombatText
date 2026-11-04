@@ -1491,7 +1491,7 @@ local function onUnitCombat(unit, event, flag, amount, school)
         -- one hit, reported on both: counted once
         local d = lastDying
         if d and d.unit ~= unit and t - d.at <= 0.05 and d.event == event and d.school == school
-            and (d.amount == amount or not (num(amount) and num(d.amount))) then
+            and (not (num(amount) and num(d.amount)) or d.amount == amount) then   -- never compare a secret
             lastDying = nil
             note(">", "the same hit, on its other unit")
             return
