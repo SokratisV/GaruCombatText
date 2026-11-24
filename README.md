@@ -3,7 +3,7 @@
 **Damage you deal and take, and healing you receive, broken down per spell.**
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-![Version](https://img.shields.io/badge/version-2.3.0-brightgreen)
+![Version](https://img.shields.io/badge/version-2.4.0-brightgreen)
 ![WoW](https://img.shields.io/badge/WoW-Forever%20%2F%20TBC%20Classic-f8b700)
 ![Interface](https://img.shields.io/badge/interface-16001%20%7C%2020505-555)
 
@@ -32,8 +32,9 @@ spell's own description says it does.
   checked in game; a paladin's, rogue's or shaman's `/gct trace` would settle it.
 - **Actions** is back: your target's dodges, parries and resists, matched to your swings
   and casts.
-- **Damage Received** is grouped **by school** (Physical, Fire, ...): the game says how you
-  were hit, not by what.
+- **Damage Received** is grouped **by school** (Physical, Fire, ...) during a fight: the game
+  says how you were hit, not by what. Once the fight is over, Blizzard's damage meter lists
+  each attack that hit you, and the rows show that instead.
 - **Healing Received** counts every heal on you. Your own are on their spell; everyone
   else's share one *Healing* line.
 
