@@ -69,14 +69,26 @@ if ns.UseUnitCombat then
     ns.UC.Subscribe("taken", function(r)
         local cfg = ns.db.takenText
         if not cfg.enabled or ns.test.combat then return end
-        if r.amount < (cfg.threshold or 0) then return end
+        if r.amount and r.amount < (cfg.threshold or 0) then return end   -- a hidden one always counts
         local frame = host()
         if not frame then return end
         local name = r.school and ns.UC.SCHOOL_NAMES[r.school]
         local key = "school:" .. tostring(r.school or 0)
         local icon = r.school and ns.UC.SCHOOL_ICONS[r.school] or MELEE_ICON
-        meter:Bump(frame, key, name or (r.school and L["Mixed"] or L["Damage"]), r.amount, r.school,
+        meter:Bump(frame, key, name or (r.school and L["Mixed"] or L["Damage"]), r.amount or r.secret, r.school,
                    r.crit and true or false, icon)
+    end)
+    -- Hidden amounts: live, the fight's running total from Blizzard's meter; once the
+    -- fight is over, the meter's figures per attack in place of the counts per school.
+    meter.liveTotal = function()
+        if ns.DM and ns.DM.LiveTotal then return ns.DM.LiveTotal("taken") end
+    end
+    ns.UC.Subscribe("takenSettled", function(r)
+        local cfg = ns.db.takenText
+        if not cfg.enabled or ns.test.combat then return end
+        local frame = host()
+        if not frame then return end
+        meter:Replace(frame, r.rows)
     end)
 end
 

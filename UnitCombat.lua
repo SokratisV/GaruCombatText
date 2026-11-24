@@ -340,6 +340,12 @@ ns.On("SPELL_TEXT_UPDATE", function(_, spell) if num(spell) then factCache[spell
 -- healed   { key, label, amount, school, crit, icon, spell, first }   a heal on you
 -- energized{ amount }                                        power gained
 -- cast     { unit, spell, label, school, offensive }         a cast of yours
+-- settledUnit { guid, key, label, icon, school, total }  after a fight against one enemy
+--          whose hits came hidden: the meter's figure for that attack, that enemy's
+-- takenSettled { rows = { { key, label, icon, school, total } ... } }   after a fight
+--          whose hits on you came hidden: the meter's damage taken, per attack
+-- A hit, heal or power whose amount the game keeps secret comes with no amount:
+-- hidden = true and secret = the amount, to be drawn and never read.
 local subs = {}
 function UC.Subscribe(kind, fn)
     subs[kind] = subs[kind] or {}
@@ -857,6 +863,8 @@ local SETTLE_AT    = { 0.5, 1.5, 3, 5 }   -- the meter is not final the instant 
 local SETTLE_LIMIT = 3      -- a top-up may be at most this many of the attack's largest hits
 
 local tally, biggest, kills = {}, {}, {}   -- this fight: shown per key, largest hit per key, kills
+-- this fight: whether any hit of yours, or on you, came hidden, and every enemy you hit
+local thisFight = { hidden = false, hiddenOnMe = false, units = {} }
 local pendingKill                          -- the kill just noticed, waiting for its killing hit
 local emitKill                             -- (below, once keyLabel is)
 local lastBlow                             -- { at, key }: the last thing of yours that landed or swung
@@ -879,6 +887,9 @@ local function out(rec)
             tally[rec.key] = (tally[rec.key] or 0) + rec.amount
             if rec.amount > (biggest[rec.key] or 0) then biggest[rec.key] = rec.amount end
         end
+        emit("dealt", rec)
+    elseif rec.hidden then
+        thisFight.hidden = true
         emit("dealt", rec)
     end
 end
@@ -1309,8 +1320,15 @@ local function myGUID()
 end
 
 -- Healing Done: a heal of yours, wherever it landed.
+-- A heal's record: its amount, or, kept secret by the game, the secret to draw.
+local function healRec(amount, school, crit)
+    if num(amount) then return { amount = amount, school = school, crit = crit } end
+    return { hidden = true, secret = amount, school = school, crit = crit }
+end
 local function healDone(spell, amount, school, crit, on)
-    emit("healDone", spellRecord(spell, { amount = amount, school = school, crit = crit, on = on }, "player"))
+    local rec = healRec(amount, school, crit)
+    rec.on = on
+    emit("healDone", spellRecord(spell, rec, "player"))
 end
 
 -- A HoT of yours ticking on `guid` now: on its beat for that unit, never in its cast's
@@ -1351,7 +1369,7 @@ local function pickHot(guid, t, ours)
 end
 
 local function placeHealOnMe(amount, school, crit, t)
-    local rec = { amount = amount, school = school, crit = crit }
+    local rec = healRec(amount, school, crit)
     local me = myGUID()
     local function mine(spell, cast, name)
         rule(name)
@@ -1384,6 +1402,7 @@ end
 --------------------------------------------------------------------------
 local FEEDBACK = { MISS = true, DODGE = true, PARRY = true, BLOCK = true, RESIST = true, EVADE = true,
                    IMMUNE = true, DEFLECT = true, ABSORB = true, REFLECT = true }
+local WHOLE_FLAGS = { ABSORB = true, BLOCK = true, RESIST = true }   -- a WOUND that did nothing
 
 -- Hits on enemies other than your target come on their nameplates, and are only
 -- wanted by a feed counting every enemy.
@@ -1410,15 +1429,18 @@ local function healOnOther(unit, flag, amount, school)
     if not str(guid) then return true end
     if guid == myGUID() then return true end                          -- counted on you
     note("U", unit, "HEAL", flag, amount, school, "other")
-    if not num(amount) or amount <= 0 then return true end
+    local hidden = not num(amount)
+    if not hidden and amount <= 0 then return true end
     local t = now()
     tidy(t)
+    -- one heal reported on two units: the same amount, or, hidden, the same school
     local d = lastDone
-    if d and d.guid == guid and d.amount == amount and t - d.at <= 0.05 then
+    if d and d.guid == guid and t - d.at <= 0.05
+        and ((hidden and d.hidden and d.school == school) or (not hidden and d.amount == amount)) then
         note(">", "the same heal, on its other unit")
         return true
     end
-    lastDone = { guid = guid, amount = amount, at = t }
+    lastDone = { guid = guid, amount = (not hidden) and amount or nil, hidden = hidden, school = school, at = t }
     stats.healsOthers = (stats.healsOthers or 0) + 1
     local crit = (flag == "CRITICAL")
     -- placed a frame later, once the cast it may come ahead of is known (as on you)
@@ -1504,14 +1526,17 @@ local function onUnitCombat(unit, event, flag, amount, school)
 
     if unit == "player" then
         stats.player = stats.player + 1
+        -- A hidden amount (every one, from 1.60.1.70755) is passed on to be counted and
+        -- drawn: a hit or heal with no flag that says it did nothing is taken to have
+        -- landed, as its 0 can no longer be read.
         if hidden and (event == "WOUND" or event == "HEAL" or event == "ENERGIZE") then
             stats.playerHidden = stats.playerHidden + 1
-            return
         end
+        local landedSome = hidden or (num(amount) and amount > 0)
         if event == "WOUND" then
             -- a melee blow that landed, even one absorbed or blocked whole, sets off a
             -- damage shield: it claims the oldest shield hit waiting for one
-            local landed = amount > 0 or flag == "ABSORB" or flag == "BLOCK"
+            local landed = landedSome or flag == "ABSORB" or flag == "BLOCK"
             if landed and (school == nil or school == PHYSICAL) then
                 local claimed = false
                 for _, h in ipairs(held) do
@@ -1524,10 +1549,13 @@ local function onUnitCombat(unit, event, flag, amount, school)
                 end
                 hitOnMeAt = claimed and -10 or t
             end
-            if amount > 0 then
-                emit("taken", { amount = amount, school = school, crit = (flag == "CRITICAL") })
-            elseif flag == "BLOCK" or flag == "ABSORB" or flag == "RESIST" then   -- blocked or absorbed whole
+            if WHOLE_FLAGS[flag] and (hidden or amount <= 0) then   -- blocked or absorbed whole
                 emit("dodged", { missType = flag })
+            elseif hidden then
+                thisFight.hiddenOnMe = true
+                emit("taken", { hidden = true, secret = amount, school = school, crit = (flag == "CRITICAL") })
+            elseif amount > 0 then
+                emit("taken", { amount = amount, school = school, crit = (flag == "CRITICAL") })
             end
             -- a hit of nothing with no flag is no miss (a miss comes as its own event):
             -- a weak mob's blows on you came as 0s between its 1s (/gct trace, 21 Oct 2026)
@@ -1536,12 +1564,16 @@ local function onUnitCombat(unit, event, flag, amount, school)
             -- the same frame (/gct trace, 21 Oct 2026: Regrowth's 174 and Healing
             -- Touch's 193, each a moment ahead of its own cast): placed a frame later,
             -- once every cast of that frame is known.
-            if amount > 0 then
+            if landedSome then
                 local crit = (flag == "CRITICAL")
                 C_Timer.After(0, function() placeHealOnMe(amount, school, crit, t) end)
             end
         elseif event == "ENERGIZE" then
-            if amount > 0 then emit("energized", { amount = amount }) end
+            if hidden then
+                emit("energized", { hidden = true, secret = amount })
+            elseif amount > 0 then
+                emit("energized", { amount = amount })
+            end
         elseif FEEDBACK[event] then
             emit("dodged", { missType = event })
         end
@@ -1554,10 +1586,17 @@ local function onUnitCombat(unit, event, flag, amount, school)
     if event == "WOUND" then
         stats[counted] = stats[counted] + 1
         if hidden then
-            -- Still matched, so the cast it belongs to is used up and cannot claim
-            -- the next hit; it just adds nothing to the totals.
             stats.targetHidden = stats.targetHidden + 1
-            rec = { school = school, hidden = true }
+            if WHOLE_FLAGS[flag] then
+                -- absorbed, blocked or resisted whole: told by its flag alone, as its
+                -- 0 can no longer be read (FCT 0.13.0: a hit that landed flags
+                -- CRITICAL, BLOCK_REDUCED or nothing)
+                rec = { missType = flag, school = school }
+            else
+                -- Matched like any hit, and passed on to be counted and drawn; what it
+                -- adds to the totals comes from the meter once the fight is over.
+                rec = { school = school, hidden = true, secret = amount, crit = (flag == "CRITICAL") }
+            end
         elseif amount > 0 then
             rec = { amount = amount, school = school, crit = (flag == "CRITICAL") }
         elseif flag == "ABSORB" or flag == "BLOCK" or flag == "RESIST" then
@@ -1583,6 +1622,7 @@ local function onUnitCombat(unit, event, flag, amount, school)
         stats.dying = (stats.dying or 0) + 1
     end
     placeOnTarget(rec, t, plateKey, plateKey and unit)
+    if rec.key and not rec.missType and not rec.pet then thisFight.units[plateKey or targetKey()] = true end
     -- the killing hit names the attack that gets the skull
     if dying and rec.key and pendingKill and pendingKill.guid == dying then
         pendingKill.hit = pendingKill.hit or rec.key
@@ -1778,9 +1818,44 @@ local function settleHealing()
     end
 end
 
-local function settle(fight)
+-- The meter's rows by our keys: its melee is spell 6603 (Auto Attack), or 0.
+local function byOurKeys(rows)
+    local out = {}
+    for key, r in pairs(rows) do
+        if key == "spell:6603" or key == "spell:0" then key = "swing" end
+        out[key] = (out[key] or 0) + r.amount
+    end
+    return out
+end
+
+-- Damage Received, once a fight whose hits on you came hidden is over: live, its rows
+-- could only count hits per school; the meter has what each attack did to you, so
+-- its rows take their place (as the combat log's rows read on the Classic clients).
+local function settleTaken(seen)
+    if not (seen.hiddenOnMe and ns.db and ns.db.takenText and ns.db.takenText.enabled) then return end
+    local rows = readMeter("taken")
+    if not rows or sameRows(rows, beforeFight.taken) then return end
+    lastRead.taken = rows
+    local list = {}
+    for key, amount in pairs(byOurKeys(rows)) do
+        local label, icon, school = keyLabel(key)
+        if not school then
+            local f = UC.Facts(tonumber(key:match("^spell:(%d+)$")))
+            school = f and f.school
+        end
+        local total = math.floor(amount + 0.5)
+        note(">", "settled taken", key, total)
+        list[#list + 1] = { key = key, label = label, icon = icon, school = school, total = total }
+    end
+    table.sort(list, function(a, b) return a.total > b.total end)
+    emit("takenSettled", { rows = list })
+end
+
+-- seen: what the fight saw (thisFight, as it ended)
+local function settle(fight, seen)
     if fight ~= fightNo or inCombat then return end
     settleHealing()
+    settleTaken(seen)
     local rows = readMeter()
     if not rows then return end   -- not released yet; a later attempt will see it
     if sameRows(rows, beforeFight.damage) then
@@ -1789,13 +1864,23 @@ local function settle(fight)
     end
     lastRead.damage = rows
     local all = everyEnemyDealt()
-    if not all and #kills == 0 then return end
-    local meter = {}
-    for key, r in pairs(rows) do
-        -- the meter's melee is spell 6603 (Auto Attack), or 0
-        if key == "spell:6603" or key == "spell:0" then key = "swing" end
-        meter[key] = (meter[key] or 0) + r.amount
+    local meter = byOurKeys(rows)
+    if not all and seen.hidden then
+        -- Your target, with hidden hits: there are no live totals to top up. Against
+        -- one enemy alone the meter's figures are that enemy's, every spell of them;
+        -- against more it cannot say which was whose, and the rows keep their counts.
+        local only, n = nil, 0
+        for k in pairs(seen.units) do only, n = k, n + 1 end
+        if n ~= 1 or only:find("^epoch:") then return end
+        for key, total in pairs(meter) do
+            local label, icon, school = keyLabel(key)
+            total = math.floor(total + 0.5)
+            note(">", "settled one enemy", key, total)
+            emit("settledUnit", { guid = only, key = key, label = label, icon = icon, school = school, total = total })
+        end
+        return
     end
+    if not all and #kills == 0 then return end
     if all then
         -- The meter can count a spell under another ID than the one shown live: a
         -- poison's damage is not the spell that put it on your weapon. A row the feed
@@ -1871,7 +1956,7 @@ end
 ns.On("PLAYER_ENTERING_WORLD", function()
     inCombat = yes(UnitAffectingCombat("player")) or (InCombatLockdown and InCombatLockdown()) or false
     if not inCombat then
-        lastRead.damage, lastRead.healing = readMeter(), readMeter("healing")
+        lastRead.damage, lastRead.healing, lastRead.taken = readMeter(), readMeter("healing"), readMeter("taken")
         UC.ReadWeaponDamage()
     end
 end)
@@ -1881,8 +1966,12 @@ ns.On("PLAYER_REGEN_ENABLED", function()
     inCombat = false
     UC.ReadWeaponDamage()
     local fight = fightNo
+    -- what this fight saw goes to its settling; the next one starts afresh, its
+    -- opening blow (which comes a moment before combat does) included
+    local seen = thisFight
+    thisFight = { hidden = false, hiddenOnMe = false, units = {} }
     for _, delay in ipairs(SETTLE_AT) do
-        C_Timer.After(delay, function() settle(fight) end)
+        C_Timer.After(delay, function() settle(fight, seen) end)
     end
 end)
 ns.On("PLAYER_REGEN_DISABLED", function()
@@ -1890,7 +1979,7 @@ ns.On("PLAYER_REGEN_DISABLED", function()
     inCombat = true
     fightNo = fightNo + 1
     wipe(tally); wipe(biggest); wipe(kills)
-    beforeFight.damage, beforeFight.healing = lastRead.damage, lastRead.healing
+    beforeFight.damage, beforeFight.healing, beforeFight.taken = lastRead.damage, lastRead.healing, lastRead.taken
     lastStats = (stats.target + stats.player > 0) and stats or lastStats
     -- The cast or swing that opened the fight came just before combat began (a
     -- bolt puts you in combat when it lands, not when it leaves your hands), and
@@ -1949,7 +2038,8 @@ function UC.PrintProbe()
             (s.refused or 0) > 0 and ("  (refused, too large to be one blow: " .. s.refused .. ")") or ""))
     end
     if s.targetHidden > 0 or s.playerHidden > 0 then
-        print("   |cffff4040Hidden amounts can be shown but not added up, so they are left out of")
-        print("   the totals.|r If most are hidden, the post-fight summary is the better fit here.")
+        print("   |cffffcc40Hidden amounts can be drawn but not added up:|r each row counts its hits and")
+        print("   shows the last, the header shows the meter's running total, and the rows take the")
+        print("   meter's totals once the fight is over.")
     end
 end

@@ -59,9 +59,21 @@ end
 local function newTexture() return visible(Stub()) end
 local function newText()
     local fs = visible(Stub())
-    fs.SetText = function(self, t) self.text = t end
+    fs.SetText = function(self, t)
+        if t == SECRET then error("a secret handed to SetText: draw it through SetFormattedText") end
+        self.text = t
+    end
     fs.GetText = function(self) return self.text end
-    fs.GetStringWidth = function() return 40 end
+    -- As in game: a region that has drawn a secret answers in secrets from then on
+    -- (FCT 0.25.9), so measuring one is an error waiting to happen in a sum.
+    fs.SetFormattedText = function(self, fmt, ...)
+        local args = { ... }
+        for i = 1, select("#", ...) do
+            if args[i] == SECRET then self.drewSecret, args[i] = true, "<secret>" end
+        end
+        self.text = fmt:format(unpack(args, 1, select("#", ...)))
+    end
+    fs.GetStringWidth = function(self) if self.drewSecret then return SECRET end return 40 end
     fs.GetStringHeight = function() return 12 end
     return fs
 end
@@ -237,10 +249,24 @@ local function advance(to)
     clock = to
 end
 
-SECRET = setmetatable({}, { __tostring = function() return "<secret>" end })
+-- a secret: as in game, never indexed (nor added up, compared or joined to text)
+SECRET = setmetatable({}, { __tostring = function() return "<secret>" end,
+                            __index = function() error("a secret value was indexed") end })
 function issecretvalue(v) return v == SECRET end
-if FOREVER then C_DamageMeter = {} end
-Enum = { PlayerSwingType = { MainHand = 0, OffHand = 1, Ranged = 2 } }
+-- the game's number formatters: a secret in, secret text out
+function AbbreviateNumbers(v) if v == SECRET then return SECRET end return tostring(v) end
+function CreateAbbreviateConfig(breaks) return { breaks = breaks } end
+-- Blizzard's meter: the current fight's session, as the test sets it (nil: none yet)
+meterSession = nil
+if FOREVER then
+    C_DamageMeter = {
+        GetCombatSessionFromType = function() return meterSession end,
+        GetCombatSessionSourceFromType = function() return nil end,
+    }
+end
+Enum = { PlayerSwingType = { MainHand = 0, OffHand = 1, Ranged = 2 },
+         DamageMeterSessionType = { Current = 0 },
+         DamageMeterType = { DamageDone = 0, DamageTaken = 1, HealingDone = 2 } }
 function GetLocale() return LOCALE or "enUS" end
 function InCombatLockdown() return false end
 local target = "Creature-A"
@@ -622,6 +648,99 @@ if FOREVER then
         end
         print(table.concat(lines, "\n"))
     end
+    -- The meter's running total, as a fight hands it over: your row's, secret, unread.
+    meterSession = { combatSources = { { isLocalPlayer = false, totalAmount = 5 }, { isLocalPlayer = true, totalAmount = SECRET } } }
+    check("the meter's running total: your row's, handed back unread", ns.DM.LiveTotal("damage") == SECRET,
+          tostring(ns.DM.LiveTotal("damage")))
+    meterSession = { combatSources = { { isLocalPlayer = true, totalAmount = 640 } } }
+    check("...and a plain one as it is", ns.DM.LiveTotal("taken") == 640, tostring(ns.DM.LiveTotal("taken")))
+    meterSession = SECRET
+    check("...nothing from a session the game keeps secret", ns.DM.LiveTotal("damage") == nil)
+    meterSession = nil
+
+    -- Hidden amounts (every hit's, from 1.60.1.70755), through the real feeds: rows
+    -- count them and draw the last, the header draws the meter's running total, no
+    -- layout measures what drew a secret, and the meter's figures take over after.
+    do
+        local em, tm, hm = meterOf("enemyText"), meterOf("takenText"), meterOf("healText")
+        local f = ns.frames.target
+        local c = ns.db.enemyText
+        ns.db.enemyText.scope = "all"; ns.EnemyScopeChanged()
+        local liveReal = ns.DM.LiveTotal
+        ns.DM.LiveTotal = function() return SECRET end   -- a fight on: the meter's numbers are secret
+        advance(70); target = "Creature-S1"; fire("PLAYER_TARGET_CHANGED")
+        fire("PLAYER_REGEN_DISABLED")
+        fire("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 686)
+        advance(71)
+        ok, err = pcall(fire, "UNIT_COMBAT", "target", "WOUND", "CRITICAL", SECRET, 32)
+        check("hidden: a hit reaches Damage Dealt", ok, err)
+        fire("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 686)
+        advance(72); fire("UNIT_COMBAT", "target", "WOUND", "", SECRET, 32)
+        local t = em:Trackers(f)["spell:686"]
+        check("hidden: its row counts its hits and keeps the last", t and t.hiddenHits == 2 and t.lastSecret == SECRET and t.total == 0,
+              t and (tostring(t.hiddenHits) .. " " .. tostring(t.total)) or "no row")
+        ok, err = pcall(fire, "UNIT_COMBAT", "player", "WOUND", "", SECRET, 4)
+        check("hidden: a hit on you reaches Damage Received", ok, err)
+        fire("UNIT_SPELLCAST_SUCCEEDED", "player", "g", 2050)
+        advance(72.1)
+        ok, err = pcall(fire, "UNIT_COMBAT", "player", "HEAL", "", SECRET, 2)
+        advance(72.2)
+        check("hidden: a heal reaches Healing Received", ok, err)
+        local tt = tm:Trackers(ns.takenHostFrame)["school:4"]
+        check("hidden: Damage Received counts it on its school", tt and tt.hiddenHits == 1, tt and tostring(tt.hiddenHits) or "no row")
+        local ht = hm:Trackers(ns.healHostFrame)["spell:2050"]
+        check("hidden: Healing Received counts it, in its window", ht and ht.hiddenHits == 1, ht and tostring(ht.hiddenHits) or "no row")
+        -- every layout draws it, and none measures what drew a secret
+        local looks = {
+            { "floating, stacked", { style = "float", layout = "stack", stackDir = "vertical" } },
+            { "floating, horizontal", { style = "float", layout = "stack", stackDir = "horizontal", growthH = "CENTER" } },
+            { "floating, radial", { style = "float", layout = "radial", stackDir = "vertical" } },
+            { "meter rows", { style = "meter", layout = "stack", stackDir = "vertical" } },
+        }
+        local was = { style = c.style, layout = c.layout, stackDir = c.stackDir, growthH = c.growthH, splash = c.splash }
+        c.splash = true
+        for _, look in ipairs(looks) do
+            for k, v in pairs(look[2]) do c[k] = v end
+            local okL, errL
+            for _ = 1, 6 do okL, errL = pcall(tick, 0.05); if not okL then break end end
+            check("hidden: " .. look[1] .. " draws", okL, errL)
+        end
+        check("hidden: the row shows its count", t.text.text and t.text.text:find("2", 1, true) ~= nil, tostring(t.text.text))
+        check("hidden: its last hit drawn beside it", t.secretText:IsShown() and t.secretText.drewSecret == true)
+        local s = em.streams[f]
+        check("hidden: the header draws the meter's running total", s.totalFS:IsShown() and s.totalFS.drewSecret == true,
+              tostring(s.totalFS.text))
+        for k, v in pairs(was) do c[k] = v end
+        -- the fight ends: the meter's figures, readable now, take over
+        ns.DM.LiveTotal = liveReal
+        ns.DM.Capture = function(kind)
+            if kind == 1 then return { ["spell:133"] = { id = 133, amount = 90 }, ["spell:6603"] = { id = 6603, amount = 12 } } end
+            if kind == 0 then return { ["spell:686"] = { id = 686, amount = 333 } } end
+        end
+        advance(73); fire("PLAYER_REGEN_ENABLED")
+        advance(80)
+        for _ = 1, 3 do tick(0.05) end
+        check("hidden: once the fight is over, the meter's total", t.total == 333 and t.hiddenHits == 0, tostring(t.total))
+        check("hidden: a plain row again", not t.secretText:IsShown() and not s.totalFS:IsShown())
+        local rows = tm:Trackers(ns.takenHostFrame)
+        check("hidden: Damage Received takes the meter's rows per attack",
+              rows and rows["spell:133"] and rows["spell:133"].total == 90 and rows.swing and rows.swing.total == 12
+              and rows["school:4"] == nil, rows and tostring(rows["school:4"]) or "no rows")
+        -- per target: one enemy's rows set on that enemy, off screen too
+        ns.db.enemyText.scope = "target"; ns.EnemyScopeChanged()
+        target = "Creature-S2"; fire("PLAYER_TARGET_CHANGED")
+        em:Bump(f, "spell:686", "Shadow Bolt", SECRET, 32, false, nil)
+        target = "Creature-S3"; fire("PLAYER_TARGET_CHANGED")
+        em:BumpGUID(f, "Creature-S2", "spell:686", "Shadow Bolt", SECRET, 32, false, nil)
+        em:SetTotalGUID(f, "Creature-S2", "spell:686", "Shadow Bolt", 500, 32, nil)
+        target = "Creature-S2"; fire("PLAYER_TARGET_CHANGED")
+        local back = em:Trackers(f)["spell:686"]
+        check("hidden: a remembered enemy's row takes its settled total", back and back.total == 500 and back.hiddenHits == 0,
+              back and (tostring(back.total) .. " " .. tostring(back.hiddenHits)) or "no row")
+        ok, err = pcall(tick, 0.05)
+        check("hidden: and draws", ok, err)
+    end
+
     ok, err = pcall(ns.PrintStatus)
     check("/gct status", ok, err)
 end

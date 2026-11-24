@@ -56,17 +56,32 @@ DM.TYPES = MeterType and {
 -- it -- no GUID comparison needed, which is just as well given how fragile those
 -- turned out to be here.
 local function localSource(meterType)
+    -- read in fights too (LiveTotal): each level is checked before it is indexed
     local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType, SessionType.Current, meterType)
-    if not ok or type(session) ~= "table" then return nil, nil end
+    if not ok or ns.IsSecret(session) or type(session) ~= "table" then return nil, nil end
     local sources = session.combatSources
-    if type(sources) ~= "table" then return nil, session end
+    if ns.IsSecret(sources) or type(sources) ~= "table" then return nil, session end
     for i = 1, #sources do
         local s = sources[i]
-        if type(s) == "table" and ns.Truth(s.isLocalPlayer) == true then
+        if not ns.IsSecret(s) and type(s) == "table" and ns.Truth(s.isLocalPlayer) == true then
             return s, session
         end
     end
     return nil, session
+end
+
+-- Your running total in the current fight, for one meter ("damage", "taken",
+-- "healing"), or nil. In a fight it is secret (SecretWhenInCombat), and is handed back
+-- unread, to be drawn; the session and its rows stay readable, and isLocalPlayer is
+-- never secret (FCT 0.10.10 draws your damage this way, in fights, on live clients).
+function DM.LiveTotal(kind)
+    local meterType = DM.TYPES[kind]
+    if not DM.available or meterType == nil then return nil end
+    local src = localSource(meterType)
+    if type(src) ~= "table" then return nil end
+    local v = src.totalAmount
+    if ns.IsSecret(v) then return v end
+    return type(v) == "number" and v or nil
 end
 
 -- How long the fight being summarised lasted, or nil. Used in place of the live

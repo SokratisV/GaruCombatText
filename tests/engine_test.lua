@@ -198,10 +198,12 @@ class = "WARLOCK"
 cast(80, 686); retarget(80.5, "Creature-B"); hit(81.2, 250, 32)
 nothing("bolt at A, hit on B", 82)
 
--- 8. A hidden amount uses up its cast, adds nothing.
+-- 8. A hidden amount uses up its cast, and is passed on with no amount, to be drawn.
 retarget(89, "Creature-A")
-cast(90, 686); hit(91, SECRET, 32)
-nothing("a hidden amount emits nothing", 91.1)
+cast(90, 686); hit(91, SECRET, 32, "CRITICAL")
+expect("a hidden amount: its spell, its secret, no amount", 91.1, "dealt", function(r)
+    return r.key == "spell:686" and r.hidden == true and r.secret == SECRET and r.amount == nil and r.crit == true,
+        tostring(r.key) .. " hidden=" .. tostring(r.hidden) .. " amount=" .. tostring(r.amount) end)
 hit(91.5, 200, 32)
 nothing("...and its cast cannot claim the next hit", 92)
 
@@ -272,6 +274,7 @@ local function fight(t) advance(t); fire("PLAYER_REGEN_DISABLED") end
 local function peace(t) advance(t); fire("PLAYER_REGEN_ENABLED") end
 class = "DRUID"
 
+peace(299)   -- the fights above (one with a hidden hit) are over
 retarget(300, "Creature-K1"); fight(300)
 swing(301); hit(301.5, 44, 1)
 expect("before the kill: a swing", 301.51, "dealt", key("swing", 44))
@@ -806,6 +809,94 @@ hit(1064, 33, 1); fire("DAMAGE_METER_COMBAT_SESSION_UPDATED", 0)
 nothing("in a group, a teammate's hit brings the update too: not taken", 1065)
 grouped = false
 advance(1070)
+
+-- 14g. Hidden amounts (every hit's, from Forever 1.60.1.70755): each one placed and
+--      passed on to be drawn, a whole absorb told by its flag, and the meter's figures
+--      once the fight is over.
+for _, kind in ipairs({ "settledUnit", "takenSettled" }) do
+    ns.UC.Subscribe(kind, function(r) got[#got + 1] = { kind = kind, r = r, at = clock } end)
+end
+local takenRows
+ns.DM.TYPES.taken = 1
+local captureBefore = ns.DM.Capture
+ns.DM.Capture = function(kind) if kind == 1 then return takenRows end return meterRows end
+ns.db.takenText = { enabled = true }
+local function all(kind)
+    local found = {}
+    for i = #got, 1, -1 do
+        if got[i].kind == kind then table.insert(found, 1, got[i].r); table.remove(got, i) end
+    end
+    return found
+end
+class = "WARLOCK"
+peace(1100); retarget(1100, "Creature-H1"); fight(1100)
+cast(1101, 686); hit(1102, SECRET, 32, "ABSORB")
+expect("hidden, flagged ABSORB: absorbed whole", 1102.01, "avoided", function(r)
+    return r.missType == "ABSORB", tostring(r.missType) end)
+cast(1103, 686); hit(1104, SECRET, 32)
+expect("a hidden bolt, as itself", 1104.01, "dealt", function(r)
+    return r.key == "spell:686" and r.secret == SECRET and r.amount == nil, tostring(r.key) end)
+swing(1105); hit(1105.5, SECRET, 1)
+expect("a hidden swing, as Melee", 1105.51, "dealt", function(r) return r.key == "swing" and r.hidden == true, tostring(r.key) end)
+onMe(1106, "WOUND", SECRET, 4)
+expect("a hidden hit on you", 1106.01, "taken", function(r)
+    return r.hidden == true and r.secret == SECRET and r.amount == nil and r.school == 4, tostring(r.amount) end)
+onMe(1106.5, "WOUND", SECRET, 1, "BLOCK")
+expect("a hidden hit on you, blocked whole", 1106.51, "dodged", function(r) return r.missType == "BLOCK", tostring(r.missType) end)
+onMe(1107, "ENERGIZE", SECRET, nil)
+expect("hidden power gained", 1107.01, "energized", function(r) return r.hidden == true and r.secret == SECRET, "" end)
+cast(1108, 2050); onMe(1108.05, "HEAL", SECRET, 2)
+expect("a hidden heal on you, as your own", 1108.06, "healed", function(r)
+    return r.key == "spell:2050" and r.hidden == true and r.secret == SECRET and r.amount == nil, tostring(r.key) end)
+-- one enemy, alone: the meter's figures are that enemy's; the meter's damage taken
+-- takes the place of the counts per school
+meterRows = { ["spell:686"] = { id = 686, amount = 412 }, ["spell:6603"] = { id = 6603, amount = 55 } }
+takenRows = { ["spell:0"] = { id = 0, amount = 30 }, ["spell:6603"] = { id = 6603, amount = 12 },
+              ["spell:133"] = { id = 133, amount = 90 } }
+peace(1110)
+advance(1116)
+local units = {}
+for _, r in ipairs(all("settledUnit")) do units[r.key] = r end
+local u1, u2 = units["spell:686"], units.swing
+if u1 and u1.guid == "Creature-H1" and u1.total == 412 and u2 and u2.total == 55 then pass = pass + 1
+else fail = fail + 1; print("FAIL  one enemy alone, hidden: its rows take the meter's figures: "
+    .. tostring(u1 and u1.total) .. " / " .. tostring(u2 and u2.total)) end
+local ts = all("takenSettled")
+local rows = ts[1] and ts[1].rows
+if rows and #rows == 2 and rows[1].key == "spell:133" and rows[1].total == 90 and rows[2].key == "swing" and rows[2].total == 42 then
+    pass = pass + 1
+else fail = fail + 1; print("FAIL  damage taken, hidden: the meter's rows per attack, melee as one: "
+    .. tostring(rows and #rows) .. " rows, first " .. tostring(rows and rows[1] and rows[1].key)) end
+all("healed"); all("settled"); all("settledAll")
+-- two enemies: the meter cannot say which was whose, so the rows keep their counts
+retarget(1120, "Creature-H2"); fight(1120)
+cast(1121, 686); hit(1122, SECRET, 32)
+expect("hidden, on the first enemy", 1122.01, "dealt", function(r) return r.hidden == true, "" end)
+retarget(1123, "Creature-H3")
+cast(1123, 686); hit(1124, SECRET, 32)
+expect("hidden, on the second", 1124.01, "dealt", function(r) return r.hidden == true, "" end)
+meterRows = { ["spell:686"] = { id = 686, amount = 800 } }
+takenRows = { ["spell:133"] = { id = 133, amount = 50 } }   -- this fight's, though none of it came hidden
+peace(1125)
+advance(1131)
+local stray = #all("settledUnit") + #all("takenSettled")
+if stray == 0 then pass = pass + 1
+else fail = fail + 1; print("FAIL  two enemies, hidden: nothing settled per enemy, no damage taken to settle: " .. stray) end
+all("settled"); all("settledAll")
+-- a hidden heal on a friend, reported on your target and its plate: yours, once
+done = {}
+retarget(1140, "Player-Friend2")
+plates.nameplate4, friendly.nameplate4 = "Player-Friend2", true
+-- two of your heals in flight, so a second report would find one to take
+cast(1141, 2050); cast(1141.1, 2050); healOn(1141.2, "target", SECRET); healOn(1141.2, "nameplate4", SECRET)
+advance(1141.3)
+if #done == 1 and done[1].key == "spell:2050" and done[1].hidden == true and done[1].secret == SECRET then pass = pass + 1
+else fail = fail + 1; print("FAIL  a hidden heal on a friend, reported twice: yours, once: " .. #done) end
+plates.nameplate4, friendly.nameplate4 = nil, nil
+done = {}
+all("healed")
+ns.DM.Capture, ns.db.takenText = captureBefore, nil
+advance(1150)
 
 -- 13. What descriptions say.
 local function facts(name, id, want)

@@ -98,10 +98,10 @@ if ns.UseUnitCombat then
     ns.UC.Subscribe("healed", function(r)
         local cfg = ns.db.healText
         if not cfg.enabled or ns.test.combat then return end
-        if r.amount < (cfg.threshold or 0) then return end
+        if r.amount and r.amount < (cfg.threshold or 0) then return end   -- a hidden one always counts
         local pf = playerFrame()
         if not pf then return end
-        meter:Bump(pf, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
+        meter:Bump(pf, r.key, r.label, r.amount or r.secret, r.school, r.crit and true or false, r.icon)
         -- Mana spent on a heal of yours that landed on you, once per cast, on that
         -- spell's line (as the Classic path does for self-cast heals).
         local wantMana = cfg.showMana or cfg.valueMode == "both" or cfg.valueMode == "mana"
@@ -116,10 +116,10 @@ if ns.UseUnitCombat then
         -- UNIT_COMBAT does not say which power; count it only for a mana user.
         local pt = UnitPowerType("player")
         if ns.IsSecret(pt) or pt ~= 0 then return end
-        if r.amount < (cfg.threshold or 0) then return end
+        if r.amount and r.amount < (cfg.threshold or 0) then return end
         local pf = playerFrame()
         if not pf then return end
-        meter:Bump(pf, "mana:gain", ns.ManaName(), r.amount, nil, false, "Interface\\ICONS\\INV_Potion_76")
+        meter:Bump(pf, "mana:gain", ns.ManaName(), r.amount or r.secret, nil, false, "Interface\\ICONS\\INV_Potion_76")
     end)
 end
 
@@ -290,11 +290,15 @@ if ns.UseUnitCombat then
     ns.UC.Subscribe("healDone", function(r)
         local cfg = ns.db.doneText
         if not cfg.enabled or ns.test.combat then return end
-        if r.amount < (cfg.threshold or 0) then return end
+        if r.amount and r.amount < (cfg.threshold or 0) then return end   -- a hidden one always counts
         local f = doneFrame()
         if not f then return end
-        doneMeter:Bump(f, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
+        doneMeter:Bump(f, r.key, r.label, r.amount or r.secret, r.school, r.crit and true or false, r.icon)
     end)
+    -- Hidden amounts: the fight's running total of your healing, from Blizzard's meter
+    doneMeter.liveTotal = function()
+        if ns.DM and ns.DM.LiveTotal then return ns.DM.LiveTotal("healing") end
+    end
     -- the meter's figure for each spell, once the fight is over; a spell the meter
     -- counts under another ID than the cast takes the row of the same name
     ns.UC.Subscribe("healSettled", function(r)

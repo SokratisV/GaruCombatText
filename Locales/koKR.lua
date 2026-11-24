@@ -39,6 +39,7 @@ L["nothing to probe on this client."] = "이 클라이언트에서는 점검할 
 L["settings reset to defaults."] = "설정을 초기화했습니다."
 L["%s s"] = "%s초"
 L["Combat %s"] = "전투 %s"
+L["Total %s"] = "총 %s"
 L["Free (movable)"] = "자유 (이동 가능)"
 L["Player frame"] = "플레이어 창"
 L["Target frame"] = "대상 창"

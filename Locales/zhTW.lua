@@ -39,6 +39,7 @@ L["nothing to probe on this client."] = "此用戶端上沒有可探查的內容
 L["settings reset to defaults."] = "設定已重置。"
 L["%s s"] = "%s 秒"
 L["Combat %s"] = "戰鬥 %s"
+L["Total %s"] = "總計 %s"
 L["Free (movable)"] = "自由（可移動）"
 L["Player frame"] = "玩家頭像"
 L["Target frame"] = "目標頭像"

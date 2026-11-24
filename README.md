@@ -37,6 +37,24 @@ spell's own description says it does.
 - **Healing Received** counts every heal on you. Your own are on their spell; everyone
   else's share one *Healing* line.
 
+### Hidden amounts (from game build 1.60.1.70755)
+
+Since Forever's build 1.60.1.70755 the game hands every hit's amount over **secret**: an
+addon may draw it, but not add it up or compare it. Which spell a hit was is still worked
+out as above; how much it was can no longer be totalled live. So, while a fight is on:
+
+- each row counts its hits (**×7**) and shows the last one beside it, drawn as the game
+  hands it over;
+- the feed's header shows the fight's **running total from Blizzard's own damage meter**
+  (Damage Dealt counting every enemy, Damage Received, Healing Done), drawn the same way;
+- once the fight is over, the rows take the meter's exact figures: Damage Dealt counting
+  every enemy, Healing Done, Damage Dealt per target when you fought one enemy alone, and
+  Damage Received, which then lists each attack that hit you instead of each school.
+
+Healing Received has no meter to settle from, and keeps its counts. A hit absorbed, blocked
+or resisted whole is now told by its flag, as its 0 can no longer be read. Not yet seen in
+game.
+
 Solo the matching is close to exact, because almost everything hitting your target is you.
 In a group, a teammate's hit of the same school landing inside your window can be counted as
 yours. `/gct probe` after a fight shows how many hits came through readable and how each was
@@ -47,7 +65,10 @@ The approach and its timing windows come from **Forever Combat Text** by Tarolg
 Later findings from its 0.8–0.12 releases are put to use in GCT's own code: procs named by
 the cooldown update in their hit's frame (Windfury's extra attacks too), the damage meter's
 update as a witness when you're alone, totems on their own beat, two HoTs told apart by
-their tick timing, and in a group a swing kept to a size your weapon can hit.
+their tick timing, and in a group a swing kept to a size your weapon can hit. From its
+0.13–0.29 releases: that a secret amount can be drawn through the game's own number
+formatters, that the meter's running total can be drawn during a fight, and that a text
+which has drawn a secret must never be measured again.
 
 On the Classic clients nothing changes: the combat log is still there and every feed reads
 it directly, exactly as before.

@@ -59,6 +59,16 @@ local function fmtDuration(sec)
     return ns.L["%s s"]:format(sec)
 end
 
+-- Hidden amounts. From Forever 1.60.1.70755 the game hands every hit's amount over
+-- secret: it can be drawn, never added or compared. A row fed one counts its hits
+-- (hiddenHits) and keeps the last one (lastSecret) to draw; its total stays what the
+-- plain hits made, and is set to the damage meter's figure once the fight is over
+-- (SetTotal), which makes it a plain row again. Until then the row shows "xN" and
+-- the last hit beside it, sorts and fills its bar by its count, and the feed's
+-- header shows the fight's running total from Blizzard's meter (liveTotal).
+local SECRET_SHADE = { 0.78, 0.78, 0.78 }
+local LIVE_TOTAL_EVERY = 0.5   -- how often the meter's running total is read again
+
 --------------------------------------------------------------------------
 -- Tracker elements (one per source, recycled through a pool)
 --------------------------------------------------------------------------
@@ -103,6 +113,13 @@ local function newTracker(s)
     f.manaText:SetShadowColor(0, 0, 0, 1)
     f.manaText:SetShadowOffset(1, -1)
     f.manaText:Hide()
+
+    -- the last hit, when the game keeps amounts secret: drawn, never measured, and
+    -- nothing is anchored to it, so its secret state stays its own
+    f.secretText = g:CreateFontString(nil, "OVERLAY")
+    f.secretText:SetShadowColor(0, 0, 0, 1)
+    f.secretText:SetShadowOffset(1, -1)
+    f.secretText:Hide()
 
     -- a crit's flourish: a star that bursts out behind the icon and fades
     f.burst = g:CreateTexture(nil, "ARTWORK")
@@ -168,7 +185,8 @@ local function snapshot(s)
     if not s.guid then return end
     local snap = {}
     for key, t in pairs(s.trackers) do
-        snap[key] = { total = t.total, mana = t.mana, label = t.label, school = t.school, iconTex = t.iconTex }
+        snap[key] = { total = t.total, mana = t.mana, label = t.label, school = t.school, iconTex = t.iconTex,
+                      hiddenHits = t.hiddenHits, lastSecret = t.lastSecret }
     end
     s.store[s.guid] = snap
     -- the per-target combat timer is remembered alongside the totals
@@ -194,6 +212,8 @@ local function restoreInto(s, guid)
         t.shown = d.total                    -- no count-up for totals coming back
         t.kills, t.killT, t.flashT = kills and kills[key] or 0, nil, nil
         t.mana = d.mana or 0
+        t.hiddenHits, t.lastSecret = d.hiddenHits or 0, d.lastSecret
+        t.secretText.drawnHits = nil
         t.isMana  = (type(key) == "string" and key:sub(1, 5) == "mana:") or false
         t.isCount = countKind(key) ~= nil
         t.good    = countKind(key) == "good"
@@ -248,6 +268,8 @@ local function ensureTracker(s, key)
         t.kills = kills and kills[key] or 0
         t.killT = nil
         t.mana  = 0
+        t.hiddenHits, t.lastSecret = 0, nil   -- hits whose amount the game kept secret
+        t.secretText.drawnHits = nil           -- a recycled row draws its own afresh
         t.curX  = nil
         t.curY  = nil
         t.alpha = 0
@@ -263,6 +285,7 @@ local function ensureTracker(s, key)
         wipe(t.samples)
         t.windowAmt, t.windowMana, t.windowCasts = 0, 0, 0   -- sums still inside the window
         t.baseAmt,   t.baseMana,   t.baseCasts   = 0, 0, 0   -- folded older sums (accumulate mode)
+        t.windowHidden, t.baseHidden = 0, 0                  -- hidden hits, the same way
         s.trackers[key] = t
     end
     return t
@@ -289,7 +312,7 @@ local function spawnSplash(M, s, t, amount, crit)
     local c = (crit and cfg.critFlash and CRIT_GOLD) or (t.isMana and MANA_COLOR)
         or (cfg.schoolColors and SCHOOL_COLOR[t.school]) or NEUTRAL
     fs:SetTextColor(c[1], c[2], c[3])
-    fs:SetText("+" .. ns.FormatNumber(amount))
+    ns.DrawAmount(fs, "+%s", amount)   -- a secret one is drawn as handed over
     fs:SetAlpha(0)
     fs:Show()
     -- hits close together on one row lift off a little apart
@@ -319,9 +342,18 @@ local function bump(M, s, key, label, amount, school, crit, iconTex)
     end
     t.popT    = 0
     if flourish then t.flashT = 0 end
-    if cfg.splash and not t.isCount and amount and amount > 0 then spawnSplash(M, s, t, amount, crit) end
-    if M.windowed then
-        t.samples[#t.samples + 1] = { tm = t.last, amt = amount, mana = 0, casts = 0 }
+    local hidden = ns.IsSecret(amount)
+    if cfg.splash and not t.isCount and (hidden or (amount and amount > 0)) then spawnSplash(M, s, t, amount, crit) end
+    if hidden then
+        -- counted and kept to draw; the total waits for the meter (see "Hidden amounts")
+        t.lastSecret = amount
+        t.hiddenHits = t.hiddenHits + 1   -- a windowed meter counts them again each frame (windowUpdate)
+        if M.windowed then
+            t.samples[#t.samples + 1] = { tm = t.last, amt = 0, mana = 0, casts = 0, hidden = 1 }
+            t.windowHidden = t.windowHidden + 1
+        end
+    elseif M.windowed then
+        t.samples[#t.samples + 1] = { tm = t.last, amt = amount, mana = 0, casts = 0, hidden = 0 }
         t.windowAmt = t.windowAmt + amount
     else
         t.total = t.total + amount
@@ -338,7 +370,7 @@ local function bumpMana(M, s, key, label, mana, school, iconTex)
     if not t.iconTex then t.iconTex = iconTex end
     t.last = GetTime()
     if M.windowed then
-        t.samples[#t.samples + 1] = { tm = t.last, amt = 0, mana = mana, casts = 1 }
+        t.samples[#t.samples + 1] = { tm = t.last, amt = 0, mana = mana, casts = 1, hidden = 0 }
         t.windowMana  = t.windowMana + mana
         t.windowCasts = t.windowCasts + 1
     else
@@ -367,8 +399,10 @@ end
 
 -- Displayed main value: the running total, or (when a meter opts in via
 -- cfg.valueMode) the value-per-mana ratio, or both. Mana is drawn separately.
+local function hiddenRow(t) return not t.isCount and (t.hiddenHits or 0) > 0 end
 local function valueString(t, cfg)
     if t.isCount then return "\195\151" .. (t.total or 0) end   -- "xN", in the row's colour
+    if hiddenRow(t) then return "\195\151" .. t.hiddenHits end   -- its hits, until the meter says
     local mode = cfg and cfg.valueMode
     if mode == "mana" then            -- show the mana spent (blue), not the healing
         return "|cff599eff" .. ns.FormatNumber(t.mana or 0) .. "|r"
@@ -432,6 +466,36 @@ local function layoutMana(t, cfg, where)
     t.manaText:Show()
     return t.manaText
 end
+
+-- A hidden row's last hit, drawn smaller and greyer beside its count: past `after`
+-- (float) or before it (meter). Returns the font string if shown, else nil. Its
+-- width is never asked; secretWidth stands in where a layout needs one.
+local SECRET_CHARS = 5
+local function layoutSecret(t, size, after, where)
+    if not (hiddenRow(t) and t.lastSecret ~= nil) then
+        t.secretText:Hide()
+        return nil
+    end
+    local fs = t.secretText
+    local px = math.max(6, math.floor(size * 0.72))
+    -- drawn again only for a new hit or a new size: a secret can't be compared, so
+    -- the row's count of hidden hits says whether it changed
+    if fs.drawnHits ~= t.hiddenHits or fs.drawnPx ~= px or not fs:IsShown() then
+        fs.drawnHits, fs.drawnPx = t.hiddenHits, px
+        fs:SetFont(ns.Font(ns.db.general.font), px, "OUTLINE")
+        fs:SetTextColor(SECRET_SHADE[1], SECRET_SHADE[2], SECRET_SHADE[3])
+        ns.DrawAmount(fs, "%s", t.lastSecret)
+    end
+    fs:ClearAllPoints()
+    if where == "before" then
+        fs:SetPoint("RIGHT", after, "LEFT", -5, 0)
+    else
+        fs:SetPoint("LEFT", after, "RIGHT", 5, 0)
+    end
+    fs:Show()
+    return fs
+end
+local function secretWidth(size) return math.floor(size * 0.72) * 0.6 * SECRET_CHARS + 5 end
 
 -- mana cost of a spell on this client (0 if unknown / not a mana spell)
 function ns.Meter.SpellManaCost(spellId)
@@ -598,6 +662,8 @@ local function layoutFloat(s, list, dt, cfg, basis)
             -- where a splash starts: past the end of the line, or before its start
             -- (cfg.splashSide; unset, the side away from the anchor)
             local tail = layoutSkull(t, cfg, mana or t.text, size, dt) or mana or t.text
+            local secret = layoutSecret(t, size, tail, "after")
+            tail = secret or tail
             if splashSide(cfg) == "LEFT" then
                 t.edge, t.edgeSide = hasIcon and t.icon or t.text, "left"
             else
@@ -644,15 +710,16 @@ local function layoutFloat(s, list, dt, cfg, basis)
                 -- side by side, each as wide as it is drawn, Line spacing apart: the
                 -- icon before the number, the mana figure and skull after it
                 local before = hasIcon and (size + 4) or 0
-                local after = (mana and (mana:GetStringWidth() + 5) or 0)
+                local after = (mana and (ns.PlainWidth(mana, size * 2) + 5) or 0)
                 if t.skull:IsShown() then
-                    after = after + size * 0.95 + 4 + (t.skullCount:IsShown() and (t.skullCount:GetStringWidth() + 1) or 0)
+                    after = after + size * 0.95 + 4 + (t.skullCount:IsShown() and (ns.PlainWidth(t.skullCount, size) + 1) or 0)
                 end
+                if secret then after = after + secretWidth(size) end
                 local x
                 if align == "RIGHT" then x = -(cursor + after) else x = cursor + before end
                 -- centred: the whole line shifted back by half its width (last frame's)
                 if cfg.growthH == "CENTER" then x = x - lastLineW / 2 end
-                cursor = cursor + before + t.text:GetStringWidth() + after + (cfg.lineSpacing or 18)
+                cursor = cursor + before + ns.PlainWidth(t.text, size * 3) + after + (cfg.lineSpacing or 18)
                 if not t.curX then t.curX = x end
                 t.curX = t.curX + (x - t.curX) * math.min(1, dt * 10)
                 t.curY = 0
@@ -679,8 +746,11 @@ local function layoutMeter(s, list, dt, cfg)
     local iconSz = math.max(4, rowH - 4)
     local fs = math.max(6, math.min(cfg.fontSize, rowH - 2))
 
-    local maxTotal = 1
-    for i = 1, #list do if list[i].total > maxTotal then maxTotal = list[i].total end end
+    local maxTotal, maxHidden = 1, 1
+    for i = 1, #list do
+        if list[i].total > maxTotal then maxTotal = list[i].total end
+        if (list[i].hiddenHits or 0) > maxHidden then maxHidden = list[i].hiddenHits end
+    end
 
     for i = 1, #list do
         local t = list[i]
@@ -723,8 +793,13 @@ local function layoutMeter(s, list, dt, cfg)
             local c = t.isMana and MANA_COLOR
                 or (cfg.schoolColors and SCHOOL_COLOR[t.school]) or cfg.barColor or NEUTRAL
             t.bar:SetStatusBarColor(c[1], c[2], c[3], 0.85)
-            t.bar:SetMinMaxValues(0, maxTotal)
-            t.bar:SetValue(t.shown or t.total)   -- the bar grows with a rolling total
+            if hiddenRow(t) then                 -- by its count, until the meter says
+                t.bar:SetMinMaxValues(0, maxHidden)
+                t.bar:SetValue(t.hiddenHits)
+            else
+                t.bar:SetMinMaxValues(0, maxTotal)
+                t.bar:SetValue(t.shown or t.total)   -- the bar grows with a rolling total
+            end
 
             t.name:SetText(cfg.showLabel and abbrev(t.label or "", cfg) or "")
             t.name:SetTextColor(0.96, 0.96, 0.96)
@@ -738,9 +813,11 @@ local function layoutMeter(s, list, dt, cfg)
                 t.edge, t.edgeSide = tail or t.bar, "right"
             end
 
-            -- mana sits just left of the amount; the label clips before it
+            -- mana sits just left of the amount, a hidden row's last hit left of that;
+            -- the label clips before them
             local mana = layoutMana(t, cfg, "before")
-            t.name:SetPoint("RIGHT", mana or t.text, "LEFT", -4, 0)
+            local secret = layoutSecret(t, fs, mana or t.text, "before")
+            t.name:SetPoint("RIGHT", secret or mana or t.text, "LEFT", -4, 0)
             t.name:SetJustifyH("LEFT")
 
             t:SetAlpha(t.alpha)
@@ -767,10 +844,12 @@ local function windowUpdate(M, t, now, cfg)
         t.windowAmt   = t.windowAmt   - e.amt
         t.windowMana  = t.windowMana  - e.mana
         t.windowCasts = t.windowCasts - (e.casts or 0)
+        t.windowHidden = t.windowHidden - (e.hidden or 0)
         if not M.rolling then          -- accumulating: keep aged samples in the base...
             t.baseAmt   = t.baseAmt   + e.amt
             t.baseMana  = t.baseMana  + e.mana
             t.baseCasts = t.baseCasts + (e.casts or 0)
+            t.baseHidden = t.baseHidden + (e.hidden or 0)
         end                            -- ...rolling: just drop them (base stays clean)
         drop = drop + 1
     end
@@ -782,14 +861,18 @@ local function windowUpdate(M, t, now, cfg)
     if t.windowAmt   < 0 then t.windowAmt   = 0 end
     if t.windowMana  < 0 then t.windowMana  = 0 end
     if t.windowCasts < 0 then t.windowCasts = 0 end
+    if t.windowHidden < 0 then t.windowHidden = 0 end
 
     if M.rolling then
         t.total, t.mana, t.casts = t.windowAmt, t.windowMana, t.windowCasts
+        t.hiddenHits = t.windowHidden
+        if t.hiddenHits == 0 then t.lastSecret = nil end
         return t.total <= 0 and t.windowMana <= 0 and #sm == 0
     else
         t.total = t.baseAmt  + t.windowAmt
         t.mana  = t.baseMana + t.windowMana
         t.casts = t.baseCasts + t.windowCasts
+        t.hiddenHits = t.baseHidden + t.windowHidden
         return false
     end
 end
@@ -888,12 +971,23 @@ local function update(M, s, dt)
         end
     end
 
+    -- a hidden row has no total yet: its count orders it among others like it
+    local anyHidden = false
+    for i = 1, #list do if hiddenRow(list[i]) then anyHidden = true break end end
     if cfg.sortMode == "recent" then
         table.sort(list, function(a, b) return a.last > b.last end)
     elseif cfg.sortMode == "lowest" then
-        table.sort(list, function(a, b) return a.total < b.total end)
+        table.sort(list, function(a, b)
+            if a.total ~= b.total then return a.total < b.total end
+            if (a.hiddenHits or 0) ~= (b.hiddenHits or 0) then return (a.hiddenHits or 0) < (b.hiddenHits or 0) end
+            return tostring(a.key) < tostring(b.key)   -- a tie keeps its order frame to frame
+        end)
     else
-        table.sort(list, function(a, b) return a.total > b.total end)
+        table.sort(list, function(a, b)
+            if a.total ~= b.total then return a.total > b.total end
+            if (a.hiddenHits or 0) ~= (b.hiddenHits or 0) then return (a.hiddenHits or 0) > (b.hiddenHits or 0) end
+            return tostring(a.key) < tostring(b.key)
+        end)
     end
 
     -- Severity basis: the unit's max HP when we're allowed to read it, otherwise the
@@ -921,22 +1015,49 @@ local function update(M, s, dt)
     -- Combat-duration header (clients opt in via cfg.showCombatTime, e.g. Damage
     -- Dealt). Counts from the first hit on this target; freezes at the last hit
     -- once you stop dealing damage to it. Sits just past the growth end of the stack.
+    local lh = (cfg.style == "meter") and (cfg.rowHeight or 14) or (cfg.lineSpacing or 18)
+    local headerY = horizontal(cfg) and ((cfg.fontSize or 14) + 8)
+        or (((cfg.growth ~= "DOWN") and 1 or -1) * (math.min(#list, cfg.maxLines or #list) * lh))
+    local headerStep = horizontal(cfg) and (cfg.fontSize or 14) or (((cfg.growth ~= "DOWN") and 1 or -1) * lh)
+    local headerFont = math.max(8, (cfg.fontSize or 14) - 2)
     if s.timeFS then
         if #list == 0 then s.combatStart, s.lastHit = nil, nil end   -- stream emptied: reset timer
         if cfg.showCombatTime and s.combatStart then
             local endT = (s.lastHit and (now - s.lastHit) > 3) and s.lastHit or now
-            local lh = (cfg.style == "meter") and (cfg.rowHeight or 14) or (cfg.lineSpacing or 18)
-            local n  = math.min(#list, cfg.maxLines or #list)
-            local up = (cfg.growth ~= "DOWN")
-            s.timeFS:SetFont(ns.Font(ns.db.general.font), math.max(8, (cfg.fontSize or 14) - 2), "OUTLINE")
+            s.timeFS:SetFont(ns.Font(ns.db.general.font), headerFont, "OUTLINE")
             s.timeFS:SetText(ns.L["Combat %s"]:format(fmtDuration(endT - s.combatStart)))
             s.timeFS:SetTextColor(0.95, 0.85, 0.45)
             s.timeFS:ClearAllPoints()
-            s.timeFS:SetPoint("CENTER", s.container, "CENTER", 0,
-                horizontal(cfg) and ((cfg.fontSize or 14) + 8) or ((up and 1 or -1) * (n * lh)))
+            s.timeFS:SetPoint("CENTER", s.container, "CENTER", 0, headerY)
             s.timeFS:Show()
+            headerY = headerY + headerStep
         else
             s.timeFS:Hide()
+        end
+    end
+
+    -- Hidden amounts: while rows wait for the meter, the fight's running total from
+    -- Blizzard's own meter, drawn as handed over (FCT 0.10.10 draws it this way in
+    -- fights). Read twice a second, not every frame.
+    if s.totalFS then
+        local wanted = anyHidden and M.liveTotal ~= nil
+        local fresh = false
+        if wanted and (s.liveValue == nil or now - (s.liveAt or 0) >= LIVE_TOTAL_EVERY) then
+            s.liveAt, s.liveValue, fresh = now, M.liveTotal(), true
+        end
+        if wanted and s.liveValue ~= nil then
+            if fresh or s.totalPx ~= headerFont or not s.totalFS:IsShown() then
+                s.totalPx = headerFont
+                s.totalFS:SetFont(ns.Font(ns.db.general.font), headerFont, "OUTLINE")
+                s.totalFS:SetTextColor(0.95, 0.85, 0.45)
+                ns.DrawAmount(s.totalFS, ns.L["Total %s"], s.liveValue)
+            end
+            s.totalFS:ClearAllPoints()
+            s.totalFS:SetPoint("CENTER", s.container, "CENTER", 0, headerY)
+            s.totalFS:Show()
+        else
+            s.liveValue = nil
+            s.totalFS:Hide()
         end
     end
 
@@ -977,6 +1098,9 @@ local function getStream(M, frame)
     s.timeFS = s.container:CreateFontString(nil, "OVERLAY")   -- combat-duration header
     s.timeFS:SetShadowColor(0, 0, 0, 1); s.timeFS:SetShadowOffset(1, -1)
     s.timeFS:Hide()
+    s.totalFS = s.container:CreateFontString(nil, "OVERLAY")  -- the meter's running total (hidden amounts)
+    s.totalFS:SetShadowColor(0, 0, 0, 1); s.totalFS:SetShadowOffset(1, -1)
+    s.totalFS:Hide()
     M.streams[frame] = s
     anchorStream(M, s)
     return s
@@ -1000,7 +1124,7 @@ function ns.Meter.New(opts)
         M.rolling = on
         if on then
             for _, s in pairs(M.streams) do
-                for _, t in pairs(s.trackers) do t.baseAmt, t.baseMana, t.baseCasts = 0, 0, 0 end
+                for _, t in pairs(s.trackers) do t.baseAmt, t.baseMana, t.baseCasts, t.baseHidden = 0, 0, 0, 0 end
             end
         end
     end
@@ -1042,10 +1166,31 @@ function ns.Meter.New(opts)
         local snap = s.store[guid]
         if not snap then snap = {}; s.store[guid] = snap end
         local d = snap[key]
-        if d then
-            d.total = (d.total or 0) + amount
+        if not d then
+            d = { total = 0, mana = 0, label = label, school = school, iconTex = iconTex, hiddenHits = 0 }
+            snap[key] = d
+        end
+        if ns.IsSecret(amount) then
+            d.hiddenHits, d.lastSecret = (d.hiddenHits or 0) + 1, amount
         else
-            snap[key] = { total = amount, mana = 0, label = label, school = school, iconTex = iconTex }
+            d.total = (d.total or 0) + amount
+        end
+    end
+
+    -- Set one unit's row to a known total, on screen or not (the meter's figure for a
+    -- fight against that one enemy alone, UnitCombat.lua). Its hidden hits are done.
+    function M:SetTotalGUID(frame, guid, key, label, total, school, iconTex)
+        local s = getStream(M, frame)
+        if not s or not guid or not total then return end
+        if s.guid == guid then return M:SetTotal(frame, key, label, total, school, iconTex) end
+        if not persistOn(M) then return end
+        local snap = s.store[guid]
+        if not snap then snap = {}; s.store[guid] = snap end
+        local d = snap[key]
+        if d then
+            d.total, d.hiddenHits, d.lastSecret = total, 0, nil
+        elseif total > 0 then
+            snap[key] = { total = total, mana = 0, label = label, school = school, iconTex = iconTex, hiddenHits = 0 }
         end
     end
 
@@ -1076,10 +1221,31 @@ function ns.Meter.New(opts)
         local t = s.trackers[key]
         if t then
             t.total = total
+            t.hiddenHits, t.lastSecret = 0, nil          -- the meter has spoken: a plain row again
+            t.baseHidden, t.windowHidden = 0, 0
+            t.baseAmt, t.windowAmt = total, 0
+            for _, e in ipairs(t.samples or {}) do e.amt, e.hidden = 0, 0 end
         elseif total > 0 then
             bump(M, s, key, label, total, school, false, iconTex)
             s.trackers[key].pop, s.trackers[key].popT = 1, 1
         end
+    end
+
+    -- Put these rows in place of everything the feed shows: the meter's own rows for
+    -- the fight just over ({ key, label, total, school, icon } each), where its live
+    -- rows were kept another way (Damage Received: by school live, by attack after).
+    function M:Replace(frame, rows)
+        local s = self:Stream(frame)
+        if not s then return end
+        for key, t in pairs(s.trackers) do release(s, key, t) end
+        for _, r in ipairs(rows) do
+            if r.total and r.total > 0 then
+                bump(M, s, r.key, r.label, r.total, r.school, false, r.icon)
+                local t = s.trackers[r.key]
+                t.pop, t.popT, t.shown, t.alpha = 1, 1, r.total, 1
+            end
+        end
+        clearSplashes(s)   -- a correction, not hits: nothing floats off
     end
 
     -- re-sync a frame to its current GUID (e.g. on target change)

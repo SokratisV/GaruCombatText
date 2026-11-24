@@ -39,6 +39,7 @@ L["nothing to probe on this client."] = "на этом клиенте нечег
 L["settings reset to defaults."] = "настройки сброшены."
 L["%s s"] = "%s с"
 L["Combat %s"] = "Бой %s"
+L["Total %s"] = "Всего %s"
 L["Free (movable)"] = "Свободно (можно двигать)"
 L["Player frame"] = "Рамка игрока"
 L["Target frame"] = "Рамка цели"

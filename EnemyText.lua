@@ -141,7 +141,9 @@ if ns.UseUnitCombat then
         local cfg = ns.db.enemyText
         if not cfg.enabled or ns.test.combat then return end
         if r.pet and not cfg.includePet then return end
-        if r.amount < (cfg.threshold or 0) then return end
+        -- a hidden amount (r.secret) can't be held to the threshold: it always counts
+        if r.amount and r.amount < (cfg.threshold or 0) then return end
+        local amount = r.amount or r.secret
         local frame = ns.frames and ns.frames.target
         if not frame then return end
         -- hits on other enemies' nameplates come only for an every-enemy feed
@@ -150,12 +152,26 @@ if ns.UseUnitCombat then
         elseif r.killed then
             -- the blow that killed your target, reported on its plate once the
             -- target had cleared: it goes on the dead unit's own totals
-            meter:BumpGUID(frame, r.killed, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
+            meter:BumpGUID(frame, r.killed, r.key, r.label, amount, r.school, r.crit and true or false, r.icon)
             return
         elseif r.onTarget == false then
             return
         end
-        meter:Bump(frame, r.key, r.label, r.amount, r.school, r.crit and true or false, r.icon)
+        meter:Bump(frame, r.key, r.label, amount, r.school, r.crit and true or false, r.icon)
+    end)
+    -- Hidden amounts: the fight's running total from Blizzard's meter, counting every
+    -- enemy (which is what the meter counts; per target it would not be the target's).
+    meter.liveTotal = function()
+        if everyEnemy() and ns.DM and ns.DM.LiveTotal then return ns.DM.LiveTotal("damage") end
+    end
+    -- Your target, its hits hidden, against that one enemy alone: the meter's figure
+    -- for each attack is that enemy's, on screen or remembered.
+    ns.UC.Subscribe("settledUnit", function(r)
+        local cfg = ns.db.enemyText
+        if not cfg.enabled or ns.test.combat or everyEnemy() then return end
+        local frame = ns.frames and ns.frames.target
+        if not frame then return end
+        meter:SetTotalGUID(frame, r.guid, r.key, r.label, r.total, r.school, r.icon)
     end)
     -- Every enemy: once the fight is over, the meter's totals for it, which are
     -- exactly this feed's figures -- every hit on every enemy, the killing blows

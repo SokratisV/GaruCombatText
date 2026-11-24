@@ -196,6 +196,47 @@ function ns.FormatNumber(v)
     if v >= 1e4 then return string.format("%.1fk", v / 1e3) end
     return tostring(math.floor(v + 0.5))
 end
+
+-- An amount the game keeps secret (every hit's, from Forever 1.60.1.70755) can be
+-- drawn but never added, compared or joined to text in Lua. The game's own
+-- formatters take one and hand back text to draw (FCT 0.29.7's finding:
+-- AbbreviateNumbers and BreakUpLargeNumbers, on 1.60.1.71037), so it is shortened as
+-- FormatNumber shortens a plain one -- cut, not rounded -- and drawn through
+-- SetFormattedText. A plain amount goes through FormatNumber as ever.
+local SECRET_BREAKS = {
+    { breakpoint = 1e6, abbreviation = "M", significandDivisor = 1e4, fractionDivisor = 100, abbreviationIsGlobal = false },
+    { breakpoint = 1e4, abbreviation = "k", significandDivisor = 100, fractionDivisor = 10, abbreviationIsGlobal = false },
+}
+local secretOptions
+function ns.FormatSecret(v)
+    if not ns.IsSecret(v) then return ns.FormatNumber(v) end
+    local abbreviate = _G.AbbreviateNumbers
+    if type(abbreviate) == "function" then
+        if not secretOptions then
+            local make = _G.CreateAbbreviateConfig
+            local config = type(make) == "function" and make(SECRET_BREAKS) or nil
+            secretOptions = config and { config = config } or { breakpointData = SECRET_BREAKS }
+        end
+        return abbreviate(v, secretOptions)
+    end
+    if type(_G.AbbreviateLargeNumbers) == "function" then return _G.AbbreviateLargeNumbers(v) end
+    return v
+end
+-- Draw an amount, plain or secret, into a font string through a format ("%s").
+function ns.DrawAmount(fs, fmt, v)
+    if ns.IsSecret(v) then
+        fs:SetFormattedText(fmt, ns.FormatSecret(v))
+    else
+        fs:SetText(fmt:format(ns.FormatNumber(v)))
+    end
+end
+-- How wide a font string draws, or `guess` when the game will not say: a region
+-- that has drawn a secret answers in secrets from then on (FCT 0.25.9).
+function ns.PlainWidth(fs, guess)
+    local w = fs:GetStringWidth()
+    if ns.IsSecret(w) or type(w) ~= "number" then return guess or 0 end
+    return w
+end
 ns.test = { combat = false }   -- set true via /gct test to preview
 
 -- Names the client already has in its own language: Blizzard's for the schools, the
